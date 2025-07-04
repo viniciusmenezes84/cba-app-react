@@ -1171,6 +1171,9 @@ export default function App() {
         const ATTENDANCE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vToVgb2bcwJcd-MAfIjYDK-B13qFQcNt1g6O5GKgCVyvlJbqrUi_9ZtXfrmlYZi1A/pub?output=csv';
         setAttendanceData(prev => ({ ...prev, isLoading: true }));
         try {
+            if (!window.Papa) {
+                throw new Error("A biblioteca de análise (PapaParse) não foi carregada.");
+            }
             const results = await new Promise((resolve, reject) => {
                 window.Papa.parse(ATTENDANCE_SHEET_URL, {
                     download: true,
@@ -1224,6 +1227,9 @@ export default function App() {
         const FINANCE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT0fIELkR4lk2apHxZ9JbhTUUI8M4ICKGCEe3ntox5zyYsaccFftSx4mFyne5xpzA/pub?output=csv';
         setFinanceData({ isLoading: true, data: null, error: null });
         try {
+            if (!window.Papa) {
+                throw new Error("A biblioteca de análise (PapaParse) não foi carregada.");
+            }
             const results = await new Promise((resolve, reject) => {
                 window.Papa.parse(FINANCE_SHEET_URL, {
                     download: true,
@@ -1320,7 +1326,7 @@ export default function App() {
 
     const handleTabClick = (tab) => {
         setActiveTab(tab);
-        if (tab === 'financas' && !financeData.data && !financeData.error) {
+        if (tab === 'financas' && !financeData.data && !financeData.error && librariesLoaded) {
             fetchFinanceData();
         }
     };
