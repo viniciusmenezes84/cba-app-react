@@ -101,6 +101,7 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
     const [report, setReport] = useState(null);
     const [monthRange, setMonthRange] = useState({ start: '', end: '' });
     const [modalPlayer, setModalPlayer] = useState(null);
+    const [selectedPerformancePlayer, setSelectedPerformancePlayer] = useState('');
 
     const availableMonths = useMemo(() => {
         const monthSet = new Set();
@@ -111,11 +112,43 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
         return Array.from(monthSet).sort();
     }, [dates]);
 
+    const performanceData = useMemo(() => {
+        const sixtyDaysAgo = new Date();
+        sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+
+        const relevantDates = dates.filter(d => {
+            const [day, month, year] = d.split('/');
+            return new Date(`${year}-${month}-${day}`) >= sixtyDaysAgo;
+        });
+
+        if (relevantDates.length === 0) return [];
+
+        return allPlayersData.map(player => {
+            const presencesInPeriod = relevantDates.reduce((count, date) => {
+                return count + (player.attendance[date]?.includes('✅') ? 1 : 0);
+            }, 0);
+            
+            const performancePercentage = (presencesInPeriod / relevantDates.length) * 100;
+            const status = performancePercentage >= 50 ? 'Em conformidade' : 'Abaixo da meta';
+            
+            return {
+                ...player,
+                performancePercentage,
+                status,
+                gamesInPeriod: relevantDates.length,
+                presencesInPeriod,
+            };
+        }).sort((a, b) => b.performancePercentage - a.performancePercentage);
+    }, [allPlayersData, dates]);
+
     useEffect(() => {
         if (availableMonths.length > 0) {
             setMonthRange({ start: availableMonths[0], end: availableMonths[availableMonths.length - 1] });
         }
-    }, [availableMonths]);
+        if(allPlayersData.length > 0) {
+            setSelectedPerformancePlayer(allPlayersData[0].name);
+        }
+    }, [availableMonths, allPlayersData]);
 
     if (isLoading) return <Loader message="A carregar dados da planilha de presença..." />;
     if (error) return <p className="text-center text-red-500 py-8">{error}</p>;
@@ -139,10 +172,12 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
     const hallOfFame = getHallOfFameData();
     const attendanceChartConfig = { type: 'line', data: { labels: dates, datasets: [{ label: 'Jogadores Presentes', data: dates.map(date => allPlayersData.reduce((count, player) => count + (player.attendance[date]?.includes('✅') ? 1 : 0), 0)), fill: false, borderColor: 'rgb(75, 192, 192)', tension: 0.1 }] }, options: { scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } } };
     const averageBarChartConfig = { type: 'bar', data: { labels: [...allPlayersData].sort((a, b) => b.average - a.average).map(p => p.name), datasets: [{ label: 'Média de Presença (%)', data: [...allPlayersData].sort((a, b) => b.average - a.average).map(p => p.average), backgroundColor: [...allPlayersData].sort((a, b) => b.average - a.average).map(p => p.average >= 75 ? '#22c55e' : p.average >= 50 ? '#3b82f6' : '#f59e0b') }] }, options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false } } } };
-    const filterButtons = [{ key: 'all', label: 'Todos' }, { key: 'good', label: 'Melhores' }, { key: 'regular', label: 'Regulares' }, { key: 'bad', label: 'Abaixo' }, { key: 'faltas', label: 'Faltosos' }];
-    const filterFunctions = { 'all': () => true, 'good': p => p.average >= 75, 'regular': p => p.average >= 50 && p.average < 75, 'bad': p => p.average < 50, 'faltas': p => p.unjustifiedAbsences > 0 };
+    const filterButtons = [{ key: 'desempenho', label: 'Desempenho' }, { key: 'all', label: 'Todos' }, { key: 'good', label: 'Melhores' }, { key: 'regular', label: 'Regulares' }, { key: 'bad', label: 'Abaixo' }, { key: 'faltas', label: 'Faltosos' }];
+    const filterFunctions = { 'all': () => true, 'good': p => p.average >= 75, 'regular': p => p.average >= 50 && p.average < 75, 'bad': p => p.average < 50, 'faltas': p => p.unjustifiedAbsences > 0, 'desempenho': () => true };
     const sortedData = (filter === 'faltas') ? [...allPlayersData].sort((a, b) => b.unjustifiedAbsences - a.unjustifiedAbsences) : [...allPlayersData].sort((a, b) => b.average - a.average);
-    const filteredData = sortedData.filter(filterFunctions[filter]);
+    const filteredData = (filter === 'desempenho') ? performanceData : sortedData.filter(filterFunctions[filter]);
+    const selectedPlayerData = performanceData.find(p => p.name === selectedPerformancePlayer);
+
 
     const handleGenerateReport = () => {
         if (!monthRange.start || !monthRange.end) {
@@ -255,39 +290,71 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
                 <div className="space-y-5">
                     {filteredData.length === 0 ?
                         <p className="text-center text-gray-500">Nenhum jogador corresponde a este filtro.</p> :
-                        <div className={filter === 'all' ? 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-2' : 'space-y-4'}>
-                            {filteredData.map(player => (
-                                <div key={player.name}>
-                                    {filter === 'faltas' ? (
-                                        <div>
-                                            <div className="flex items-center justify-between">
-                                                <button onClick={() => setModalPlayer(player)} className="w-1/2 text-left truncate pr-2 font-medium text-blue-600 hover:text-blue-800 hover:underline">{player.name}</button>
-                                                <div className="w-1/2 text-right"><span className="font-semibold text-orange-600">{player.unjustifiedAbsences} falta(s)</span></div>
-                                            </div>
-                                            <div className="text-xs text-gray-500 pl-4 mt-1">
-                                                Datas: {player.unjustifiedAbsenceDates.join(', ')}
-                                            </div>
-                                        </div>
-                                    ) : filter === 'all' ? (
-                                        <div className="flex items-center justify-between border-b border-gray-100 py-1">
-                                            <button onClick={() => setModalPlayer(player)} className="text-left truncate pr-2 font-medium text-blue-600 hover:text-blue-800 hover:underline">{player.name}</button>
-                                            <span className="font-semibold text-gray-700">{player.average}%</span>
-                                        </div>
-                                    ) : (
-                                        <div className="flex items-center justify-between gap-4">
-                                            <button onClick={() => setModalPlayer(player)} className="w-1/4 text-left truncate font-medium text-blue-600 hover:text-blue-800 hover:underline">{player.name}</button>
-                                            <div className="w-2/4 bg-gray-200 rounded-full h-4">
-                                                <div
-                                                    className={`h-4 rounded-full ${player.average >= 75 ? 'bg-green-500' : player.average >= 50 ? 'bg-blue-600' : 'bg-yellow-500'}`}
-                                                    style={{ width: `${player.average}%` }}
-                                                ></div>
-                                            </div>
-                                            <span className="font-semibold w-1/4 text-right">{player.average}%</span>
-                                        </div>
-                                    )}
+                        
+                        filter === 'desempenho' ? (
+                            <div className="space-y-4">
+                                <div className="mb-4">
+                                    <label htmlFor="player-performance-select" className="block text-sm font-medium text-gray-700 mb-1">Selecione um Jogador:</label>
+                                    <select 
+                                        id="player-performance-select"
+                                        value={selectedPerformancePlayer} 
+                                        onChange={(e) => setSelectedPerformancePlayer(e.target.value)}
+                                        className="w-full p-2 border border-gray-300 rounded-md shadow-sm"
+                                    >
+                                        {allPlayersData.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
+                                    </select>
                                 </div>
-                            ))}
-                        </div>
+                                {selectedPlayerData && (
+                                    <div className="p-4 border rounded-lg bg-gray-50">
+                                        <div className="flex justify-between items-center">
+                                            <span className="font-bold text-xl">{selectedPlayerData.name}</span>
+                                            <span className={`font-semibold text-lg ${selectedPlayerData.performancePercentage >= 50 ? 'text-green-600' : 'text-red-600'}`}>{selectedPlayerData.performancePercentage.toFixed(1)}%</span>
+                                        </div>
+                                        <div className="w-full bg-gray-200 rounded-full h-4 mt-2">
+                                            <div className={`h-4 rounded-full ${selectedPlayerData.performancePercentage >= 50 ? 'bg-green-500' : 'bg-red-500'}`} style={{ width: `${selectedPlayerData.performancePercentage}%` }}></div>
+                                        </div>
+                                        <div className="text-sm text-gray-600 mt-1 flex justify-between">
+                                            <span>{selectedPlayerData.presencesInPeriod} de {selectedPlayerData.gamesInPeriod} jogos nos últimos 60 dias</span>
+                                            <span>Status: <span className={`font-bold ${selectedPlayerData.performancePercentage >= 50 ? 'text-green-600' : 'text-red-600'}`}>{selectedPlayerData.status}</span></span>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <div className={filter === 'all' ? 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-2' : 'space-y-4'}>
+                                {filteredData.map(player => (
+                                    <div key={player.name}>
+                                        {filter === 'faltas' ? (
+                                            <div>
+                                                <div className="flex items-center justify-between">
+                                                    <button onClick={() => setModalPlayer(player)} className="w-1/2 text-left truncate pr-2 font-medium text-blue-600 hover:text-blue-800 hover:underline">{player.name}</button>
+                                                    <div className="w-1/2 text-right"><span className="font-semibold text-orange-600">{player.unjustifiedAbsences} falta(s)</span></div>
+                                                </div>
+                                                <div className="text-xs text-gray-500 pl-4 mt-1">
+                                                    Datas: {player.unjustifiedAbsenceDates.join(', ')}
+                                                </div>
+                                            </div>
+                                        ) : filter === 'all' ? (
+                                            <div className="flex items-center justify-between border-b border-gray-100 py-1">
+                                                <button onClick={() => setModalPlayer(player)} className="text-left truncate pr-2 font-medium text-blue-600 hover:text-blue-800 hover:underline">{player.name}</button>
+                                                <span className="font-semibold text-gray-700">{player.average}%</span>
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center justify-between gap-4">
+                                                <button onClick={() => setModalPlayer(player)} className="w-1/4 text-left truncate font-medium text-blue-600 hover:text-blue-800 hover:underline">{player.name}</button>
+                                                <div className="w-2/4 bg-gray-200 rounded-full h-4">
+                                                    <div
+                                                        className={`h-4 rounded-full ${player.average >= 75 ? 'bg-green-500' : player.average >= 50 ? 'bg-blue-600' : 'bg-yellow-500'}`}
+                                                        style={{ width: `${player.average}%` }}
+                                                    ></div>
+                                                </div>
+                                                <span className="font-semibold w-1/4 text-right">{player.average}%</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )
                     }
                 </div>
             </section>
