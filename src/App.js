@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 
 // --- COMPONENTES AUXILIARES DE UI ---
 
@@ -99,14 +99,23 @@ const ChartComponent = ({ chartConfig }) => {
 const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }) => {
     const [filter, setFilter] = useState('all');
     const [report, setReport] = useState(null);
-    const [dateRange, setDateRange] = useState({ start: '', end: '' });
+    const [monthRange, setMonthRange] = useState({ start: '', end: '' });
     const [modalPlayer, setModalPlayer] = useState(null);
 
-    useEffect(() => {
-        if (dates && dates.length > 0) {
-            setDateRange({ start: dates[0], end: dates[dates.length - 1] });
-        }
+    const availableMonths = useMemo(() => {
+        const monthSet = new Set();
+        dates.forEach(d => {
+            const [day, month, year] = d.split('/');
+            monthSet.add(`${year}-${month.padStart(2, '0')}`);
+        });
+        return Array.from(monthSet).sort();
     }, [dates]);
+
+    useEffect(() => {
+        if (availableMonths.length > 0) {
+            setMonthRange({ start: availableMonths[0], end: availableMonths[availableMonths.length - 1] });
+        }
+    }, [availableMonths]);
 
     if (isLoading) return <Loader message="A carregar dados da planilha de presença..." />;
     if (error) return <p className="text-center text-red-500 py-8">{error}</p>;
@@ -136,20 +145,27 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
     const filteredData = sortedData.filter(filterFunctions[filter]);
 
     const handleGenerateReport = () => {
-        if (!dateRange.start || !dateRange.end) {
-            alert("Por favor, aguarde o carregamento dos dados antes de gerar um relatório.");
+        if (!monthRange.start || !monthRange.end) {
+            alert("Por favor, selecione um período de meses.");
             return;
         }
-        const startDate = new Date(dateRange.start.split('/').reverse().join('-'));
-        const endDate = new Date(dateRange.end.split('/').reverse().join('-'));
-        if (startDate > endDate) {
-            alert("A data de início não pode ser posterior à data de fim.");
+
+        const [startYear, startMonth] = monthRange.start.split('-').map(Number);
+        const [endYear, endMonth] = monthRange.end.split('-').map(Number);
+
+        if (startYear > endYear || (startYear === endYear && startMonth > endMonth)) {
+            alert("O mês de início não pode ser posterior ao mês de fim.");
             return;
         }
+
         const periodDates = dates.filter(d => {
-            const currentDate = new Date(d.split('/').reverse().join('-'));
-            return currentDate >= startDate && currentDate <= endDate;
+            const [day, month, year] = d.split('/').map(Number);
+            const date = new Date(year, month - 1, day);
+            const startDate = new Date(startYear, startMonth - 1, 1);
+            const endDate = new Date(endYear, endMonth, 0); // Last day of the end month
+            return date >= startDate && date <= endDate;
         });
+
         const reportData = allPlayersData
             .map(player => ({
                 name: player.name,
@@ -157,8 +173,13 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
             }))
             .sort((a, b) => b.presences - a.presences);
 
+        const formatMonth = (monthStr) => {
+            const [year, month] = monthStr.split('-');
+            return new Date(year, month - 1).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+        }
+
         setReport({
-            title: `Relatório de Presença (${dateRange.start} a ${dateRange.end})`,
+            title: `Relatório de Presença (${formatMonth(monthRange.start)} a ${formatMonth(monthRange.end)})`,
             data: reportData
         });
     };
@@ -275,15 +296,15 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
                 <h2 className="text-2xl font-bold mb-4 text-gray-800">Extrair Relatório por Período</h2>
                 <div className="grid grid-cols-1 md:grid-cols-3 items-end gap-4">
                     <div>
-                        <label htmlFor="date-selector-start" className="block text-sm font-medium text-gray-700 mb-1">Data de Início:</label>
-                        <select id="date-selector-start" value={dateRange.start} onChange={e => setDateRange({ ...dateRange, start: e.target.value })} className="w-full p-2 border border-gray-300 rounded-md shadow-sm">
-                            {dates.map(d => <option key={d} value={d}>{d}</option>)}
+                        <label htmlFor="month-selector-start" className="block text-sm font-medium text-gray-700 mb-1">Mês de Início:</label>
+                        <select id="month-selector-start" value={monthRange.start} onChange={e => setMonthRange({ ...monthRange, start: e.target.value })} className="w-full p-2 border border-gray-300 rounded-md shadow-sm">
+                            {availableMonths.map(m => <option key={m} value={m}>{new Date(m + '-02').toLocaleString('pt-BR', {month: 'long', year: 'numeric'})}</option>)}
                         </select>
                     </div>
                     <div>
-                        <label htmlFor="date-selector-end" className="block text-sm font-medium text-gray-700 mb-1">Data de Fim:</label>
-                        <select id="date-selector-end" value={dateRange.end} onChange={e => setDateRange({ ...dateRange, end: e.target.value })} className="w-full p-2 border border-gray-300 rounded-md shadow-sm">
-                            {dates.map(d => <option key={d} value={d}>{d}</option>)}
+                        <label htmlFor="month-selector-end" className="block text-sm font-medium text-gray-700 mb-1">Mês de Fim:</label>
+                        <select id="month-selector-end" value={monthRange.end} onChange={e => setMonthRange({ ...monthRange, end: e.target.value })} className="w-full p-2 border border-gray-300 rounded-md shadow-sm">
+                            {availableMonths.map(m => <option key={m} value={m}>{new Date(m + '-02').toLocaleString('pt-BR', {month: 'long', year: 'numeric'})}</option>)}
                         </select>
                     </div>
                     <div><button onClick={handleGenerateReport} className="w-full bg-indigo-600 text-white font-bold py-2 px-4 rounded-md hover:bg-indigo-700">Gerar Relatório</button></div>
@@ -1401,4 +1422,3 @@ export default function App() {
         </div>
     );
 }
- 
