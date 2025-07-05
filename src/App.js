@@ -238,9 +238,14 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
                             {filteredData.map(player => (
                                 <div key={player.name}>
                                     {filter === 'faltas' ? (
-                                        <div className="flex items-center justify-between">
-                                            <button onClick={() => setModalPlayer(player)} className="w-1/2 text-left truncate pr-2 font-medium text-blue-600 hover:text-blue-800 hover:underline">{player.name}</button>
-                                            <div className="w-1/2 text-right"><span className="font-semibold text-orange-600">{player.unjustifiedAbsences} falta(s)</span></div>
+                                        <div>
+                                            <div className="flex items-center justify-between">
+                                                <button onClick={() => setModalPlayer(player)} className="w-1/2 text-left truncate pr-2 font-medium text-blue-600 hover:text-blue-800 hover:underline">{player.name}</button>
+                                                <div className="w-1/2 text-right"><span className="font-semibold text-orange-600">{player.unjustifiedAbsences} falta(s)</span></div>
+                                            </div>
+                                            <div className="text-xs text-gray-500 pl-4 mt-1">
+                                                Datas: {player.unjustifiedAbsenceDates.join(', ')}
+                                            </div>
                                         </div>
                                     ) : filter === 'all' ? (
                                         <div className="flex items-center justify-between border-b border-gray-100 py-1">
@@ -981,9 +986,9 @@ const EventosTab = ({ scriptUrl, allPlayers, ModalComponent }) => {
 
     return (
         <div>
-            <div className="flex justify-between items-center mb-6">
-                <h2 className="text-3xl font-bold text-gray-800">Próximos Eventos</h2>
-                <button onClick={() => { setCurrentEvent(null); setIsEventModalOpen(true); }} className="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 shadow-md transition-all transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+            <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
+                <h2 className="text-2xl md:text-3xl font-bold text-gray-800">Próximos Eventos</h2>
+                <button onClick={() => { setCurrentEvent(null); setIsEventModalOpen(true); }} className="w-full sm:w-auto bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 shadow-md transition-all transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
                     + Criar Evento
                 </button>
             </div>
@@ -1200,18 +1205,22 @@ export default function App() {
                     const attendance = {};
                     let presences = 0;
                     let unjustifiedAbsences = 0;
+                    let unjustifiedAbsenceDates = [];
                     let relevantGames = 0;
                     allDates.forEach(date => {
                         const status = row[date]?.trim() || '';
                         if (status) {
                             relevantGames++;
                             if (status.includes('✅')) presences++;
-                            else if (status.toUpperCase() === 'NÃO JUSTIFICOU') unjustifiedAbsences++;
+                            else if (status.toUpperCase() === 'NÃO JUSTIFICOU') {
+                                unjustifiedAbsences++;
+                                unjustifiedAbsenceDates.push(date);
+                            }
                         }
                         attendance[date] = status;
                     });
                     const average = relevantGames > 0 ? parseFloat(((presences / relevantGames) * 100).toFixed(1)) : 0;
-                    return { name, presences, totalGames: relevantGames, average, unjustifiedAbsences, attendance };
+                    return { name, presences, totalGames: relevantGames, average, unjustifiedAbsences, unjustifiedAbsenceDates, attendance };
                 })
                 .filter(Boolean);
 
@@ -1371,15 +1380,15 @@ export default function App() {
                 </header>
 
                 <div className="mb-6">
-                    <nav className="flex space-x-2 p-1 bg-gray-200 rounded-lg">
+                    <nav className="flex space-x-1 sm:space-x-2 p-1 bg-gray-200 rounded-lg">
                         {TABS.map(tab => (
                             <button
                                 key={tab}
                                 onClick={() => handleTabClick(tab)}
-                                className={`w-full py-2.5 px-4 text-sm font-medium rounded-md transition-colors duration-300 flex items-center justify-center ${activeTab === tab ? 'bg-white shadow text-blue-600' : 'text-gray-600 hover:bg-gray-300 hover:text-gray-800'}`}
+                                className={`w-full py-2.5 px-2 sm:px-4 text-xs sm:text-sm font-medium rounded-md transition-colors duration-300 flex items-center justify-center ${activeTab === tab ? 'bg-white shadow text-blue-600' : 'text-gray-600 hover:bg-gray-300 hover:text-gray-800'}`}
                             >
                                 {TAB_ICONS[tab]}
-                                {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                                <span className="hidden sm:inline">{tab.charAt(0).toUpperCase() + tab.slice(1)}</span>
                             </button>
                         ))}
                     </nav>
@@ -1392,3 +1401,4 @@ export default function App() {
         </div>
     );
 }
+ 
