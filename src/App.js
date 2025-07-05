@@ -295,6 +295,7 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
                             <div className="space-y-4">
                                 <div className="mb-4">
                                     <label htmlFor="player-performance-select" className="block text-sm font-medium text-gray-700 mb-1">Selecione um Jogador:</label>
+                                    <p className="text-xs text-gray-500 mt-1 mb-2">Referência: Ata de Reunião 06/01/2025 - Cláusula 4.</p>
                                     <select 
                                         id="player-performance-select"
                                         value={selectedPerformancePlayer} 
