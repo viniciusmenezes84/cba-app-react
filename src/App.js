@@ -128,7 +128,7 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
                 return count + (player.attendance[date]?.includes('✅') ? 1 : 0);
             }, 0);
             
-            const performancePercentage = (presencesInPeriod / relevantDates.length) * 100;
+            const performancePercentage = (relevantDates.length > 0) ? (presencesInPeriod / relevantDates.length) * 100 : 0;
             const status = performancePercentage >= 50 ? 'Em conformidade' : 'Abaixo da meta';
             
             return {
@@ -140,6 +140,26 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
             };
         }).sort((a, b) => b.performancePercentage - a.performancePercentage);
     }, [allPlayersData, dates]);
+    
+    const performanceChartConfig = useMemo(() => ({
+        type: 'bar',
+        data: {
+            labels: performanceData.map(p => p.name),
+            datasets: [{
+                label: 'Desempenho nos Últimos 60 Dias (%)',
+                data: performanceData.map(p => p.performancePercentage),
+                backgroundColor: performanceData.map(p => p.performancePercentage >= 50 ? 'rgba(34, 197, 94, 0.8)' : 'rgba(239, 68, 68, 0.8)'),
+                borderColor: performanceData.map(p => p.performancePercentage >= 50 ? 'rgb(22, 163, 74)' : 'rgb(220, 38, 38)'),
+                borderWidth: 1
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: { x: { beginAtZero: true, max: 100 } }
+        }
+    }), [performanceData]);
 
     useEffect(() => {
         if (availableMonths.length > 0) {
@@ -292,34 +312,43 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
                         <p className="text-center text-gray-500">Nenhum jogador corresponde a este filtro.</p> :
                         
                         filter === 'desempenho' ? (
-                            <div className="space-y-4">
-                                <div className="mb-4">
-                                    <label htmlFor="player-performance-select" className="block text-sm font-medium text-gray-700 mb-1">Selecione um Jogador:</label>
-                                    <p className="text-xs text-gray-500 mt-1 mb-2">Referência: Ata de Reunião 06/01/2025 - Cláusula 4.</p>
-                                    <select 
-                                        id="player-performance-select"
-                                        value={selectedPerformancePlayer} 
-                                        onChange={(e) => setSelectedPerformancePlayer(e.target.value)}
-                                        className="w-full p-2 border border-gray-300 rounded-md shadow-sm"
-                                    >
-                                        {allPlayersData.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
-                                    </select>
-                                </div>
-                                {selectedPlayerData && (
-                                    <div className="p-4 border rounded-lg bg-gray-50">
-                                        <div className="flex justify-between items-center">
-                                            <span className="font-bold text-xl">{selectedPlayerData.name}</span>
-                                            <span className={`font-semibold text-lg ${selectedPlayerData.performancePercentage >= 50 ? 'text-green-600' : 'text-red-600'}`}>{selectedPlayerData.performancePercentage.toFixed(1)}%</span>
-                                        </div>
-                                        <div className="w-full bg-gray-200 rounded-full h-4 mt-2">
-                                            <div className={`h-4 rounded-full ${selectedPlayerData.performancePercentage >= 50 ? 'bg-green-500' : 'bg-red-500'}`} style={{ width: `${selectedPlayerData.performancePercentage}%` }}></div>
-                                        </div>
-                                        <div className="text-sm text-gray-600 mt-1 flex justify-between">
-                                            <span>{selectedPlayerData.presencesInPeriod} de {selectedPlayerData.gamesInPeriod} jogos nos últimos 60 dias</span>
-                                            <span>Status: <span className={`font-bold ${selectedPlayerData.performancePercentage >= 50 ? 'text-green-600' : 'text-red-600'}`}>{selectedPlayerData.status}</span></span>
-                                        </div>
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+                                <div className="space-y-4">
+                                    <h3 className="text-xl font-semibold text-gray-700">Desempenho Individual</h3>
+                                    <div className="mb-4">
+                                        <label htmlFor="player-performance-select" className="block text-sm font-medium text-gray-700 mb-1">Selecione um Jogador:</label>
+                                        <p className="text-xs text-gray-500 mt-1 mb-2">Referência: Ata de Reunião 06/01/2025 - Cláusula 4.</p>
+                                        <select 
+                                            id="player-performance-select"
+                                            value={selectedPerformancePlayer} 
+                                            onChange={(e) => setSelectedPerformancePlayer(e.target.value)}
+                                            className="w-full p-2 border border-gray-300 rounded-md shadow-sm"
+                                        >
+                                            {allPlayersData.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
+                                        </select>
                                     </div>
-                                )}
+                                    {selectedPlayerData && (
+                                        <div className="p-4 border rounded-lg bg-gray-50">
+                                            <div className="flex justify-between items-center">
+                                                <span className="font-bold text-xl">{selectedPlayerData.name}</span>
+                                                <span className={`font-semibold text-lg ${selectedPlayerData.performancePercentage >= 50 ? 'text-green-600' : 'text-red-600'}`}>{selectedPlayerData.performancePercentage.toFixed(1)}%</span>
+                                            </div>
+                                            <div className="w-full bg-gray-200 rounded-full h-4 mt-2">
+                                                <div className={`h-4 rounded-full ${selectedPlayerData.performancePercentage >= 50 ? 'bg-green-500' : 'bg-red-500'}`} style={{ width: `${selectedPlayerData.performancePercentage}%` }}></div>
+                                            </div>
+                                            <div className="text-sm text-gray-600 mt-1 flex justify-between">
+                                                <span>{selectedPlayerData.presencesInPeriod} de {selectedPlayerData.gamesInPeriod} jogos nos últimos 60 dias</span>
+                                                <span>Status: <span className={`font-bold ${selectedPlayerData.performancePercentage >= 50 ? 'text-green-600' : 'text-red-600'}`}>{selectedPlayerData.status}</span></span>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="space-y-4">
+                                    <h3 className="text-xl font-semibold text-gray-700">Desempenho Geral (Últimos 60 Dias)</h3>
+                                    <div className="h-96">
+                                       <ChartComponent chartConfig={performanceChartConfig} />
+                                    </div>
+                                </div>
                             </div>
                         ) : (
                             <div className={filter === 'all' ? 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-2' : 'space-y-4'}>
