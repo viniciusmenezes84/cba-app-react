@@ -180,15 +180,8 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
         const sortedByAverage = [...allPlayersData].sort((a, b) => b.average - a.average || a.name.localeCompare(b.name));
         const sortedByTotalPresence = [...allPlayersData].sort((a, b) => b.presences - a.presences || a.name.localeCompare(b.name));
         const leastPresentSorted = [...allPlayersData].sort((a, b) => a.average - b.average || a.name.localeCompare(b.name));
-        const lastGameDate = new Date(dates[dates.length - 1].split('/').reverse().join('-'));
-        const lastMonth = lastGameDate.getMonth();
-        const lastYear = lastGameDate.getFullYear();
-        const gamesInLastMonth = dates.filter(d => {
-            const gameDate = new Date(d.split('/').reverse().join('-'));
-            return gameDate.getMonth() === lastMonth && gameDate.getFullYear() === lastYear;
-        });
-        const perfectPlayers = gamesInLastMonth.length > 0 ? allPlayersData.filter(p => gamesInLastMonth.every(date => p.attendance[date]?.includes('✅'))) : [];
-        return { onFire: sortedByAverage[0], mostPresent: sortedByTotalPresence[0], leastPresent: leastPresentSorted.slice(0, 3), monthlyPerfect: perfectPlayers };
+        
+        return { onFire: sortedByAverage[0], mostPresent: sortedByTotalPresence[0], leastPresent: leastPresentSorted.slice(0, 3) };
     };
 
     const hallOfFame = getHallOfFameData();
@@ -252,7 +245,7 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
         <div className="space-y-8">
             <section className="bg-white p-6 rounded-xl shadow-lg">
                 <h2 className="text-2xl font-bold mb-4 text-center text-gray-800">🏆 Quadro de Honra 🏆</h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                     <div className="text-center p-4 bg-orange-50 rounded-lg">
                         <h3 className="text-lg font-semibold text-orange-600 mb-2">On Fire 🔥</h3>
                         <p className="text-2xl font-bold">{hallOfFame.onFire?.name}</p>
@@ -263,14 +256,7 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
                         <p className="text-2xl font-bold">{hallOfFame.mostPresent?.name}</p>
                         <p className="text-xl text-cyan-700 font-semibold">{hallOfFame.mostPresent?.presences} jogos</p>
                     </div>
-                    <div className="text-center p-4 bg-green-50 rounded-lg">
-                        <h3 className="text-lg font-semibold text-green-600 mb-2">100% no Mês ✅</h3>
-                        {hallOfFame.monthlyPerfect.length > 0 ?
-                            <p className="font-bold text-lg">{hallOfFame.monthlyPerfect.map(p => p.name).join(', ')}</p> :
-                            <p className="text-gray-600">Ninguém.</p>
-                        }
-                    </div>
-                    <div className="p-4 bg-red-50 rounded-lg">
+                    <div className="p-4 bg-red-50 rounded-lg lg:col-span-1 sm:col-span-2">
                         <h3 className="text-lg font-semibold text-red-600 mb-2 text-center">Menos Presentes 📉</h3>
                         <ul className="text-left space-y-1 text-sm">
                             {hallOfFame.leastPresent.map(player => (
@@ -397,21 +383,16 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
                                                     Datas: {player.unjustifiedAbsenceDates.join(', ')}
                                                 </div>
                                             </div>
-                                        ) : filter === 'all' ? (
-                                            <div className="flex items-center justify-between border-b border-gray-100 py-1">
-                                                <button onClick={() => setModalPlayer(player)} className="text-left truncate pr-2 font-medium text-blue-600 hover:text-blue-800 hover:underline">{player.name}</button>
-                                                <span className="font-semibold text-gray-700">{player.average}%</span>
-                                            </div>
                                         ) : (
                                             <div className="flex items-center justify-between gap-4">
-                                                <button onClick={() => setModalPlayer(player)} className="w-1/4 text-left truncate font-medium text-blue-600 hover:text-blue-800 hover:underline">{player.name}</button>
-                                                <div className="w-2/4 bg-gray-200 rounded-full h-4">
+                                                <button onClick={() => setModalPlayer(player)} className="w-1/3 text-left truncate font-medium text-blue-600 hover:text-blue-800 hover:underline">{player.name}</button>
+                                                <div className="w-1/3 bg-gray-200 rounded-full h-4">
                                                     <div
                                                         className={`h-4 rounded-full ${player.average >= 75 ? 'bg-green-500' : player.average >= 50 ? 'bg-blue-600' : 'bg-yellow-500'}`}
                                                         style={{ width: `${player.average}%` }}
                                                     ></div>
                                                 </div>
-                                                <span className="font-semibold w-1/4 text-right">{player.average}%</span>
+                                                <span className="font-semibold w-1/3 text-right">{player.average}%</span>
                                             </div>
                                         )}
                                     </div>
@@ -1324,7 +1305,7 @@ export default function App() {
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz0JdnbctEkcHae8hJoma0-ExjNiGBfJP5otA9BD32x-J3K7iE3ACjxPUvFHubKGaEZpg/exec";
 
     const fetchAttendanceData = useCallback(async () => {
-        const ATTENDANCE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vToVgb2bcwJcd-MAfIjYDK-B13qFQcNt1g6O5GKgCVyvlJbqrUi_9ZtXfrmlYZi1A/pub?output=csv';
+        const ATTENDANCE_SHEET_URL = `https://docs.google.com/spreadsheets/d/e/2PACX-1vToVgb2bcwJcd-MAfIjYDK-B13qFQcNt1g6O5GKgCVyvlJbqrUi_9ZtXfrmlYZi1A/pub?output=csv&_=${new Date().getTime()}`;
         setAttendanceData(prev => ({ ...prev, isLoading: true }));
         try {
             if (!window.Papa) {
@@ -1384,7 +1365,7 @@ export default function App() {
     }, []);
 
     const fetchFinanceData = useCallback(async () => {
-        const FINANCE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT0fIELkR4lk2apHxZ9JbhTUUI8M4ICKGCEe3ntox5zyYsaccFftSx4mFyne5xpzA/pub?output=csv';
+        const FINANCE_SHEET_URL = `https://docs.google.com/spreadsheets/d/e/2PACX-1vT0fIELkR4lk2apHxZ9JbhTUUI8M4ICKGCEe3ntox5zyYsaccFftSx4mFyne5xpzA/pub?output=csv&_=${new Date().getTime()}`;
         setFinanceData({ isLoading: true, data: null, error: null });
         try {
             if (!window.Papa) {
@@ -1479,10 +1460,22 @@ export default function App() {
         .catch(error => console.error("Failed to load essential libraries:", error));
     }, []);
 
+    const handleRefresh = useCallback(() => {
+        setIsRefreshing(true);
+        const promises = [fetchAttendanceData()];
+        if(activeTab === 'financas') {
+            promises.push(fetchFinanceData());
+        }
+        Promise.all(promises).finally(() => setIsRefreshing(false));
+    }, [activeTab, fetchAttendanceData, fetchFinanceData]);
+
     useEffect(() => {
         if (!librariesLoaded) return;
         fetchAttendanceData();
-    }, [librariesLoaded, fetchAttendanceData]);
+        if (activeTab === 'financas') {
+            fetchFinanceData();
+        }
+    }, [librariesLoaded, fetchAttendanceData, fetchFinanceData, activeTab]);
 
     const handleTabClick = (tab) => {
         setActiveTab(tab);
@@ -1527,6 +1520,16 @@ export default function App() {
                     <div>
                         <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-gray-900 tracking-tight">CBA - Basquete dos Aposentados</h1>
                         <p className="text-gray-500 mt-1">O seu portal completo para eventos, finanças e estatísticas do time.</p>
+                    </div>
+                    <div className="flex items-center gap-4 pt-2">
+                        <p className="text-sm text-gray-500">
+                            Última atualização: <span>{lastUpdated.toLocaleTimeString('pt-BR')}</span>
+                        </p>
+                        <button onClick={handleRefresh} disabled={isRefreshing} className="p-1.5 rounded-full bg-gray-200 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                            <svg className={`w-5 h-5 text-gray-600 ${isRefreshing ? 'animate-spin' : ''}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h5M20 20v-5h-5M4 4a14.95 14.95 0 0117.47 9.47M20 20a14.95 14.95 0 01-17.47-9.47" />
+                            </svg>
+                        </button>
                     </div>
                 </header>
 
