@@ -194,7 +194,14 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
     const hallOfFame = getHallOfFameData();
     const attendanceChartConfig = { type: 'line', data: { labels: dates, datasets: [{ label: 'Jogadores Presentes', data: dates.map(date => allPlayersData.reduce((count, player) => count + (player.attendance[date]?.includes('✅') ? 1 : 0), 0)), fill: false, borderColor: 'rgb(75, 192, 192)', tension: 0.1 }] }, options: { scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } } };
     const averageBarChartConfig = { type: 'bar', data: { labels: [...allPlayersData].sort((a, b) => b.average - a.average).map(p => p.name), datasets: [{ label: 'Média de Presença (%)', data: [...allPlayersData].sort((a, b) => b.average - a.average).map(p => p.average), backgroundColor: [...allPlayersData].sort((a, b) => b.average - a.average).map(p => p.average >= 75 ? '#22c55e' : p.average >= 50 ? '#3b82f6' : '#f59e0b') }] }, options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false } } } };
-    const filterButtons = [{ key: 'desempenho', label: 'Desempenho' }, { key: 'all', label: 'Todos' }, { key: 'good', label: 'Melhores' }, { key: 'regular', label: 'Regulares' }, { key: 'bad', label: 'Abaixo' }, { key: 'faltas', label: 'Faltosos' }];
+    const filterButtons = [
+        { key: 'desempenho', label: 'Desempenho', emoji: '📈' },
+        { key: 'all', label: 'Todos', emoji: '👥' },
+        { key: 'good', label: 'Melhores', emoji: '👍' },
+        { key: 'regular', label: 'Regulares', emoji: '👌' },
+        { key: 'bad', label: 'Abaixo', emoji: '👎' },
+        { key: 'faltas', label: 'Faltosos', emoji: '⚠️' }
+    ];
     const filterFunctions = { 'all': () => true, 'good': p => p.average >= 75, 'regular': p => p.average >= 50 && p.average < 75, 'bad': p => p.average < 50, 'faltas': p => p.unjustifiedAbsences > 0, 'desempenho': () => true };
     const sortedData = (filter === 'faltas') ? [...allPlayersData].sort((a, b) => b.unjustifiedAbsences - a.unjustifiedAbsences) : [...allPlayersData].sort((a, b) => b.average - a.average);
     const filteredData = (filter === 'desempenho') ? performanceData : sortedData.filter(filterFunctions[filter]);
@@ -294,17 +301,17 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
                         <p className="text-sm text-gray-500">Clique no nome de um jogador para ver os detalhes.</p>
                     </div>
                     <div className="flex flex-wrap gap-2 mt-4 sm:mt-0">
-                        {filterButtons.map(({ key, label }) => (
+                        {filterButtons.map(({ key, label, emoji }) => (
                             <button
                                 key={key}
                                 onClick={() => setFilter(key)}
-                                className={`py-2 px-4 text-sm font-semibold rounded-lg shadow-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                                className={`py-2 px-4 text-sm font-semibold rounded-lg shadow-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 flex items-center ${
                                     filter === key
                                     ? 'bg-blue-600 text-white ring-blue-500'
                                     : 'bg-white text-gray-700 ring-1 ring-gray-300 hover:bg-gray-100'
                                 }`}
                             >
-                                {label}
+                                <span className="mr-2">{emoji}</span> {label}
                             </button>
                         ))}
                     </div>
@@ -343,7 +350,7 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
                                     </div>
                                     <div className="text-center mt-4">
                                         <p className={`font-bold text-xl ${teamPerformance.average >= 50 ? 'text-green-600' : 'text-red-600'}`}>{teamPerformance.status}</p>
-                                        <p className="text-sm text-gray-600">Média de presença da equipa</p>
+                                        <p className="text-sm text-gray-600">Média de presença do CBA</p>
                                     </div>
                                 </div>
                                 <div className="space-y-4">
