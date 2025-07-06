@@ -1471,11 +1471,21 @@ export default function App() {
 
     useEffect(() => {
         if (!librariesLoaded) return;
-        fetchAttendanceData();
-        if (activeTab === 'financas') {
-            fetchFinanceData();
-        }
-    }, [librariesLoaded, fetchAttendanceData, fetchFinanceData, activeTab]);
+        
+        const refreshData = () => {
+            setIsRefreshing(true);
+            const promises = [fetchAttendanceData()];
+            if (activeTab === 'financas') {
+                promises.push(fetchFinanceData());
+            }
+            Promise.all(promises).finally(() => setIsRefreshing(false));
+        };
+        
+        refreshData();
+        const intervalId = setInterval(refreshData, 120000); // 2 minutos
+        
+        return () => clearInterval(intervalId);
+    }, [librariesLoaded, activeTab, fetchAttendanceData, fetchFinanceData]);
 
     const handleTabClick = (tab) => {
         setActiveTab(tab);
