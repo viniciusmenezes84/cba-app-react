@@ -141,25 +141,27 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
         }).sort((a, b) => b.performancePercentage - a.performancePercentage);
     }, [allPlayersData, dates]);
     
-    const performanceChartConfig = useMemo(() => ({
-        type: 'bar',
-        data: {
-            labels: performanceData.map(p => p.name),
-            datasets: [{
-                label: 'Desempenho nos Últimos 60 Dias (%)',
-                data: performanceData.map(p => p.performancePercentage),
-                backgroundColor: performanceData.map(p => p.performancePercentage >= 50 ? 'rgba(34, 197, 94, 0.8)' : 'rgba(239, 68, 68, 0.8)'),
-                borderColor: performanceData.map(p => p.performancePercentage >= 50 ? 'rgb(22, 163, 74)' : 'rgb(220, 38, 38)'),
-                borderWidth: 1
-            }]
-        },
-        options: {
-            indexAxis: 'y',
-            responsive: true,
-            plugins: { legend: { display: false } },
-            scales: { x: { beginAtZero: true, max: 100 } }
+    const teamPerformance = useMemo(() => {
+        if (!performanceData || performanceData.length === 0) {
+            return {
+                average: 0,
+                status: 'N/A',
+                totalGames: 0,
+                totalPresences: 0,
+            };
         }
-    }), [performanceData]);
+        const totalPercentage = performanceData.reduce((sum, player) => sum + player.performancePercentage, 0);
+        const average = totalPercentage / performanceData.length;
+        const totalGames = performanceData[0].gamesInPeriod;
+        const totalPresences = performanceData.reduce((sum, player) => sum + player.presencesInPeriod, 0);
+        
+        return {
+            average,
+            status: average >= 50 ? 'Em conformidade' : 'Abaixo da meta',
+            totalGames,
+            totalPresences,
+        };
+    }, [performanceData]);
 
     useEffect(() => {
         if (availableMonths.length > 0) {
@@ -313,11 +315,41 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
                         
                         filter === 'desempenho' ? (
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+                                <div className="p-4 border rounded-lg bg-gray-50 flex flex-col items-center">
+                                    <h3 className="text-xl font-semibold text-gray-700 mb-2">Desempenho Geral do CBA</h3>
+                                    <p className="text-xs text-gray-500 mb-4 text-center">Referência: Ata de Reunião 06/01/2025 - Cláusula 4<br/>(Meta: 50% de presença nos últimos 60 dias)</p>
+                                    <div className="relative w-40 h-40">
+                                        <svg className="w-full h-full" viewBox="0 0 36 36">
+                                            <path
+                                                className="text-gray-200"
+                                                strokeWidth="3.8"
+                                                stroke="currentColor"
+                                                fill="none"
+                                                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                                            />
+                                            <path
+                                                className={teamPerformance.average >= 50 ? 'text-green-500' : 'text-red-500'}
+                                                strokeWidth="3.8"
+                                                strokeDasharray={`${teamPerformance.average}, 100`}
+                                                strokeLinecap="round"
+                                                stroke="currentColor"
+                                                fill="none"
+                                                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                                            />
+                                        </svg>
+                                        <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                            <span className="text-4xl font-bold text-gray-800">{teamPerformance.average.toFixed(1)}%</span>
+                                        </div>
+                                    </div>
+                                    <div className="text-center mt-4">
+                                        <p className={`font-bold text-xl ${teamPerformance.average >= 50 ? 'text-green-600' : 'text-red-600'}`}>{teamPerformance.status}</p>
+                                        <p className="text-sm text-gray-600">Média de presença da equipa</p>
+                                    </div>
+                                </div>
                                 <div className="space-y-4">
-                                    <h3 className="text-xl font-semibold text-gray-700">Desempenho Individual</h3>
+                                    <h3 className="text-xl font-semibold text-gray-700">Análise Individual</h3>
                                     <div className="mb-4">
                                         <label htmlFor="player-performance-select" className="block text-sm font-medium text-gray-700 mb-1">Selecione um Jogador:</label>
-                                        <p className="text-xs text-gray-500 mt-1 mb-2">Referência: Ata de Reunião 06/01/2025 - Cláusula 4.</p>
                                         <select 
                                             id="player-performance-select"
                                             value={selectedPerformancePlayer} 
@@ -337,17 +369,11 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
                                                 <div className={`h-4 rounded-full ${selectedPlayerData.performancePercentage >= 50 ? 'bg-green-500' : 'bg-red-500'}`} style={{ width: `${selectedPlayerData.performancePercentage}%` }}></div>
                                             </div>
                                             <div className="text-sm text-gray-600 mt-1 flex justify-between">
-                                                <span>{selectedPlayerData.presencesInPeriod} de {selectedPlayerData.gamesInPeriod} jogos nos últimos 60 dias</span>
+                                                <span>{selectedPlayerData.presencesInPeriod} de {selectedPlayerData.gamesInPeriod} jogos</span>
                                                 <span>Status: <span className={`font-bold ${selectedPlayerData.performancePercentage >= 50 ? 'text-green-600' : 'text-red-600'}`}>{selectedPlayerData.status}</span></span>
                                             </div>
                                         </div>
                                     )}
-                                </div>
-                                <div className="space-y-4">
-                                    <h3 className="text-xl font-semibold text-gray-700">Desempenho Geral (Últimos 60 Dias)</h3>
-                                    <div className="h-96">
-                                       <ChartComponent chartConfig={performanceChartConfig} />
-                                    </div>
                                 </div>
                             </div>
                         ) : (
