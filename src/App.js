@@ -1,22 +1,49 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, createContext, useContext } from 'react';
+
+// --- CONTEXTO DE TEMA (Light/Dark Mode) ---
+const ThemeContext = createContext();
+
+const ThemeProvider = ({ children }) => {
+    const [theme, setTheme] = useState('light');
+    
+    useEffect(() => {
+        const root = window.document.documentElement;
+        const isDark = theme === 'dark';
+        root.classList.remove(isDark ? 'light' : 'dark');
+        root.classList.add(theme);
+    }, [theme]);
+
+    const toggleTheme = () => {
+        setTheme(prevTheme => (prevTheme === 'light' ? 'dark' : 'light'));
+    };
+    
+    return (
+        <ThemeContext.Provider value={{ theme, toggleTheme }}>
+            {children}
+        </ThemeContext.Provider>
+    );
+};
+
+const useTheme = () => useContext(ThemeContext);
+
 
 // --- COMPONENTES AUXILIARES DE UI ---
 
 const Loader = ({ message }) => (
-    <div className="flex flex-col justify-center items-center py-20 text-center">
-        <div className="w-12 h-12 border-4 border-gray-200 border-t-blue-600 rounded-full animate-spin"></div>
-        {message && <p className="mt-4 text-lg text-gray-600">{message}</p>}
+    <div className="flex flex-col justify-center items-center py-20 text-center text-gray-500 dark:text-gray-400">
+        <div className="w-12 h-12 border-4 border-gray-200 dark:border-gray-700 border-t-blue-600 rounded-full animate-spin"></div>
+        {message && <p className="mt-4 text-lg">{message}</p>}
     </div>
 );
 
 const Modal = ({ isOpen, onClose, title, children }) => {
     if (!isOpen) return null;
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4 transition-opacity">
-            <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto transform transition-all scale-95 animate-fade-in-up">
-                <div className="flex justify-between items-center pb-3 border-b border-gray-200">
-                    <h2 className="text-2xl font-bold text-gray-800">{title}</h2>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors rounded-full p-1 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4 transition-opacity animate-fade-in">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto transform transition-all scale-95 animate-fade-in-up">
+                <div className="flex justify-between items-center pb-3 border-b border-gray-200 dark:border-gray-700">
+                    <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100">{title}</h2>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors rounded-full p-1 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
                 </div>
@@ -29,9 +56,9 @@ const Modal = ({ isOpen, onClose, title, children }) => {
 const AccordionItem = ({ title, children, isOpen, onClick }) => {
     const contentRef = useRef(null);
     return (
-        <div className="border border-gray-200 rounded-lg overflow-hidden mb-4">
+        <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden mb-4 transition-all duration-300">
             <button
-                className="flex justify-between items-center w-full p-4 font-semibold text-lg text-left text-gray-700 bg-gray-50 hover:bg-gray-100 transition-colors"
+                className="flex justify-between items-center w-full p-4 font-semibold text-lg text-left text-gray-700 dark:text-gray-200 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                 onClick={onClick}
             >
                 <span>{title}</span>
@@ -42,9 +69,9 @@ const AccordionItem = ({ title, children, isOpen, onClick }) => {
             <div
                 ref={contentRef}
                 style={{ maxHeight: isOpen ? `${contentRef.current?.scrollHeight}px` : '0' }}
-                className="overflow-hidden transition-max-height duration-500 ease-in-out bg-white"
+                className="overflow-hidden transition-max-height duration-500 ease-in-out bg-white dark:bg-gray-800/50"
             >
-                <div className="p-5 prose max-w-none border-t border-gray-200">{children}</div>
+                <div className="p-5 prose dark:prose-invert max-w-none border-t border-gray-200 dark:border-gray-700">{children}</div>
             </div>
         </div>
     );
@@ -54,27 +81,38 @@ const AccordionItem = ({ title, children, isOpen, onClick }) => {
 const ChartComponent = ({ chartConfig }) => {
     const chartRef = useRef(null);
     const chartInstance = useRef(null);
+    const { theme } = useTheme();
+
     useEffect(() => {
-        if (chartInstance.current) chartInstance.current.destroy();
+        if (chartInstance.current) {
+            chartInstance.current.destroy();
+        }
         if (chartRef.current && chartConfig && window.Chart) {
             const ctx = chartRef.current.getContext('2d');
-            chartInstance.current = new window.Chart(ctx, chartConfig);
+            const isDark = theme === 'dark';
+            
+            const updatedConfig = JSON.parse(JSON.stringify(chartConfig)); 
+            if(updatedConfig.options?.scales?.y?.ticks) updatedConfig.options.scales.y.ticks.color = isDark ? '#9ca3af' : '#6b7280';
+            if(updatedConfig.options?.scales?.x?.ticks) updatedConfig.options.scales.x.ticks.color = isDark ? '#9ca3af' : '#6b7280';
+            if(updatedConfig.options?.plugins?.legend?.labels) updatedConfig.options.plugins.legend.labels.color = isDark ? '#e5e7eb' : '#374151';
+
+            chartInstance.current = new window.Chart(ctx, updatedConfig);
         }
         return () => { if (chartInstance.current) chartInstance.current.destroy(); };
-    }, [chartConfig]);
+    }, [chartConfig, theme]);
+
     return <canvas ref={chartRef}></canvas>;
 };
-
 
 // --- COMPONENTES DE AUTENTICAÇÃO ---
 
 const LoginScreen = ({ onLogin, isLoading, error }) => (
     <div 
-        className="min-h-screen bg-cover bg-center flex items-center justify-center"
+        className="min-h-screen bg-cover bg-center flex items-center justify-center p-4"
         style={{ backgroundImage: "url('https://images.unsplash.com/photo-1546519638-68e109498ffc?q=80&w=2070&auto=format&fit=crop')" }}
     >
-        <div className="absolute inset-0 bg-black bg-opacity-50"></div>
-        <div className="relative z-10 p-8 bg-gray-900/70 backdrop-blur-sm rounded-xl shadow-2xl text-center w-full max-w-sm">
+        <div className="absolute inset-0 bg-black bg-opacity-60"></div>
+        <div className="relative z-10 p-8 bg-gray-900/70 backdrop-blur-sm border border-gray-700 rounded-xl shadow-2xl text-center w-full max-w-sm">
             <img src="https://i.ibb.co/pGnycLc/ICONE-CBA.jpg" alt="Logo CBA" className="h-24 w-24 rounded-full shadow-lg mx-auto mb-4" />
             <h1 className="text-3xl font-bold text-white mb-2">Portal do CBA</h1>
             <p className="text-gray-300 mb-6">Por favor, entre para continuar.</p>
@@ -82,7 +120,7 @@ const LoginScreen = ({ onLogin, isLoading, error }) => (
             <form onSubmit={onLogin} className="space-y-4">
                 <input name="email" type="email" placeholder="Email" className="w-full p-3 border border-gray-600 bg-gray-800 text-white rounded-md placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500" required />
                 <input name="password" type="password" placeholder="Senha" className="w-full p-3 border border-gray-600 bg-gray-800 text-white rounded-md placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500" required />
-                <button type="submit" disabled={isLoading} className="w-full bg-blue-600 text-white font-bold py-3 rounded-md hover:bg-blue-700 disabled:bg-blue-400">
+                <button type="submit" disabled={isLoading} className="w-full bg-blue-600 text-white font-bold py-3 rounded-md hover:bg-blue-700 disabled:bg-blue-400 transition-colors">
                     {isLoading ? 'A entrar...' : 'Entrar'}
                 </button>
             </form>
@@ -91,10 +129,10 @@ const LoginScreen = ({ onLogin, isLoading, error }) => (
 );
 
 const PendingScreen = () => (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100">
-        <div className="p-8 bg-white rounded-xl shadow-2xl text-center max-w-md">
-            <h2 className="text-2xl font-bold text-yellow-600 mb-4">Acesso Pendente</h2>
-            <p className="text-gray-600">O seu pedido de acesso foi enviado. Por favor, aguarde a aprovação de um administrador.</p>
+    <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900">
+        <div className="p-8 bg-white dark:bg-gray-800 rounded-xl shadow-2xl text-center max-w-md">
+            <h2 className="text-2xl font-bold text-yellow-600 dark:text-yellow-400 mb-4">Acesso Pendente</h2>
+            <p className="text-gray-600 dark:text-gray-300">O seu pedido de acesso foi enviado. Por favor, aguarde a aprovação de um administrador.</p>
         </div>
     </div>
 );
@@ -135,7 +173,7 @@ const ResetPasswordModal = ({ isOpen, onClose, user, scriptUrl }) => {
             });
             const data = await res.json();
             if (data.result === 'success') {
-                setMessage({ type: 'success', text: 'Senha alterada com sucesso! Por favor, faça login novamente.' });
+                setMessage({ type: 'success', text: 'Senha alterada com sucesso! A sair...' });
                 setTimeout(() => {
                     onClose(true); // Pass true to signal logout
                 }, 2000);
@@ -153,23 +191,23 @@ const ResetPasswordModal = ({ isOpen, onClose, user, scriptUrl }) => {
         <Modal isOpen={isOpen} onClose={() => onClose(false)} title="Resetar Senha">
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                    <label className="block text-sm font-medium text-gray-700">Nova Senha</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Nova Senha</label>
                     <input 
                         type="password" 
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
-                        className="w-full p-3 border border-gray-300 rounded-md" 
+                        className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md" 
                         required 
                     />
-                     <p className="text-xs text-gray-500 mt-1">Deve conter letras maiúsculas e números.</p>
+                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Deve conter letras maiúsculas e números.</p>
                 </div>
                 <div>
-                    <label className="block text-sm font-medium text-gray-700">Confirmar Nova Senha</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Confirmar Nova Senha</label>
                     <input 
                         type="password" 
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
-                        className="w-full p-3 border border-gray-300 rounded-md" 
+                        className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md" 
                         required 
                     />
                 </div>
@@ -336,22 +374,22 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
 
     return (
         <div className="space-y-8">
-            <section className="bg-white p-6 rounded-xl shadow-lg">
-                <h2 className="text-2xl font-bold mb-4 text-center text-gray-800">🏆 Quadro de Honra 🏆</h2>
+            <section className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg">
+                <h2 className="text-2xl font-bold mb-4 text-center text-gray-800 dark:text-gray-100">🏆 Quadro de Honra 🏆</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <div className="text-center p-4 bg-orange-50 rounded-lg">
-                        <h3 className="text-lg font-semibold text-orange-600 mb-2">On Fire 🔥</h3>
-                        <p className="text-2xl font-bold">{hallOfFame.onFire?.name}</p>
-                        <p className="text-xl text-orange-700 font-semibold">{hallOfFame.onFire?.average}%</p>
+                    <div className="text-center p-4 bg-orange-100 dark:bg-orange-900/30 rounded-lg">
+                        <h3 className="text-lg font-semibold text-orange-600 dark:text-orange-400 mb-2">On Fire 🔥</h3>
+                        <p className="text-2xl font-bold dark:text-gray-100">{hallOfFame.onFire?.name}</p>
+                        <p className="text-xl text-orange-700 dark:text-orange-500 font-semibold">{hallOfFame.onFire?.average}%</p>
                     </div>
-                    <div className="text-center p-4 bg-cyan-50 rounded-lg">
-                        <h3 className="text-lg font-semibold text-cyan-600 mb-2">Mais Presente</h3>
-                        <p className="text-2xl font-bold">{hallOfFame.mostPresent?.name}</p>
-                        <p className="text-xl text-cyan-700 font-semibold">{hallOfFame.mostPresent?.presences} jogos</p>
+                    <div className="text-center p-4 bg-cyan-100 dark:bg-cyan-900/30 rounded-lg">
+                        <h3 className="text-lg font-semibold text-cyan-600 dark:text-cyan-400 mb-2">Mais Presente</h3>
+                        <p className="text-2xl font-bold dark:text-gray-100">{hallOfFame.mostPresent?.name}</p>
+                        <p className="text-xl text-cyan-700 dark:text-cyan-500 font-semibold">{hallOfFame.mostPresent?.presences} jogos</p>
                     </div>
-                    <div className="p-4 bg-red-50 rounded-lg lg:col-span-1 sm:col-span-2">
-                        <h3 className="text-lg font-semibold text-red-600 mb-2 text-center">Menos Presentes 📉</h3>
-                        <ul className="text-left space-y-1 text-sm">
+                    <div className="p-4 bg-red-100 dark:bg-red-900/30 rounded-lg lg:col-span-1 sm:col-span-2">
+                        <h3 className="text-lg font-semibold text-red-600 dark:text-red-400 mb-2 text-center">Menos Presentes 📉</h3>
+                        <ul className="text-left space-y-1 text-sm text-gray-800 dark:text-gray-300">
                             {hallOfFame.leastPresent.map(player => (
                                 <li key={player.name} className="flex justify-between">
                                     <span>{player.name}</span> <span className="font-semibold">{player.average}%</span>
@@ -363,21 +401,21 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
             </section>
 
             <section className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <div className="bg-white p-6 rounded-xl shadow-lg">
-                    <h2 className="text-2xl font-bold mb-6 text-gray-800">Tendência de Presença por Jogo</h2>
+                <div className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg">
+                    <h2 className="text-2xl font-bold mb-6 text-gray-800 dark:text-gray-100">Tendência de Presença por Jogo</h2>
                     <ChartComponent chartConfig={attendanceChartConfig} />
                 </div>
-                <div className="bg-white p-6 rounded-xl shadow-lg">
-                    <h2 className="text-2xl font-bold mb-6 text-gray-800">Comparativo de Médias (%)</h2>
+                <div className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg">
+                    <h2 className="text-2xl font-bold mb-6 text-gray-800 dark:text-gray-100">Comparativo de Médias (%)</h2>
                     <ChartComponent chartConfig={averageBarChartConfig} />
                 </div>
             </section>
 
-            <section className="bg-white p-6 rounded-xl shadow-lg">
+            <section className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4">
                     <div>
-                        <h2 className="text-2xl font-bold text-gray-800">Análise Geral de Presença</h2>
-                        <p className="text-sm text-gray-500">Clique no nome de um jogador para ver os detalhes.</p>
+                        <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100">Análise Geral de Presença</h2>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Clique no nome de um jogador para ver os detalhes.</p>
                     </div>
                     <div className="flex flex-wrap gap-2 mt-4 sm:mt-0">
                         {filterButtons.map(({ key, label, emoji }) => (
@@ -387,7 +425,7 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
                                 className={`py-2 px-4 text-sm font-semibold rounded-lg shadow-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 flex items-center ${
                                     filter === key
                                     ? 'bg-blue-600 text-white ring-blue-500'
-                                    : 'bg-white text-gray-700 ring-1 ring-gray-300 hover:bg-gray-100'
+                                    : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 ring-1 ring-gray-300 dark:ring-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600'
                                 }`}
                             >
                                 <span className="mr-2">{emoji}</span> {label}
@@ -397,17 +435,17 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
                 </div>
                 <div className="space-y-5">
                     {filteredData.length === 0 ?
-                        <p className="text-center text-gray-500">Nenhum jogador corresponde a este filtro.</p> :
+                        <p className="text-center text-gray-500 dark:text-gray-400">Nenhum jogador corresponde a este filtro.</p> :
                         
                         filter === 'desempenho' ? (
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-                                <div className="p-4 border rounded-lg bg-gray-50 flex flex-col items-center">
-                                    <h3 className="text-xl font-semibold text-gray-700 mb-2">Desempenho Geral do CBA</h3>
-                                    <p className="text-xs text-gray-500 mb-4 text-center">Referência: Ata de Reunião 06/01/2025 - Cláusula 4<br/>(Meta: 50% de presença nos últimos 60 dias)</p>
+                                <div className="p-4 border rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-700 flex flex-col items-center">
+                                    <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-200 mb-2">Desempenho Geral do CBA</h3>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-4 text-center">Referência: Ata de Reunião 06/01/2025 - Cláusula 4<br/>(Meta: 50% de presença nos últimos 60 dias)</p>
                                     <div className="relative w-40 h-40">
                                         <svg className="w-full h-full" viewBox="0 0 36 36">
                                             <path
-                                                className="text-gray-200"
+                                                className="text-gray-200 dark:text-gray-700"
                                                 strokeWidth="3.8"
                                                 stroke="currentColor"
                                                 fill="none"
@@ -424,39 +462,39 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
                                             />
                                         </svg>
                                         <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                            <span className="text-4xl font-bold text-gray-800">{teamPerformance.average.toFixed(1)}%</span>
+                                            <span className="text-4xl font-bold text-gray-800 dark:text-gray-100">{teamPerformance.average.toFixed(1)}%</span>
                                         </div>
                                     </div>
                                     <div className="text-center mt-4">
-                                        <p className={`font-bold text-xl ${teamPerformance.average >= 50 ? 'text-green-600' : 'text-red-600'}`}>{teamPerformance.status}</p>
-                                        <p className="text-sm text-gray-600">Média de presença do CBA</p>
+                                        <p className={`font-bold text-xl ${teamPerformance.average >= 50 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>{teamPerformance.status}</p>
+                                        <p className="text-sm text-gray-600 dark:text-gray-400">Média de presença do CBA</p>
                                     </div>
                                 </div>
                                 <div className="space-y-4">
-                                    <h3 className="text-xl font-semibold text-gray-700">Análise Individual</h3>
+                                    <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-200">Análise Individual</h3>
                                     <div className="mb-4">
-                                        <label htmlFor="player-performance-select" className="block text-sm font-medium text-gray-700 mb-1">Selecione um Jogador:</label>
+                                        <label htmlFor="player-performance-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Selecione um Jogador:</label>
                                         <select 
                                             id="player-performance-select"
                                             value={selectedPerformancePlayer} 
                                             onChange={(e) => setSelectedPerformancePlayer(e.target.value)}
-                                            className="w-full p-2 border border-gray-300 rounded-md shadow-sm"
+                                            className="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md shadow-sm"
                                         >
                                             {allPlayersData.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
                                         </select>
                                     </div>
                                     {selectedPlayerData && (
-                                        <div className="p-4 border rounded-lg bg-gray-50">
+                                        <div className="p-4 border rounded-lg bg-gray-50 dark:bg-gray-800 dark:border-gray-700">
                                             <div className="flex justify-between items-center">
-                                                <span className="font-bold text-xl">{selectedPlayerData.name}</span>
-                                                <span className={`font-semibold text-lg ${selectedPlayerData.performancePercentage >= 50 ? 'text-green-600' : 'text-red-600'}`}>{selectedPlayerData.performancePercentage.toFixed(1)}%</span>
+                                                <span className="font-bold text-xl dark:text-gray-100">{selectedPlayerData.name}</span>
+                                                <span className={`font-semibold text-lg ${selectedPlayerData.performancePercentage >= 50 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>{selectedPlayerData.performancePercentage.toFixed(1)}%</span>
                                             </div>
-                                            <div className="w-full bg-gray-200 rounded-full h-4 mt-2">
+                                            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4 mt-2">
                                                 <div className={`h-4 rounded-full ${selectedPlayerData.performancePercentage >= 50 ? 'bg-green-500' : 'bg-red-500'}`} style={{ width: `${selectedPlayerData.performancePercentage}%` }}></div>
                                             </div>
-                                            <div className="text-sm text-gray-600 mt-1 flex justify-between">
+                                            <div className="text-sm text-gray-600 dark:text-gray-400 mt-1 flex justify-between">
                                                 <span>{selectedPlayerData.presencesInPeriod} de {selectedPlayerData.gamesInPeriod} jogos</span>
-                                                <span>Status: <span className={`font-bold ${selectedPlayerData.performancePercentage >= 50 ? 'text-green-600' : 'text-red-600'}`}>{selectedPlayerData.status}</span></span>
+                                                <span>Status: <span className={`font-bold ${selectedPlayerData.performancePercentage >= 50 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>{selectedPlayerData.status}</span></span>
                                             </div>
                                         </div>
                                     )}
@@ -469,23 +507,23 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
                                         {filter === 'faltas' ? (
                                             <div>
                                                 <div className="flex items-center justify-between">
-                                                    <button onClick={() => setModalPlayer(player)} className="w-1/2 text-left truncate pr-2 font-medium text-blue-600 hover:text-blue-800 hover:underline">{player.name}</button>
-                                                    <div className="w-1/2 text-right"><span className="font-semibold text-orange-600">{player.unjustifiedAbsences} falta(s)</span></div>
+                                                    <button onClick={() => setModalPlayer(player)} className="w-1/2 text-left truncate pr-2 font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline">{player.name}</button>
+                                                    <div className="w-1/2 text-right"><span className="font-semibold text-orange-600 dark:text-orange-400">{player.unjustifiedAbsences} falta(s)</span></div>
                                                 </div>
-                                                <div className="text-xs text-gray-500 pl-4 mt-1">
+                                                <div className="text-xs text-gray-500 dark:text-gray-400 pl-4 mt-1">
                                                     Datas: {player.unjustifiedAbsenceDates.join(', ')}
                                                 </div>
                                             </div>
                                         ) : (
                                             <div className="flex items-center justify-between gap-4">
-                                                <button onClick={() => setModalPlayer(player)} className="w-1/3 text-left truncate font-medium text-blue-600 hover:text-blue-800 hover:underline">{player.name}</button>
-                                                <div className="w-1/3 bg-gray-200 rounded-full h-4">
+                                                <button onClick={() => setModalPlayer(player)} className="w-1/3 text-left truncate font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline">{player.name}</button>
+                                                <div className="w-1/3 bg-gray-200 dark:bg-gray-700 rounded-full h-4">
                                                     <div
                                                         className={`h-4 rounded-full ${player.average >= 75 ? 'bg-green-500' : player.average >= 50 ? 'bg-blue-600' : 'bg-yellow-500'}`}
                                                         style={{ width: `${player.average}%` }}
                                                     ></div>
                                                 </div>
-                                                <span className="font-semibold w-1/3 text-right">{player.average}%</span>
+                                                <span className="font-semibold w-1/3 text-right dark:text-gray-300">{player.average}%</span>
                                             </div>
                                         )}
                                     </div>
@@ -496,18 +534,18 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
                 </div>
             </section>
 
-            <section className="bg-white p-6 rounded-xl shadow-lg">
-                <h2 className="text-2xl font-bold mb-4 text-gray-800">Extrair Relatório por Período</h2>
+            <section className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg">
+                <h2 className="text-2xl font-bold mb-4 text-gray-800 dark:text-gray-100">Extrair Relatório por Período</h2>
                 <div className="grid grid-cols-1 md:grid-cols-3 items-end gap-4">
                     <div>
-                        <label htmlFor="month-selector-start" className="block text-sm font-medium text-gray-700 mb-1">Mês de Início:</label>
-                        <select id="month-selector-start" value={monthRange.start} onChange={e => setMonthRange({ ...monthRange, start: e.target.value })} className="w-full p-2 border border-gray-300 rounded-md shadow-sm">
+                        <label htmlFor="month-selector-start" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mês de Início:</label>
+                        <select id="month-selector-start" value={monthRange.start} onChange={e => setMonthRange({ ...monthRange, start: e.target.value })} className="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md shadow-sm">
                             {availableMonths.map(m => <option key={m} value={m}>{new Date(m + '-02').toLocaleString('pt-BR', {month: 'long', year: 'numeric'})}</option>)}
                         </select>
                     </div>
                     <div>
-                        <label htmlFor="month-selector-end" className="block text-sm font-medium text-gray-700 mb-1">Mês de Fim:</label>
-                        <select id="month-selector-end" value={monthRange.end} onChange={e => setMonthRange({ ...monthRange, end: e.target.value })} className="w-full p-2 border border-gray-300 rounded-md shadow-sm">
+                        <label htmlFor="month-selector-end" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mês de Fim:</label>
+                        <select id="month-selector-end" value={monthRange.end} onChange={e => setMonthRange({ ...monthRange, end: e.target.value })} className="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md shadow-sm">
                             {availableMonths.map(m => <option key={m} value={m}>{new Date(m + '-02').toLocaleString('pt-BR', {month: 'long', year: 'numeric'})}</option>)}
                         </select>
                     </div>
@@ -515,8 +553,8 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
                 </div>
                 {report && (
                     <div className="mt-6">
-                        <h3 className="text-xl font-semibold mb-2">{report.title}</h3>
-                        <ul className="list-disc list-inside mt-2 text-gray-700 space-y-1">
+                        <h3 className="text-xl font-semibold mb-2 dark:text-gray-100">{report.title}</h3>
+                        <ul className="list-disc list-inside mt-2 text-gray-700 dark:text-gray-300 space-y-1">
                             {report.data.map(p => <li key={p.name}><strong>{p.name}:</strong> {p.presences} presença(s)</li>)}
                         </ul>
                         <div className="mt-4 text-right">
@@ -526,19 +564,19 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
                 )}
             </section>
 
-            <ModalComponent isOpen={!!modalPlayer} onClose={() => setModalPlayer(null)} title={modalPlayer?.name}>
+            <ModalComponent isOpen={!!modalPlayer} onClose={() => setModalPlayer(null)} title={`Histórico de ${modalPlayer?.name}`}>
                 <div className="text-left">
-                    <div className="mb-4 p-2 bg-gray-100 rounded-md text-center">
+                    <div className="mb-4 p-2 bg-gray-100 dark:bg-gray-700 rounded-md text-center text-gray-800 dark:text-gray-200">
                         <strong>{modalPlayer?.presences}</strong> Presenças | <strong>{modalPlayer?.totalGames - modalPlayer?.presences}</strong> Ausências
                     </div>
                     <div className="flex flex-wrap gap-1">
                         {dates.map(date => {
                             const status = modalPlayer?.attendance[date]?.trim() || '❌';
-                            let colorClass = 'bg-gray-300';
+                            let colorClass = 'bg-gray-300 dark:bg-gray-600';
                             if (status.includes('✅')) colorClass = 'bg-green-500';
                             else if (status.toUpperCase() === 'NÃO JUSTIFICOU') colorClass = 'bg-orange-500';
                             else if (status.includes('❌')) colorClass = 'bg-red-500';
-                            return <div key={date} className={`w-5 h-5 border border-gray-400 ${colorClass}`} title={`${date}: ${status}`}></div>;
+                            return <div key={date} className={`w-5 h-5 border border-gray-400 dark:border-gray-500 ${colorClass}`} title={`${date}: ${status}`}></div>;
                         })}
                     </div>
                 </div>
@@ -1432,6 +1470,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
     const [lastUpdated, setLastUpdated] = useState(new Date());
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isResetPasswordModalOpen, setIsResetPasswordModalOpen] = useState(false);
+    const { theme, toggleTheme } = useTheme();
 
     const [attendanceData, setAttendanceData] = useState({ isLoading: true, data: null, error: null });
     const [financeData, setFinanceData] = useState({ isLoading: true, data: null, error: null });
@@ -1650,21 +1689,27 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
     };
 
     return (
-        <div className="bg-gray-100 text-gray-800 font-sans min-h-screen">
+        <div className="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 font-sans min-h-screen">
             <div className="container mx-auto p-4 md:p-8">
                 <header className="mb-8 flex flex-col sm:flex-row justify-between items-center text-center sm:text-left">
                     <div className="flex items-center space-x-4">
                         <img src="https://i.ibb.co/pGnycLc/ICONE-CBA.jpg" alt="Logo CBA" className="h-16 w-16 rounded-full shadow-lg" onError={(e) => { e.target.onerror = null; e.target.src='https://placehold.co/64x64/1e3a8a/ffffff?text=CBA'; }} />
                         <div>
-                            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">Portal do CBA</h1>
-                            <p className="text-gray-500 mt-1">Bem-vindo, {user.name}!</p>
+                            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white tracking-tight">Portal do CBA v2.1</h1>
+                            <p className="text-gray-500 dark:text-gray-400 mt-1">Bem-vindo, {user.name}!</p>
                         </div>
                     </div>
                     <div className="flex items-center gap-4 pt-4 sm:pt-0">
-                        <button onClick={() => setIsResetPasswordModalOpen(true)} className="text-sm font-semibold text-blue-600 hover:underline">Resetar Senha</button>
-                        <button onClick={onLogout} className="text-sm font-semibold text-red-600 hover:underline">Sair</button>
-                        <button onClick={handleRefresh} disabled={isRefreshing} className="p-1.5 rounded-full bg-gray-200 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                            <svg className={`w-5 h-5 text-gray-600 ${isRefreshing ? 'animate-spin' : ''}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                         <button onClick={toggleTheme} className="p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
+                            {theme === 'light' ? 
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" /></svg> :
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zM4.929 4.929a1 1 0 011.414 0L7.05 5.636a1 1 0 11-1.414 1.414l-1.414-1.414a1 1 0 010-1.414zM12.95 7.05a1 1 0 011.414-1.414l1.414 1.414a1 1 0 11-1.414 1.414l-1.414-1.414zM10 16a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM4.929 15.071a1 1 0 010-1.414l1.414-1.414a1 1 0 111.414 1.414l-1.414 1.414a1 1 0 01-1.414 0zM12.95 12.95a1 1 0 011.414 1.414l1.414-1.414a1 1 0 11-1.414-1.414l-1.414 1.414zM4 10a1 1 0 11-2 0v-1a1 1 0 112 0v1zm12 0a1 1 0 11-2 0v-1a1 1 0 112 0v1z" clipRule="evenodd" /></svg>
+                            }
+                        </button>
+                        <button onClick={() => setIsResetPasswordModalOpen(true)} className="text-sm font-semibold text-blue-600 dark:text-blue-400 hover:underline">Resetar Senha</button>
+                        <button onClick={onLogout} className="text-sm font-semibold text-red-600 dark:text-red-400 hover:underline">Sair</button>
+                        <button onClick={handleRefresh} disabled={isRefreshing} className="p-1.5 rounded-full bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                            <svg className={`w-5 h-5 text-gray-600 dark:text-gray-300 ${isRefreshing ? 'animate-spin' : ''}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h5M20 20v-5h-5M4 4a14.95 14.95 0 0117.47 9.47M20 20a14.95 14.95 0 01-17.47-9.47" />
                             </svg>
                         </button>
@@ -1672,12 +1717,12 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
                 </header>
 
                 <div className="mb-6">
-                    <nav className="flex space-x-1 sm:space-x-2 p-1 bg-gray-200 rounded-lg">
+                    <nav className="flex space-x-1 sm:space-x-2 p-1 bg-gray-200 dark:bg-gray-800 rounded-lg">
                         {TABS.map(tab => (
                             <button
                                 key={tab}
                                 onClick={() => handleTabClick(tab)}
-                                className={`w-full py-2.5 px-2 sm:px-4 text-xs sm:text-sm font-medium rounded-md transition-colors duration-300 flex items-center justify-center ${activeTab === tab ? 'bg-white shadow text-blue-600' : 'text-gray-600 hover:bg-gray-300 hover:text-gray-800'}`}
+                                className={`w-full py-2.5 px-2 sm:px-4 text-xs sm:text-sm font-medium rounded-md transition-colors duration-300 flex items-center justify-center ${activeTab === tab ? 'bg-white dark:bg-gray-700 shadow text-blue-600 dark:text-white' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-700/50 hover:text-gray-800 dark:hover:text-gray-200'}`}
                             >
                                 {TAB_ICONS[tab]}
                                 <span className="hidden sm:inline">{tab.charAt(0).toUpperCase() + tab.slice(1)}</span>
@@ -1706,7 +1751,7 @@ export default function App() {
     const [auth, setAuth] = useState({ status: 'unauthenticated', user: null, error: null }); // unauthenticated, loading, pending, authenticated
     const [librariesLoaded, setLibrariesLoaded] = useState(false);
     
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxG7bR_qr7MSvQKkDD-elVLjmGmnVmiiHTUrn5hH58k7dwqmwjHNmPpsX5bRhrgNLZDUg/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwmLKAs-OnJeZz7o12wI5LomQt05MehFAd-cKM-FamZv4-BWS1qvUKcb-BpB-F1JDfreA/exec";
 
     const handleLogin = async (e) => {
         e.preventDefault();
@@ -1757,20 +1802,30 @@ export default function App() {
         .catch(error => console.error("Failed to load essential libraries:", error));
     }, []);
 
-    if (auth.status === 'loading') {
-        return <Loader message="A processar..." />;
-    }
-
-    if (auth.status === 'unauthenticated') {
-        return <LoginScreen onLogin={handleLogin} isLoading={auth.status === 'loading'} error={auth.error} />;
-    }
+    const renderContent = () => {
+        if (auth.status === 'loading') {
+            return <Loader message="A processar..." />;
+        }
     
-    if (auth.status === 'pending') {
-        return <PendingScreen />;
-    }
+        if (auth.status === 'unauthenticated') {
+            return <LoginScreen onLogin={handleLogin} isLoading={auth.status === 'loading'} error={auth.error} />;
+        }
+        
+        if (auth.status === 'pending') {
+            return <PendingScreen />;
+        }
+    
+        // Se autenticado, renderiza a aplicação principal
+        return (
+            <MainApp user={auth.user} onLogout={handleLogout} SCRIPT_URL={SCRIPT_URL} librariesLoaded={librariesLoaded} />
+        );
+    };
 
-    // Se autenticado, renderiza a aplicação principal
     return (
-        <MainApp user={auth.user} onLogout={handleLogout} SCRIPT_URL={SCRIPT_URL} librariesLoaded={librariesLoaded} />
+        <ThemeProvider>
+            <div className="bg-gray-100 dark:bg-gray-900 min-h-screen transition-colors duration-300">
+                {renderContent()}
+            </div>
+        </ThemeProvider>
     );
 }
