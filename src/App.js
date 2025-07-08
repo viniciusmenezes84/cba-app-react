@@ -104,6 +104,52 @@ const ChartComponent = ({ chartConfig }) => {
     return <canvas ref={chartRef}></canvas>;
 };
 
+const CircularProgress = ({ percentage }) => {
+    const radius = 50;
+    const stroke = 8;
+    const normalizedRadius = radius - stroke * 2;
+    const circumference = normalizedRadius * 2 * Math.PI;
+    const strokeDashoffset = circumference - (percentage / 100) * circumference;
+
+    let colorClass = 'text-red-500';
+    if (percentage >= 75) {
+        colorClass = 'text-green-500';
+    } else if (percentage >= 50) {
+        colorClass = 'text-blue-500';
+    } else if (percentage >= 25) {
+        colorClass = 'text-yellow-500';
+    }
+
+    return (
+        <div className="relative flex items-center justify-center">
+            <svg height={radius * 2} width={radius * 2} className="transform -rotate-90">
+                <circle
+                    stroke="#e5e7eb"
+                    className="dark:stroke-gray-700"
+                    fill="transparent"
+                    strokeWidth={stroke}
+                    r={normalizedRadius}
+                    cx={radius}
+                    cy={radius}
+                />
+                <circle
+                    stroke="currentColor"
+                    className={colorClass}
+                    fill="transparent"
+                    strokeWidth={stroke}
+                    strokeDasharray={circumference + ' ' + circumference}
+                    style={{ strokeDashoffset, strokeLinecap: 'round' }}
+                    r={normalizedRadius}
+                    cx={radius}
+                    cy={radius}
+                />
+            </svg>
+            <span className="absolute text-xl font-bold text-gray-700 dark:text-gray-200">{`${Math.round(percentage)}%`}</span>
+        </div>
+    );
+};
+
+
 // --- COMPONENTES DE AUTENTICAÇÃO ---
 
 const LoginScreen = ({ onLogin, isLoading, error }) => (
@@ -1695,7 +1741,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
                     <div className="flex items-center space-x-4">
                         <img src="https://i.ibb.co/pGnycLc/ICONE-CBA.jpg" alt="Logo CBA" className="h-16 w-16 rounded-full shadow-lg" onError={(e) => { e.target.onerror = null; e.target.src='https://placehold.co/64x64/1e3a8a/ffffff?text=CBA'; }} />
                         <div>
-                            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white tracking-tight">Portal do CBA v2.2</h1>
+                            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white tracking-tight">Portal do CBA</h1>
                             <p className="text-gray-500 dark:text-gray-400 mt-1">Bem-vindo, {user.name}!</p>
                         </div>
                     </div>
