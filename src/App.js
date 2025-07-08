@@ -5,7 +5,6 @@ const ThemeContext = createContext();
 
 const ThemeProvider = ({ children }) => {
     const [theme, setTheme] = useState(() => {
-        // Tenta obter o tema do localStorage, ou usa 'light' como padrão
         const savedTheme = localStorage.getItem('theme');
         return savedTheme || 'light';
     });
@@ -15,7 +14,6 @@ const ThemeProvider = ({ children }) => {
         const isDark = theme === 'dark';
         root.classList.remove(isDark ? 'light' : 'dark');
         root.classList.add(theme);
-        // Salva a escolha do tema no localStorage
         localStorage.setItem('theme', theme);
     }, [theme]);
 
@@ -1757,7 +1755,7 @@ export default function App() {
     const [auth, setAuth] = useState({ status: 'unauthenticated', user: null, error: null }); // unauthenticated, loading, pending, authenticated
     const [librariesLoaded, setLibrariesLoaded] = useState(false);
     
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzNHcYHfx5XHQvmLiMGXvokZIs66Vei6k1eAQ14UkEnyXRDzNbWJlXn9EQQVsWNpQPAdQ/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxmhHGbQvaSFSx03L63o_uLBp9XWU4nhHzgkOQ7-5cmerDiLySvg0b4dQ86gWWiXBRPsg/exec";
 
     const handleLogin = async (e) => {
         e.preventDefault();
