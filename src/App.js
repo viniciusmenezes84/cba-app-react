@@ -73,15 +73,15 @@ const LoginScreen = ({ onLogin, isLoading, error }) => (
         className="min-h-screen bg-cover bg-center flex items-center justify-center"
         style={{ backgroundImage: "url('https://images.unsplash.com/photo-1546519638-68e109498ffc?q=80&w=2070&auto=format&fit=crop')" }}
     >
-        <div className="absolute inset-0 bg-black bg-opacity-60"></div>
-        <div className="relative z-10 p-8 bg-white rounded-xl shadow-2xl text-center w-full max-w-sm">
+        <div className="absolute inset-0 bg-black bg-opacity-50"></div>
+        <div className="relative z-10 p-8 bg-gray-900/70 backdrop-blur-sm rounded-xl shadow-2xl text-center w-full max-w-sm">
             <img src="https://i.ibb.co/pGnycLc/ICONE-CBA.jpg" alt="Logo CBA" className="h-24 w-24 rounded-full shadow-lg mx-auto mb-4" />
-            <h1 className="text-3xl font-bold text-gray-800 mb-2">Portal do CBA</h1>
-            <p className="text-gray-500 mb-6">Por favor, entre para continuar.</p>
-            {error && <p className="bg-red-100 text-red-700 p-3 rounded-md mb-4">{error}</p>}
+            <h1 className="text-3xl font-bold text-white mb-2">Portal do CBA</h1>
+            <p className="text-gray-300 mb-6">Por favor, entre para continuar.</p>
+            {error && <p className="bg-red-500/30 text-red-200 p-3 rounded-md mb-4">{error}</p>}
             <form onSubmit={onLogin} className="space-y-4">
-                <input name="email" type="email" placeholder="Email" className="w-full p-3 border border-gray-300 rounded-md" required />
-                <input name="password" type="password" placeholder="Senha" className="w-full p-3 border border-gray-300 rounded-md" required />
+                <input name="email" type="email" placeholder="Email" className="w-full p-3 border border-gray-600 bg-gray-800 text-white rounded-md placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500" required />
+                <input name="password" type="password" placeholder="Senha" className="w-full p-3 border border-gray-600 bg-gray-800 text-white rounded-md placeholder-gray-400 focus:ring-blue-500 focus:border-blue-500" required />
                 <button type="submit" disabled={isLoading} className="w-full bg-blue-600 text-white font-bold py-3 rounded-md hover:bg-blue-700 disabled:bg-blue-400">
                     {isLoading ? 'A entrar...' : 'Entrar'}
                 </button>
@@ -1706,7 +1706,7 @@ export default function App() {
     const [auth, setAuth] = useState({ status: 'unauthenticated', user: null, error: null }); // unauthenticated, loading, pending, authenticated
     const [librariesLoaded, setLibrariesLoaded] = useState(false);
     
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz6idfcbzvduVnTlgNvlWRxiKG3KlGEPZFLuDzmRmwUcLC4Nz5iE8FpWoctRroU8DfEYQ/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxG7bR_qr7MSvQKkDD-elVLjmGmnVmiiHTUrn5hH58k7dwqmwjHNmPpsX5bRhrgNLZDUg/exec";
 
     const handleLogin = async (e) => {
         e.preventDefault();
