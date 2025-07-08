@@ -4,13 +4,19 @@ import React, { useState, useEffect, useRef, useCallback, useMemo, createContext
 const ThemeContext = createContext();
 
 const ThemeProvider = ({ children }) => {
-    const [theme, setTheme] = useState('light');
+    const [theme, setTheme] = useState(() => {
+        // Tenta obter o tema do localStorage, ou usa 'light' como padrão
+        const savedTheme = localStorage.getItem('theme');
+        return savedTheme || 'light';
+    });
     
     useEffect(() => {
         const root = window.document.documentElement;
         const isDark = theme === 'dark';
         root.classList.remove(isDark ? 'light' : 'dark');
         root.classList.add(theme);
+        // Salva a escolha do tema no localStorage
+        localStorage.setItem('theme', theme);
     }, [theme]);
 
     const toggleTheme = () => {
@@ -103,52 +109,6 @@ const ChartComponent = ({ chartConfig }) => {
 
     return <canvas ref={chartRef}></canvas>;
 };
-
-const CircularProgress = ({ percentage }) => {
-    const radius = 50;
-    const stroke = 8;
-    const normalizedRadius = radius - stroke * 2;
-    const circumference = normalizedRadius * 2 * Math.PI;
-    const strokeDashoffset = circumference - (percentage / 100) * circumference;
-
-    let colorClass = 'text-red-500';
-    if (percentage >= 75) {
-        colorClass = 'text-green-500';
-    } else if (percentage >= 50) {
-        colorClass = 'text-blue-500';
-    } else if (percentage >= 25) {
-        colorClass = 'text-yellow-500';
-    }
-
-    return (
-        <div className="relative flex items-center justify-center">
-            <svg height={radius * 2} width={radius * 2} className="transform -rotate-90">
-                <circle
-                    stroke="#e5e7eb"
-                    className="dark:stroke-gray-700"
-                    fill="transparent"
-                    strokeWidth={stroke}
-                    r={normalizedRadius}
-                    cx={radius}
-                    cy={radius}
-                />
-                <circle
-                    stroke="currentColor"
-                    className={colorClass}
-                    fill="transparent"
-                    strokeWidth={stroke}
-                    strokeDasharray={circumference + ' ' + circumference}
-                    style={{ strokeDashoffset, strokeLinecap: 'round' }}
-                    r={normalizedRadius}
-                    cx={radius}
-                    cy={radius}
-                />
-            </svg>
-            <span className="absolute text-xl font-bold text-gray-700 dark:text-gray-200">{`${Math.round(percentage)}%`}</span>
-        </div>
-    );
-};
-
 
 // --- COMPONENTES DE AUTENTICAÇÃO ---
 
@@ -1797,7 +1757,7 @@ export default function App() {
     const [auth, setAuth] = useState({ status: 'unauthenticated', user: null, error: null }); // unauthenticated, loading, pending, authenticated
     const [librariesLoaded, setLibrariesLoaded] = useState(false);
     
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxmhHGbQvaSFSx03L63o_uLBp9XWU4nhHzgkOQ7-5cmerDiLySvg0b4dQ86gWWiXBRPsg/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzNHcYHfx5XHQvmLiMGXvokZIs66Vei6k1eAQ14UkEnyXRDzNbWJlXn9EQQVsWNpQPAdQ/exec";
 
     const handleLogin = async (e) => {
         e.preventDefault();
