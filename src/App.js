@@ -1695,7 +1695,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
                     <div className="flex items-center space-x-4">
                         <img src="https://i.ibb.co/pGnycLc/ICONE-CBA.jpg" alt="Logo CBA" className="h-16 w-16 rounded-full shadow-lg" onError={(e) => { e.target.onerror = null; e.target.src='https://placehold.co/64x64/1e3a8a/ffffff?text=CBA'; }} />
                         <div>
-                            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white tracking-tight">Portal do CBA v2.1</h1>
+                            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white tracking-tight">Portal do CBA </h1>
                             <p className="text-gray-500 dark:text-gray-400 mt-1">Bem-vindo, {user.name}!</p>
                         </div>
                     </div>
@@ -1751,7 +1751,7 @@ export default function App() {
     const [auth, setAuth] = useState({ status: 'unauthenticated', user: null, error: null }); // unauthenticated, loading, pending, authenticated
     const [librariesLoaded, setLibrariesLoaded] = useState(false);
     
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwmLKAs-OnJeZz7o12wI5LomQt05MehFAd-cKM-FamZv4-BWS1qvUKcb-BpB-F1JDfreA/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz-FReAQEsUMnsHscqGbh6hRl4bzG96l21Dhvf6TxYIj8FUFv7OjhTWpJoXiIr0z8kX2w/exec";
 
     const handleLogin = async (e) => {
         e.preventDefault();
