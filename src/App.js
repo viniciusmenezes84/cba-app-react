@@ -68,9 +68,13 @@ const ChartComponent = ({ chartConfig }) => {
 
 // --- COMPONENTES DE AUTENTICAÇÃO ---
 
-const LoginScreen = ({ onLogin, onSwitchToRegister, isLoading, error }) => (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100">
-        <div className="p-8 bg-white rounded-xl shadow-2xl text-center w-full max-w-sm">
+const LoginScreen = ({ onLogin, isLoading, error }) => (
+    <div 
+        className="min-h-screen bg-cover bg-center flex items-center justify-center"
+        style={{ backgroundImage: "url('https://images.unsplash.com/photo-1546519638-68e109498ffc?q=80&w=2070&auto=format&fit=crop')" }}
+    >
+        <div className="absolute inset-0 bg-black bg-opacity-60"></div>
+        <div className="relative z-10 p-8 bg-white rounded-xl shadow-2xl text-center w-full max-w-sm">
             <img src="https://i.ibb.co/pGnycLc/ICONE-CBA.jpg" alt="Logo CBA" className="h-24 w-24 rounded-full shadow-lg mx-auto mb-4" />
             <h1 className="text-3xl font-bold text-gray-800 mb-2">Portal do CBA</h1>
             <p className="text-gray-500 mb-6">Por favor, entre para continuar.</p>
@@ -1702,7 +1706,7 @@ export default function App() {
     const [auth, setAuth] = useState({ status: 'unauthenticated', user: null, error: null }); // unauthenticated, loading, pending, authenticated
     const [librariesLoaded, setLibrariesLoaded] = useState(false);
     
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxmhHGbQvaSFSx03L63o_uLBp9XWU4nhHzgkOQ7-5cmerDiLySvg0b4dQ86gWWiXBRPsg/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbz6idfcbzvduVnTlgNvlWRxiKG3KlGEPZFLuDzmRmwUcLC4Nz5iE8FpWoctRroU8DfEYQ/exec";
 
     const handleLogin = async (e) => {
         e.preventDefault();
