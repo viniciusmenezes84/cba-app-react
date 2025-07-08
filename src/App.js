@@ -82,33 +82,6 @@ const LoginScreen = ({ onLogin, onSwitchToRegister, isLoading, error }) => (
                     {isLoading ? 'A entrar...' : 'Entrar'}
                 </button>
             </form>
-            <p className="mt-6 text-sm">
-                Não tem uma conta? <button onClick={onSwitchToRegister} className="text-blue-600 hover:underline font-semibold">Registe-se</button>
-            </p>
-        </div>
-    </div>
-);
-
-const RegisterScreen = ({ onRegister, onSwitchToLogin, isLoading, error }) => (
-     <div className="flex items-center justify-center min-h-screen bg-gray-100">
-        <div className="p-8 bg-white rounded-xl shadow-2xl text-center w-full max-w-sm">
-            <h1 className="text-3xl font-bold text-gray-800 mb-2">Criar Conta</h1>
-            <p className="text-gray-500 mb-6">O seu acesso será validado por um administrador.</p>
-            {error && <p className="bg-red-100 text-red-700 p-3 rounded-md mb-4">{error}</p>}
-            <form onSubmit={onRegister} className="space-y-4">
-                <input name="name" type="text" placeholder="Nome Completo" className="w-full p-3 border border-gray-300 rounded-md" required />
-                <input name="email" type="email" placeholder="Email" className="w-full p-3 border border-gray-300 rounded-md" required />
-                <div>
-                    <input name="password" type="password" placeholder="Crie uma Senha" className="w-full p-3 border border-gray-300 rounded-md" required />
-                    <p className="text-xs text-gray-500 mt-1 text-left">A senha deve conter pelo menos uma letra maiúscula.</p>
-                </div>
-                <button type="submit" disabled={isLoading} className="w-full bg-blue-600 text-white font-bold py-3 rounded-md hover:bg-blue-700 disabled:bg-blue-400">
-                    {isLoading ? 'A registar...' : 'Registar'}
-                </button>
-            </form>
-            <p className="mt-6 text-sm">
-                Já tem uma conta? <button onClick={onSwitchToLogin} className="text-blue-600 hover:underline font-semibold">Entrar</button>
-            </p>
         </div>
     </div>
 );
@@ -117,10 +90,97 @@ const PendingScreen = () => (
     <div className="flex items-center justify-center min-h-screen bg-gray-100">
         <div className="p-8 bg-white rounded-xl shadow-2xl text-center max-w-md">
             <h2 className="text-2xl font-bold text-yellow-600 mb-4">Acesso Pendente</h2>
-            <p className="text-gray-600">O seu pedido de acesso foi enviado. Por favor, aguarde a aprovação de um administrador. Você será notificado por email quando o seu acesso for liberado.</p>
+            <p className="text-gray-600">O seu pedido de acesso foi enviado. Por favor, aguarde a aprovação de um administrador.</p>
         </div>
     </div>
 );
+
+const ResetPasswordModal = ({ isOpen, onClose, user, scriptUrl }) => {
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [message, setMessage] = useState({ type: '', text: '' });
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setMessage({ type: '', text: '' });
+
+        if (newPassword !== confirmPassword) {
+            setMessage({ type: 'error', text: 'As senhas não coincidem.' });
+            return;
+        }
+
+        const passwordRegex = /^(?=.*[A-Z])(?=.*[0-9])/;
+        if (!passwordRegex.test(newPassword)) {
+            setMessage({ type: 'error', text: 'A senha deve conter pelo menos uma letra maiúscula e um número.' });
+            return;
+        }
+
+        setIsSubmitting(true);
+        const payload = {
+            action: 'resetPassword',
+            email: user.email,
+            newPassword: newPassword,
+        };
+
+        try {
+            const res = await fetch(scriptUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams(payload).toString(),
+            });
+            const data = await res.json();
+            if (data.result === 'success') {
+                setMessage({ type: 'success', text: 'Senha alterada com sucesso! Por favor, faça login novamente.' });
+                setTimeout(() => {
+                    onClose(true); // Pass true to signal logout
+                }, 2000);
+            } else {
+                throw new Error(data.message || 'Ocorreu um erro desconhecido.');
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: error.message });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    return (
+        <Modal isOpen={isOpen} onClose={() => onClose(false)} title="Resetar Senha">
+            <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                    <label className="block text-sm font-medium text-gray-700">Nova Senha</label>
+                    <input 
+                        type="password" 
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        className="w-full p-3 border border-gray-300 rounded-md" 
+                        required 
+                    />
+                     <p className="text-xs text-gray-500 mt-1">Deve conter letras maiúsculas e números.</p>
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-gray-700">Confirmar Nova Senha</label>
+                    <input 
+                        type="password" 
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        className="w-full p-3 border border-gray-300 rounded-md" 
+                        required 
+                    />
+                </div>
+                {message.text && (
+                    <p className={`p-3 rounded-md text-sm ${message.type === 'error' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                        {message.text}
+                    </p>
+                )}
+                <button type="submit" disabled={isSubmitting} className="w-full bg-blue-600 text-white font-bold py-3 rounded-md hover:bg-blue-700 disabled:bg-blue-400">
+                    {isSubmitting ? 'A alterar...' : 'Alterar Senha'}
+                </button>
+            </form>
+        </Modal>
+    );
+};
 
 
 // --- COMPONENTES DAS ABAS ---
@@ -483,7 +543,7 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
     );
 };
 
-const EstatutoTab = () => {
+const EstatutoTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }) => {
     const [openAccordion, setOpenAccordion] = useState('Regulamento');
 
     const toggleAccordion = (title) => {
@@ -1367,6 +1427,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
     const [activeTab, setActiveTab] = useState('presenca');
     const [lastUpdated, setLastUpdated] = useState(new Date());
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [isResetPasswordModalOpen, setIsResetPasswordModalOpen] = useState(false);
 
     const [attendanceData, setAttendanceData] = useState({ isLoading: true, data: null, error: null });
     const [financeData, setFinanceData] = useState({ isLoading: true, data: null, error: null });
@@ -1537,6 +1598,13 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
         Promise.all(promises).finally(() => setIsRefreshing(false));
     }, [activeTab, fetchAttendanceData, fetchFinanceData]);
 
+    const handleResetPasswordClose = (shouldLogout) => {
+        setIsResetPasswordModalOpen(false);
+        if (shouldLogout) {
+            onLogout();
+        }
+    };
+
     useEffect(() => {
         if (!librariesLoaded) return;
         handleRefresh();
@@ -1589,6 +1657,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
                         </div>
                     </div>
                     <div className="flex items-center gap-4 pt-4 sm:pt-0">
+                        <button onClick={() => setIsResetPasswordModalOpen(true)} className="text-sm font-semibold text-blue-600 hover:underline">Resetar Senha</button>
                         <button onClick={onLogout} className="text-sm font-semibold text-red-600 hover:underline">Sair</button>
                         <button onClick={handleRefresh} disabled={isRefreshing} className="p-1.5 rounded-full bg-gray-200 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
                             <svg className={`w-5 h-5 text-gray-600 ${isRefreshing ? 'animate-spin' : ''}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1617,6 +1686,12 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
                     {renderTabContent()}
                 </div>
             </div>
+            <ResetPasswordModal 
+                isOpen={isResetPasswordModalOpen} 
+                onClose={handleResetPasswordClose} 
+                user={user} 
+                scriptUrl={SCRIPT_URL} 
+            />
         </div>
     );
 }
@@ -1625,10 +1700,9 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
 // --- COMPONENTE ROOT ---
 export default function App() {
     const [auth, setAuth] = useState({ status: 'unauthenticated', user: null, error: null }); // unauthenticated, loading, pending, authenticated
-    const [view, setView] = useState('login'); // login, register
     const [librariesLoaded, setLibrariesLoaded] = useState(false);
     
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxUIxMuPbVR9J2ER-dQQz_Jfn_EYG2wNdcp5Ob_h0Zt_gzkUBeZeU-vHX2zsSiPQdP29w/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxmhHGbQvaSFSx03L63o_uLBp9XWU4nhHzgkOQ7-5cmerDiLySvg0b4dQ86gWWiXBRPsg/exec";
 
     const handleLogin = async (e) => {
         e.preventDefault();
@@ -1654,44 +1728,9 @@ export default function App() {
             setAuth({ status: 'unauthenticated', user: null, error: 'Falha na comunicação com o servidor.' });
         }
     };
-
-    const handleRegister = async (e) => {
-        e.preventDefault();
-        setAuth({ status: 'loading', user: null, error: null });
-        const password = e.target.password.value;
-        const passwordRegex = /[A-Z]/;
-        if (!passwordRegex.test(password)) {
-            setAuth({ status: 'unauthenticated', user: null, error: 'A senha deve conter pelo menos uma letra maiúscula.' });
-            setView('register');
-            return;
-        }
-
-        const payload = {
-            action: 'registerUser',
-            name: e.target.name.value,
-            email: e.target.email.value,
-            password: password
-        };
-
-        try {
-            const res = await fetch(SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(payload).toString() });
-            const data = await res.json();
-
-            if (data.status === 'pending') {
-                setAuth({ status: 'pending', user: null, error: null });
-            } else {
-                setAuth({ status: 'unauthenticated', user: null, error: data.message });
-                setView('register');
-            }
-        } catch (error) {
-            setAuth({ status: 'unauthenticated', user: null, error: 'Falha na comunicação com o servidor.' });
-            setView('register');
-        }
-    };
     
     const handleLogout = () => {
         setAuth({ status: 'unauthenticated', user: null, error: null });
-        setView('login');
     };
 
     useEffect(() => {
@@ -1719,10 +1758,7 @@ export default function App() {
     }
 
     if (auth.status === 'unauthenticated') {
-        if (view === 'login') {
-            return <LoginScreen onLogin={handleLogin} onSwitchToRegister={() => setView('register')} isLoading={auth.status === 'loading'} error={auth.error} />;
-        }
-        return <RegisterScreen onRegister={handleRegister} onSwitchToLogin={() => setView('login')} isLoading={auth.status === 'loading'} error={auth.error} />;
+        return <LoginScreen onLogin={handleLogin} isLoading={auth.status === 'loading'} error={auth.error} />;
     }
     
     if (auth.status === 'pending') {
