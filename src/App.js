@@ -4,27 +4,19 @@ import React, { useState, useEffect, useRef, useCallback, useMemo, createContext
 const ThemeContext = createContext();
 
 const ThemeProvider = ({ children }) => {
-    const [theme, setTheme] = useState('light'); // Default to light and let useEffect handle the rest
-
-    useEffect(() => {
-        const savedTheme = localStorage.getItem('theme') || 'light';
-        setTheme(savedTheme);
-    }, []);
+    // O tema agora é fixo como 'dark'.
+    const theme = 'dark';
     
     useEffect(() => {
         const root = window.document.documentElement;
-        const isDark = theme === 'dark';
-        root.classList.remove(isDark ? 'light' : 'dark');
-        root.classList.add(theme);
-        localStorage.setItem('theme', theme);
-    }, [theme]);
+        // Garante que a classe 'dark' está sempre aplicada e 'light' removida.
+        root.classList.remove('light');
+        root.classList.add('dark');
+    }, []); // Executa apenas uma vez na montagem.
 
-    const toggleTheme = () => {
-        setTheme(prevTheme => (prevTheme === 'light' ? 'dark' : 'light'));
-    };
-    
+    // A função toggleTheme é um placeholder vazio, pois não é mais necessária.
     return (
-        <ThemeContext.Provider value={{ theme, toggleTheme }}>
+        <ThemeContext.Provider value={{ theme, toggleTheme: () => {} }}>
             {children}
         </ThemeContext.Provider>
     );
@@ -795,8 +787,8 @@ const EstatutoTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
     ];
 
     return (
-        <div className="bg-white p-6 rounded-xl shadow-lg">
-            <h2 className="text-3xl font-bold mb-6 text-center text-gray-800">Estatuto e Regras do CBA</h2>
+        <div className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg">
+            <h2 className="text-3xl font-bold mb-6 text-center text-gray-800 dark:text-gray-100">Estatuto e Regras do CBA</h2>
             <div className="space-y-2">
                 {estatutoItens.map((item) => (
                     <AccordionItem
@@ -944,49 +936,49 @@ const FinancasTab = ({ financeData, isLoading, error }) => {
     return (
         <div className="space-y-8">
             {/* Resumo Financeiro */}
-            <section className="bg-white p-6 rounded-xl shadow-lg">
-                <h2 className="text-2xl font-bold mb-4 text-center text-gray-800">Resumo Financeiro</h2>
+            <section className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg">
+                <h2 className="text-2xl font-bold mb-4 text-center text-gray-800 dark:text-gray-100">Resumo Financeiro</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-center">
-                    <div className="p-4 bg-green-50 rounded-lg">
-                        <h3 className="text-lg font-semibold text-green-600">Total de Receitas</h3>
-                        <p className="text-3xl font-bold text-green-800">{formatCurrency(summary.revenue)}</p>
+                    <div className="p-4 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                        <h3 className="text-lg font-semibold text-green-600 dark:text-green-400">Total de Receitas</h3>
+                        <p className="text-3xl font-bold text-green-800 dark:text-green-200">{formatCurrency(summary.revenue)}</p>
                     </div>
-                    <div className="p-4 bg-red-50 rounded-lg">
-                        <h3 className="text-lg font-semibold text-red-600">Total de Despesas</h3>
-                        <p className="text-3xl font-bold text-red-800">{formatCurrency(summary.expense)}</p>
+                    <div className="p-4 bg-red-100 dark:bg-red-900/30 rounded-lg">
+                        <h3 className="text-lg font-semibold text-red-600 dark:text-red-400">Total de Despesas</h3>
+                        <p className="text-3xl font-bold text-red-800 dark:text-red-200">{formatCurrency(summary.expense)}</p>
                     </div>
-                    <div className={`p-4 rounded-lg ${summary.balance >= 0 ? 'bg-blue-50' : 'bg-orange-50'}`}>
-                        <h3 className={`text-lg font-semibold ${summary.balance >= 0 ? 'text-blue-600' : 'text-orange-600'}`}>Saldo Atual</h3>
-                        <p className={`text-3xl font-bold ${summary.balance >= 0 ? 'text-blue-800' : 'text-orange-800'}`}>{formatCurrency(summary.balance)}</p>
+                    <div className={`p-4 rounded-lg ${summary.balance >= 0 ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-orange-100 dark:bg-orange-900/30'}`}>
+                        <h3 className={`text-lg font-semibold ${summary.balance >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-orange-600 dark:text-orange-400'}`}>Saldo Atual</h3>
+                        <p className={`text-3xl font-bold ${summary.balance >= 0 ? 'text-blue-800 dark:text-blue-200' : 'text-orange-800 dark:text-orange-200'}`}>{formatCurrency(summary.balance)}</p>
                     </div>
                 </div>
             </section>
             
             {monthlyChartData.labels.length > 0 && (
-                 <section className="bg-white p-6 rounded-xl shadow-lg">
-                    <h2 className="text-2xl font-bold mb-4 text-gray-800">Receitas vs. Despesas por Mês</h2>
+                 <section className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg">
+                    <h2 className="text-2xl font-bold mb-4 text-gray-800 dark:text-gray-100">Receitas vs. Despesas por Mês</h2>
                     <ChartComponent chartConfig={monthlyChartConfig} />
                 </section>
             )}
 
             {/* Status de Pagamento */}
             {paymentStatus.length > 0 && (
-                 <section className="bg-white p-6 rounded-xl shadow-lg">
-                    <h2 className="text-2xl font-bold mb-4 text-gray-800">Status de Pagamento dos Mensalistas</h2>
+                 <section className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg">
+                    <h2 className="text-2xl font-bold mb-4 text-gray-800 dark:text-gray-100">Status de Pagamento dos Mensalistas</h2>
                     <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
+                        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                            <thead className="bg-gray-50 dark:bg-gray-700/50">
                                 <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Jogador</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Jogador</th>
                                     {paymentHeaders.map(month => (
-                                        <th key={month} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{month}</th>
+                                        <th key={month} className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{month}</th>
                                     ))}
                                 </tr>
                             </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
+                            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                                 {paymentStatus.map(({ player, statuses }) => (
-                                    <tr key={player}>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{player}</td>
+                                    <tr key={player} className="even:bg-gray-50 dark:even:bg-gray-800/50">
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">{player}</td>
                                         {paymentHeaders.map(month => (
                                             <td key={month} className="px-6 py-4 whitespace-nowrap text-sm">
                                                 <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(statuses[month] || '')}`}>
@@ -1009,12 +1001,12 @@ const FinancasTab = ({ financeData, isLoading, error }) => {
                         <AccordionItem title="Detalhamento de Receitas" isOpen={openAccordion === 'revenues'} onClick={() => toggleAccordion('revenues')}>
                             <ul className="space-y-2">
                                 {revenues.map((item, index) => (
-                                    <li key={index} className="flex justify-between items-center p-2 bg-gray-50 rounded">
+                                    <li key={index} className="flex justify-between items-center p-2 bg-gray-50 dark:bg-gray-700/50 rounded">
                                         <div>
-                                            <p className="font-semibold">{item.description}</p>
-                                            <p className="text-sm text-gray-500">{item.date.toLocaleDateString('pt-BR')}</p>
+                                            <p className="font-semibold text-gray-800 dark:text-gray-200">{item.description}</p>
+                                            <p className="text-sm text-gray-500 dark:text-gray-400">{item.date.toLocaleDateString('pt-BR')}</p>
                                         </div>
-                                        <p className="font-semibold text-green-600">{formatCurrency(item.value)}</p>
+                                        <p className="font-semibold text-green-600 dark:text-green-400">{formatCurrency(item.value)}</p>
                                     </li>
                                 ))}
                             </ul>
@@ -1022,12 +1014,12 @@ const FinancasTab = ({ financeData, isLoading, error }) => {
                         <AccordionItem title="Detalhamento de Despesas" isOpen={openAccordion === 'expenses'} onClick={() => toggleAccordion('expenses')}>
                              <ul className="space-y-2">
                                 {expenses.map((item, index) => (
-                                    <li key={index} className="flex justify-between items-center p-2 bg-gray-50 rounded">
+                                    <li key={index} className="flex justify-between items-center p-2 bg-gray-50 dark:bg-gray-700/50 rounded">
                                         <div>
-                                            <p className="font-semibold">{item.description}</p>
-                                            <p className="text-sm text-gray-500">{item.date.toLocaleDateString('pt-BR')}</p>
+                                            <p className="font-semibold text-gray-800 dark:text-gray-200">{item.description}</p>
+                                            <p className="text-sm text-gray-500 dark:text-gray-400">{item.date.toLocaleDateString('pt-BR')}</p>
                                         </div>
-                                        <p className="font-semibold text-red-600">{formatCurrency(item.value)}</p>
+                                        <p className="font-semibold text-red-600 dark:text-red-400">{formatCurrency(item.value)}</p>
                                     </li>
                                 ))}
                             </ul>
@@ -1130,9 +1122,9 @@ const SorteioTab = ({ allPlayersData, scriptUrl, ModalComponent }) => {
 
             {/* Seção de Seleção de Jogadores */}
             {!teams && (
-                <section className="bg-white p-6 rounded-xl shadow-lg">
-                    <h2 className="text-2xl font-bold text-gray-800 mb-4">Seleção de Jogadores</h2>
-                    <p className="text-gray-600 mb-6">Selecione os jogadores presentes para o sorteio de hoje. Os 10 primeiros selecionados participarão do sorteio.</p>
+                <section className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg">
+                    <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-4">Seleção de Jogadores</h2>
+                    <p className="text-gray-600 dark:text-gray-400 mb-6">Selecione os jogadores presentes para o sorteio de hoje. Os 10 primeiros selecionados participarão do sorteio.</p>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                         {sortedPlayers.map(player => (
                             <button
@@ -1141,7 +1133,7 @@ const SorteioTab = ({ allPlayersData, scriptUrl, ModalComponent }) => {
                                 className={`p-3 rounded-lg text-center font-semibold transition-all duration-200 border-2 ${
                                     selectedPlayers.includes(player.name)
                                         ? 'bg-blue-600 text-white border-blue-700 shadow-md'
-                                        : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200'
+                                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 border-gray-200 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600'
                                 }`}
                             >
                                 {player.name}
@@ -1163,8 +1155,8 @@ const SorteioTab = ({ allPlayersData, scriptUrl, ModalComponent }) => {
 
             {/* Seção de Exibição dos Times */}
             {teams && (
-                <section className="bg-white p-6 rounded-xl shadow-lg text-center animate-fade-in-up">
-                    <h2 className="text-3xl font-bold text-gray-800 mb-6">Times Sorteados!</h2>
+                <section className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg text-center animate-fade-in-up">
+                    <h2 className="text-3xl font-bold text-gray-800 dark:text-gray-100 mb-6">Times Sorteados!</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         {/* Time Preto */}
                         <div className="bg-gray-800 p-6 rounded-lg">
@@ -1351,7 +1343,7 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, ModalComponent }) => {
     return (
         <div className="space-y-8">
             <div className="flex justify-between items-center">
-                <h2 className="text-3xl font-bold text-gray-800">Próximas Confraternizações</h2>
+                <h2 className="text-3xl font-bold text-gray-800 dark:text-gray-100">Próximas Confraternizações</h2>
                 {isAdmin && (
                     <button onClick={() => handleOpenModal()} className="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition-all shadow-md">
                         Criar Evento
@@ -1370,42 +1362,42 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, ModalComponent }) => {
                         const totalCollected = event.attendees.length * event.value;
 
                         return (
-                        <div key={event.id} className="bg-white p-6 rounded-xl shadow-lg flex flex-col">
+                        <div key={event.id} className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg flex flex-col">
                             <div className="flex justify-between items-start">
-                                <h3 className="text-xl font-bold text-gray-800 mb-1">{event.name}</h3>
+                                <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-1">{event.name}</h3>
                                 {isAdmin && (
                                     <div className="flex gap-2">
-                                        <button onClick={() => handleOpenModal(event)} className="p-1 text-gray-400 hover:text-blue-600"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fillRule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clipRule="evenodd" /></svg></button>
-                                        <button onClick={() => setConfirmDelete(event)} className="p-1 text-gray-400 hover:text-red-600"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clipRule="evenodd" /></svg></button>
+                                        <button onClick={() => handleOpenModal(event)} className="p-1 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fillRule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clipRule="evenodd" /></svg></button>
+                                        <button onClick={() => setConfirmDelete(event)} className="p-1 text-gray-400 hover:text-red-600 dark:hover:text-red-400"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clipRule="evenodd" /></svg></button>
                                     </div>
                                 )}
                             </div>
-                            <p className="text-sm text-gray-500 mb-1">{new Date(event.date).toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
-                            <p className="text-sm font-semibold text-gray-600 mb-2">{event.location}</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{new Date(event.date).toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                            <p className="text-sm font-semibold text-gray-600 dark:text-gray-300 mb-2">{event.location}</p>
                             <p className="text-xs text-red-600 font-bold mb-4">Data limite para confirmação: {new Date(event.deadline).toLocaleDateString('pt-BR')}</p>
                             
-                            <div className="bg-gray-50 p-3 rounded-lg mb-4">
-                                <p className="text-gray-700 mb-2 flex-grow">{event.description}</p>
+                            <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg mb-4">
+                                <p className="text-gray-700 dark:text-gray-300 mb-2 flex-grow">{event.description}</p>
                                 <div className="flex justify-between items-center text-sm">
-                                    <span className="font-semibold">Valor por pessoa:</span>
-                                    <span className="font-bold text-blue-600">{formatCurrency(event.value)}</span>
+                                    <span className="font-semibold text-gray-600 dark:text-gray-300">Valor por pessoa:</span>
+                                    <span className="font-bold text-blue-600 dark:text-blue-400">{formatCurrency(event.value)}</span>
                                 </div>
                                  <div className="flex justify-between items-center text-sm mt-1">
-                                    <span className="font-semibold">Total arrecadado:</span>
-                                    <span className="font-bold text-green-600">{formatCurrency(totalCollected)}</span>
+                                    <span className="font-semibold text-gray-600 dark:text-gray-300">Total arrecadado:</span>
+                                    <span className="font-bold text-green-600 dark:text-green-400">{formatCurrency(totalCollected)}</span>
                                 </div>
                             </div>
                             
                             <div className="mb-4">
-                                <h4 className="font-bold text-sm mb-2">Confirmados ({event.attendees.length}):</h4>
+                                <h4 className="font-bold text-sm mb-2 text-gray-800 dark:text-gray-200">Confirmados ({event.attendees.length}):</h4>
                                 <div className="flex flex-wrap gap-2">
                                     {event.attendees.length > 0 ? event.attendees.map(name => (
-                                        <span key={name} className="bg-gray-200 text-gray-800 px-2 py-1 text-xs font-semibold rounded-full">{name}</span>
-                                    )) : <p className="text-xs text-gray-500">Ninguém confirmado ainda.</p>}
+                                        <span key={name} className="bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 px-2 py-1 text-xs font-semibold rounded-full">{name}</span>
+                                    )) : <p className="text-xs text-gray-500 dark:text-gray-400">Ninguém confirmado ainda.</p>}
                                 </div>
                             </div>
 
-                            <div className="mt-auto pt-4 border-t border-gray-200">
+                            <div className="mt-auto pt-4 border-t border-gray-200 dark:border-gray-700">
                                 {isConfirmed ? (
                                     <button
                                         onClick={() => handleAttendance(event.id, 'withdrawAttendance')}
@@ -1430,20 +1422,20 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, ModalComponent }) => {
 
             <ModalComponent isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingEvent ? "Editar Evento" : "Criar Novo Evento"}>
                 <form onSubmit={handleFormSubmit} className="space-y-4">
-                    <input name="name" type="text" placeholder="Nome do Evento" defaultValue={editingEvent?.name || ''} className="w-full p-3 border border-gray-300 rounded-md" required />
+                    <input name="name" type="text" placeholder="Nome do Evento" defaultValue={editingEvent?.name || ''} className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md" required />
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label className="text-sm font-medium text-gray-700">Data do Evento</label>
-                            <input name="date" type="datetime-local" defaultValue={editingEvent?.date ? new Date(editingEvent.date).toISOString().substring(0, 16) : ''} className="w-full p-3 border border-gray-300 rounded-md" required />
+                            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Data do Evento</label>
+                            <input name="date" type="datetime-local" defaultValue={editingEvent?.date ? new Date(editingEvent.date).toISOString().substring(0, 16) : ''} className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md" required />
                         </div>
                         <div>
-                            <label className="text-sm font-medium text-gray-700">Data Limite para Confirmação</label>
-                            <input name="deadline" type="date" defaultValue={editingEvent?.deadline ? new Date(editingEvent.deadline).toISOString().substring(0, 10) : ''} className="w-full p-3 border border-gray-300 rounded-md" required />
+                            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Data Limite para Confirmação</label>
+                            <input name="deadline" type="date" defaultValue={editingEvent?.deadline ? new Date(editingEvent.deadline).toISOString().substring(0, 10) : ''} className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md" required />
                         </div>
                     </div>
-                    <input name="location" type="text" placeholder="Local do Evento" defaultValue={editingEvent?.location || ''} className="w-full p-3 border border-gray-300 rounded-md" required />
-                    <input name="value" type="number" step="0.01" placeholder="Valor por Pessoa (ex: 20.00)" defaultValue={editingEvent?.value || ''} className="w-full p-3 border border-gray-300 rounded-md" required />
-                    <textarea name="description" placeholder="Descrição (detalhes, o que levar, etc.)" defaultValue={editingEvent?.description || ''} className="w-full p-3 border border-gray-300 rounded-md" rows="4" required></textarea>
+                    <input name="location" type="text" placeholder="Local do Evento" defaultValue={editingEvent?.location || ''} className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md" required />
+                    <input name="value" type="number" step="0.01" placeholder="Valor por Pessoa (ex: 20.00)" defaultValue={editingEvent?.value || ''} className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md" required />
+                    <textarea name="description" placeholder="Descrição (detalhes, o que levar, etc.)" defaultValue={editingEvent?.description || ''} className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md" rows="4" required></textarea>
                     {modalMessage && <p className="text-red-500 text-sm">{modalMessage}</p>}
                     <button type="submit" disabled={isSubmitting} className="w-full bg-blue-600 text-white font-bold py-3 rounded-md hover:bg-blue-700 disabled:bg-blue-400">
                         {isSubmitting ? 'A guardar...' : (editingEvent ? 'Guardar Alterações' : 'Criar Evento')}
@@ -1476,7 +1468,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
     const [lastUpdated, setLastUpdated] = useState(new Date());
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isResetPasswordModalOpen, setIsResetPasswordModalOpen] = useState(false);
-    const { theme, toggleTheme } = useTheme();
+    const { theme } = useTheme();
 
     const [attendanceData, setAttendanceData] = useState({ isLoading: true, data: null, error: null });
     const [financeData, setFinanceData] = useState({ isLoading: true, data: null, error: null });
@@ -1701,17 +1693,11 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
                     <div className="flex items-center space-x-4">
                         <img src="https://i.ibb.co/pGnycLc/ICONE-CBA.jpg" alt="Logo CBA" className="h-16 w-16 rounded-full shadow-lg" onError={(e) => { e.target.onerror = null; e.target.src='https://placehold.co/64x64/1e3a8a/ffffff?text=CBA'; }} />
                         <div>
-                            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white tracking-tight">Portal do CBA</h1>
+                            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white tracking-tight">Portal do CBA v2.7</h1>
                             <p className="text-gray-500 dark:text-gray-400 mt-1">Bem-vindo, {user.name}!</p>
                         </div>
                     </div>
                     <div className="flex items-center gap-4 pt-4 sm:pt-0">
-                         <button onClick={toggleTheme} className="p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
-                            {theme === 'light' ? 
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" /></svg> :
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zM4.929 4.929a1 1 0 011.414 0L7.05 5.636a1 1 0 11-1.414 1.414l-1.414-1.414a1 1 0 010-1.414zM12.95 7.05a1 1 0 011.414-1.414l1.414 1.414a1 1 0 11-1.414 1.414l-1.414-1.414zM10 16a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM4.929 15.071a1 1 0 010-1.414l1.414-1.414a1 1 0 111.414 1.414l-1.414 1.414a1 1 0 01-1.414 0zM12.95 12.95a1 1 0 011.414 1.414l1.414-1.414a1 1 0 11-1.414-1.414l-1.414 1.414zM4 10a1 1 0 11-2 0v-1a1 1 0 112 0v1zm12 0a1 1 0 11-2 0v-1a1 1 0 112 0v1z" clipRule="evenodd" /></svg>
-                            }
-                        </button>
                         <button onClick={() => setIsResetPasswordModalOpen(true)} className="text-sm font-semibold text-blue-600 dark:text-blue-400 hover:underline">Resetar Senha</button>
                         <button onClick={onLogout} className="text-sm font-semibold text-red-600 dark:text-red-400 hover:underline">Sair</button>
                         <button onClick={handleRefresh} disabled={isRefreshing} className="p-1.5 rounded-full bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
@@ -1757,7 +1743,7 @@ export default function App() {
     const [auth, setAuth] = useState({ status: 'unauthenticated', user: null, error: null }); // unauthenticated, loading, pending, authenticated
     const [librariesLoaded, setLibrariesLoaded] = useState(false);
     
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxmhHGbQvaSFSx03L63o_uLBp9XWU4nhHzgkOQ7-5cmerDiLySvg0b4dQ86gWWiXBRPsg/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwmLKAs-OnJeZz7o12wI5LomQt05MehFAd-cKM-FamZv4-BWS1qvUKcb-BpB-F1JDfreA/exec";
 
     const handleLogin = async (e) => {
         e.preventDefault();
