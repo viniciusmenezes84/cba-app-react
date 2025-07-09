@@ -562,20 +562,57 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
                 )}
             </section>
 
-            <ModalComponent isOpen={!!modalPlayer} onClose={() => setModalPlayer(null)} title={`Histórico de ${modalPlayer?.name}`}>
-                <div className="text-left">
-                    <div className="mb-4 p-2 bg-gray-100 dark:bg-gray-700 rounded-md text-center text-gray-800 dark:text-gray-200">
-                        <strong>{modalPlayer?.presences}</strong> Presenças | <strong>{modalPlayer?.totalGames - modalPlayer?.presences}</strong> Ausências
+            <ModalComponent isOpen={!!modalPlayer} onClose={() => setModalPlayer(null)} title={`Detalhes de ${modalPlayer?.name}`}>
+                <div className="text-left space-y-4">
+                    <div className="grid grid-cols-2 gap-4 text-sm p-4 bg-gray-100 dark:bg-gray-700/50 rounded-lg">
+                        <div>
+                            <p className="font-semibold text-gray-600 dark:text-gray-400">Posição</p>
+                            <p className="text-lg font-bold text-gray-900 dark:text-white">{modalPlayer?.posicao}</p>
+                        </div>
+                        <div>
+                            <p className="font-semibold text-gray-600 dark:text-gray-400">Nº Camisa</p>
+                            <p className="text-lg font-bold text-gray-900 dark:text-white">{modalPlayer?.numero}</p>
+                        </div>
+                        <div>
+                            <p className="font-semibold text-gray-600 dark:text-gray-400">Altura</p>
+                            <p className="text-lg font-bold text-gray-900 dark:text-white">{modalPlayer?.altura}</p>
+                        </div>
+                        <div>
+                            <p className="font-semibold text-gray-600 dark:text-gray-400">Membro Desde</p>
+                            <p className="text-lg font-bold text-gray-900 dark:text-white">{modalPlayer?.dataEntrada}</p>
+                        </div>
+                        <div className="col-span-2">
+                            <p className="font-semibold text-gray-600 dark:text-gray-400">Especialidade</p>
+                            <p className="text-lg font-bold text-gray-900 dark:text-white">{modalPlayer?.especialidade}</p>
+                        </div>
                     </div>
-                    <div className="flex flex-wrap gap-1">
-                        {dates.map(date => {
-                            const status = modalPlayer?.attendance[date]?.trim() || '❌';
-                            let colorClass = 'bg-gray-300 dark:bg-gray-600';
-                            if (status.includes('✅')) colorClass = 'bg-green-500';
-                            else if (status.toUpperCase() === 'NÃO JUSTIFICOU') colorClass = 'bg-orange-500';
-                            else if (status.includes('❌')) colorClass = 'bg-red-500';
-                            return <div key={date} className={`w-5 h-5 border border-gray-400 dark:border-gray-500 ${colorClass}`} title={`${date}: ${status}`}></div>;
-                        })}
+                    
+                    <div className="grid grid-cols-2 gap-4 text-sm p-4 bg-gray-100 dark:bg-gray-700/50 rounded-lg">
+                         <div className="text-center">
+                            <p className="text-2xl font-bold text-blue-500 dark:text-blue-400">{modalPlayer?.ppj}</p>
+                            <p className="font-semibold text-gray-600 dark:text-gray-400">Pontos/Jogo</p>
+                        </div>
+                         <div className="text-center">
+                            <p className="text-2xl font-bold text-blue-500 dark:text-blue-400">{modalPlayer?.rpj}</p>
+                            <p className="font-semibold text-gray-600 dark:text-gray-400">Ressaltos/Jogo</p>
+                        </div>
+                    </div>
+
+                    <div>
+                        <h4 className="font-bold text-gray-800 dark:text-gray-200 mb-2">Histórico de Presença</h4>
+                        <div className="mb-2 p-2 bg-gray-100 dark:bg-gray-700/50 rounded-md text-center text-gray-800 dark:text-gray-200">
+                            <strong>{modalPlayer?.presences}</strong> Presenças | <strong>{modalPlayer?.totalGames - modalPlayer?.presences}</strong> Ausências
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                            {dates.map(date => {
+                                const status = modalPlayer?.attendance[date]?.trim() || '❌';
+                                let colorClass = 'bg-gray-300 dark:bg-gray-600';
+                                if (status.includes('✅')) colorClass = 'bg-green-500';
+                                else if (status.toUpperCase() === 'NÃO JUSTIFICOU') colorClass = 'bg-orange-500';
+                                else if (status.includes('❌')) colorClass = 'bg-red-500';
+                                return <div key={date} className={`w-5 h-5 border border-gray-400 dark:border-gray-500 ${colorClass}`} title={`${date}: ${status}`}></div>;
+                            })}
+                        </div>
                     </div>
                 </div>
             </ModalComponent>
@@ -1475,65 +1512,21 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
     
     const isAdmin = user && user.role && user.role.toUpperCase() === 'ADMIN';
 
-    const fetchAttendanceData = useCallback(async () => {
-        const ATTENDANCE_SHEET_URL = `https://docs.google.com/spreadsheets/d/e/2PACX-1vToVgb2bcwJcd-MAfIjYDK-B13qFQcNt1g6O5GKgCVyvlJbqrUi_9ZtXfrmlYZi1A/pub?output=csv&_=${new Date().getTime()}`;
+    const fetchDashboardData = useCallback(async () => {
         setAttendanceData(prev => ({ ...prev, isLoading: true }));
         try {
-            if (!window.Papa) {
-                throw new Error("A biblioteca de análise (PapaParse) não foi carregada.");
+            const res = await fetch(`${SCRIPT_URL}?action=getDashboardData`);
+            const data = await res.json();
+            if (data.result === 'success') {
+                setAttendanceData({ isLoading: false, data: data.data, error: null });
+                setLastUpdated(new Date());
+            } else {
+                throw new Error(data.message || 'Falha ao buscar dados do dashboard.');
             }
-            const results = await new Promise((resolve, reject) => {
-                window.Papa.parse(ATTENDANCE_SHEET_URL, {
-                    download: true,
-                    header: true,
-                    skipEmptyLines: true,
-                    transformHeader: h => h.trim().replace(/^\uFEFF/, ''),
-                    complete: resolve,
-                    error: reject
-                });
-            });
-
-            if (results.errors.length > 0) throw new Error(results.errors.map(e => e.message).join(', '));
-            if (!results.data || results.data.length === 0) throw new Error('A planilha de presença parece estar vazia.');
-            
-            const headers = results.meta.fields;
-            const playerNameField = headers[0];
-            const allDates = headers.slice(1).filter(h => h && h.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/));
-            allDates.sort((a, b) => new Date(a.split('/').reverse().join('-')) - new Date(b.split('/').reverse().join('-')));
-            
-            const processedData = results.data
-                .map(row => {
-                    const name = row[playerNameField]?.trim();
-                    if (!name) return null;
-                    const attendance = {};
-                    let presences = 0;
-                    let unjustifiedAbsences = 0;
-                    let unjustifiedAbsenceDates = [];
-                    let relevantGames = 0;
-                    allDates.forEach(date => {
-                        const status = row[date]?.trim() || '';
-                        if (status) {
-                            relevantGames++;
-                            if (status.includes('✅')) presences++;
-                            else if (status.toUpperCase() === 'NÃO JUSTIFICOU') {
-                                unjustifiedAbsences++;
-                                unjustifiedAbsenceDates.push(date);
-                            }
-                        }
-                        attendance[date] = status;
-                    });
-                    const average = relevantGames > 0 ? parseFloat(((presences / relevantGames) * 100).toFixed(1)) : 0;
-                    return { name, presences, totalGames: relevantGames, average, unjustifiedAbsences, unjustifiedAbsenceDates, attendance };
-                })
-                .filter(Boolean);
-
-            if (processedData.length === 0) throw new Error("Nenhum dado de jogador válido foi encontrado.");
-            setAttendanceData({ isLoading: false, data: { players: processedData, dates: allDates }, error: null });
-            setLastUpdated(new Date());
         } catch (error) {
-            setAttendanceData({ isLoading: false, data: null, error: `Erro ao carregar dados de presença: ${error.message}` });
+            setAttendanceData({ isLoading: false, data: null, error: `Erro ao carregar dados: ${error.message}` });
         }
-    }, []);
+    }, [SCRIPT_URL]);
 
     const fetchFinanceData = useCallback(async () => {
         const FINANCE_SHEET_URL = `https://docs.google.com/spreadsheets/d/e/2PACX-1vT0fIELkR4lk2apHxZ9JbhTUUI8M4ICKGCEe3ntox5zyYsaccFftSx4mFyne5xpzA/pub?output=csv&_=${new Date().getTime()}`;
@@ -1629,7 +1622,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
 
     const handleRefresh = useCallback(() => {
         setIsRefreshing(true);
-        const promises = [fetchAttendanceData()];
+        const promises = [fetchDashboardData()];
         if(activeTab === 'financas') {
             promises.push(fetchFinanceData());
         }
@@ -1637,7 +1630,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
             // A lógica de fetch já está no componente, mas podemos forçar aqui se quisermos
         }
         Promise.all(promises).finally(() => setIsRefreshing(false));
-    }, [activeTab, fetchAttendanceData, fetchFinanceData]);
+    }, [activeTab, fetchDashboardData, fetchFinanceData]);
 
     const handleResetPasswordClose = (shouldLogout) => {
         setIsResetPasswordModalOpen(false);
@@ -1743,7 +1736,7 @@ export default function App() {
     const [auth, setAuth] = useState({ status: 'unauthenticated', user: null, error: null }); // unauthenticated, loading, pending, authenticated
     const [librariesLoaded, setLibrariesLoaded] = useState(false);
     
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwmLKAs-OnJeZz7o12wI5LomQt05MehFAd-cKM-FamZv4-BWS1qvUKcb-BpB-F1JDfreA/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwxdZM-hbXiQ21A8YAy6qDBsqObxa9UCVqjnA-To0cOTnu6ZDORqb_KRdQAiZ5YG5j-Jw/exec";
 
     const handleLogin = async (e) => {
         e.preventDefault();
