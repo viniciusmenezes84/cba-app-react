@@ -1592,9 +1592,9 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
             if (hasDetailedTransactions) {
                 setFinanceData({ isLoading: false, data: { revenues, expenses, paymentStatus, paymentHeaders, availableMonths: [...availableMonths].sort((a,b) => monthNames.indexOf(a) - monthNames.indexOf(b)) }, error: null });
             } else {
-                 const revenueCell = data[38]?.[15] || 'R$ 0,00'; // P39
+                 const revenueCell = data[46]?.[15] || 'R$ 0,00'; // P39
                  const expenseCell = data[54]?.[15] || 'R$ 0,00'; // P55
-                 const balanceCell = data[56]?.[15] || 'R$ 0,00'; // P57
+                 const balanceCell = data[64]?.[15] || 'R$ 0,00'; // P57
 
                  const summaryData = {
                     revenue: parseCurrency(revenueCell),
