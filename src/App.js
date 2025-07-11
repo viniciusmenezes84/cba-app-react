@@ -231,6 +231,7 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
     const [monthRange, setMonthRange] = useState({ start: '', end: '' });
     const [modalPlayer, setModalPlayer] = useState(null);
     const [selectedPerformancePlayer, setSelectedPerformancePlayer] = useState('');
+    const [modalInfo, setModalInfo] = useState({ isOpen: false, title: '', message: '' });
 
     const availableMonths = useMemo(() => {
         const monthSet = new Set();
@@ -332,7 +333,7 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
 
     const handleGenerateReport = () => {
         if (!monthRange.start || !monthRange.end) {
-            alert("Por favor, selecione um período de meses.");
+            setModalInfo({ isOpen: true, title: "Período Inválido", message: "Por favor, selecione um período de meses." });
             return;
         }
 
@@ -340,7 +341,7 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
         const [endYear, endMonth] = monthRange.end.split('-').map(Number);
 
         if (startYear > endYear || (startYear === endYear && startMonth > endMonth)) {
-            alert("O mês de início não pode ser posterior ao mês de fim.");
+            setModalInfo({ isOpen: true, title: "Período Inválido", message: "O mês de início não pode ser posterior ao mês de fim." });
             return;
         }
 
@@ -616,6 +617,14 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
                     </div>
                 </div>
             </ModalComponent>
+            
+            <ModalComponent 
+                isOpen={modalInfo.isOpen} 
+                onClose={() => setModalInfo({ isOpen: false, title: '', message: '' })} 
+                title={modalInfo.title}
+            >
+                <p>{modalInfo.message}</p>
+            </ModalComponent>
         </div>
     );
 };
@@ -843,227 +852,136 @@ const EstatutoTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
 };
 
 
-const FinancasTab = ({ financeData, isLoading, error }) => {
-    const [openAccordion, setOpenAccordion] = useState(null);
+const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin }) => {
+    const [selectedPlayer, setSelectedPlayer] = useState('');
 
-    const toggleAccordion = (title) => {
-        setOpenAccordion(openAccordion === title ? null : title);
-    };
+    useEffect(() => {
+        if (!financeData || !financeData.paymentStatus || financeData.paymentStatus.length === 0) return;
+
+        if (isAdmin) {
+            setSelectedPlayer(financeData.paymentStatus[0].player);
+        } else {
+            const userRecord = financeData.paymentStatus.find(p => p.player.toLowerCase() === currentUser.name.toLowerCase());
+            if (userRecord) {
+                setSelectedPlayer(userRecord.player);
+            }
+        }
+    }, [financeData, isAdmin, currentUser.name]);
+
 
     const formatCurrency = (value) => {
         if (typeof value !== 'number') return 'R$ 0,00';
         return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     };
-    
-    const { summary, monthlyChartData, paymentStatus, paymentHeaders, revenues, expenses } = useMemo(() => {
-        if (!financeData) {
-            return {
-                summary: { revenue: 0, expense: 0, balance: 0 },
-                monthlyChartData: { labels: [], datasets: [] },
-                paymentStatus: [],
-                paymentHeaders: [],
-                revenues: [],
-                expenses: [],
-            };
+
+    const getEnhancedStatus = (monthName, originalStatus) => {
+        const statusStr = String(originalStatus || '').trim();
+        
+        if (isNaN(parseInt(statusStr)) && statusStr !== '') {
+            return { text: statusStr, type: 'info' };
+        }
+        
+        if (statusStr === '20') {
+            return { text: 'Pagamento Efetuado', type: 'pago' };
         }
 
-        if (financeData.summary) {
-             return {
-                summary: financeData.summary,
-                monthlyChartData: { labels: [], datasets: [] },
-                paymentStatus: financeData.paymentStatus || [],
-                paymentHeaders: financeData.paymentHeaders || [],
-                revenues: [],
-                expenses: [],
-            };
+        const monthMap = {
+            "janeiro": 0, "fevereiro": 1, "março": 2, "abril": 3, "maio": 4, "junho": 5,
+            "julho": 6, "agosto": 7, "setembro": 8, "outubro": 9, "novembro": 10, "dezembro": 11
+        };
+        
+        const now = new Date();
+        const currentMonth = now.getMonth();
+        const currentYear = now.getFullYear();
+        
+        const monthIndex = monthMap[monthName.toLowerCase()];
+
+        const monthDate = new Date(currentYear, monthIndex, 1);
+
+        if (monthIndex < currentMonth) {
+            return { text: 'Em débito', type: 'atrasado' };
         }
 
-        const totalRevenue = financeData.revenues.reduce((sum, item) => sum + item.value, 0);
-        const totalExpense = financeData.expenses.reduce((sum, item) => sum + item.value, 0);
-        const balance = totalRevenue - totalExpense;
-
-        const monthlyData = {};
-        [...financeData.revenues, ...financeData.expenses].forEach(item => {
-            const month = item.month;
-            if (!monthlyData[month]) {
-                monthlyData[month] = { revenue: 0, expense: 0 };
-            }
-            if (financeData.revenues.includes(item)) {
-                monthlyData[month].revenue += item.value;
-            } else {
-                monthlyData[month].expense += item.value;
-            }
-        });
-
-        const sortedMonths = Object.keys(monthlyData).sort((a, b) => {
-             const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-             return monthNames.indexOf(a) - monthNames.indexOf(b);
-        });
-
-        const chartData = {
-            labels: sortedMonths,
-            datasets: [
-                {
-                    label: 'Receitas',
-                    data: sortedMonths.map(month => monthlyData[month].revenue),
-                    backgroundColor: 'rgba(75, 192, 192, 0.6)',
-                    borderColor: 'rgba(75, 192, 192, 1)',
-                    borderWidth: 1,
-                },
-                {
-                    label: 'Despesas',
-                    data: sortedMonths.map(month => monthlyData[month].expense),
-                    backgroundColor: 'rgba(255, 99, 132, 0.6)',
-                    borderColor: 'rgba(255, 99, 132, 1)',
-                    borderWidth: 1,
-                },
-            ],
-        };
-
-        return {
-            summary: { revenue: totalRevenue, expense: totalExpense, balance: balance },
-            monthlyChartData: chartData,
-            paymentStatus: financeData.paymentStatus || [],
-            paymentHeaders: financeData.paymentHeaders || [],
-            revenues: financeData.revenues || [],
-            expenses: financeData.expenses || [],
-        };
-
-    }, [financeData]);
-
-    const monthlyChartConfig = {
-        type: 'bar',
-        data: monthlyChartData,
-        options: {
-            responsive: true,
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        callback: function(value) {
-                            return formatCurrency(value);
-                        }
-                    }
-                }
-            },
-            plugins: {
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return `${context.dataset.label}: ${formatCurrency(context.raw)}`;
-                        }
-                    }
-                }
-            }
-        },
+        return { text: 'A Pagar', type: 'pendente' };
     };
 
+    const getStatusPill = (statusInfo) => {
+        let colorClass = 'bg-gray-200 text-gray-800 dark:bg-gray-600 dark:text-gray-300'; // default/info
+        if (statusInfo.type === 'pago') colorClass = 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300';
+        if (statusInfo.type === 'pendente') colorClass = 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800/50 dark:text-yellow-300';
+        if (statusInfo.type === 'atrasado') colorClass = 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300';
+        
+        return (
+            <span className={`px-3 py-1 text-xs font-semibold rounded-full ${colorClass}`}>
+                {statusInfo.text}
+            </span>
+        );
+    };
+    
     if (isLoading) return <Loader message="A carregar dados financeiros..." />;
     if (error) return <p className="text-center text-red-500 py-8">{error}</p>;
     if (!financeData) return <p className="text-center text-gray-500 py-8">Nenhum dado financeiro encontrado.</p>;
 
-    const getStatusColor = (status) => {
-        const s = status.toLowerCase();
-        if (s === 'pago') return 'bg-green-100 text-green-800';
-        if (s === 'pendente') return 'bg-yellow-100 text-yellow-800';
-        if (s === 'atrasado') return 'bg-red-100 text-red-800';
-        return 'bg-gray-100 text-gray-800';
-    };
+    const playerData = financeData.paymentStatus?.find(p => p.player === selectedPlayer);
 
     return (
         <div className="space-y-8">
-            {/* Resumo Financeiro */}
             <section className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg">
                 <h2 className="text-2xl font-bold mb-4 text-center text-gray-800 dark:text-gray-100">Resumo Financeiro</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-center">
                     <div className="p-4 bg-green-100 dark:bg-green-900/30 rounded-lg">
                         <h3 className="text-lg font-semibold text-green-600 dark:text-green-400">Total de Receitas</h3>
-                        <p className="text-3xl font-bold text-green-800 dark:text-green-200">{formatCurrency(summary.revenue)}</p>
+                        <p className="text-3xl font-bold text-green-800 dark:text-green-200">{formatCurrency(financeData.summary.revenue)}</p>
                     </div>
                     <div className="p-4 bg-red-100 dark:bg-red-900/30 rounded-lg">
                         <h3 className="text-lg font-semibold text-red-600 dark:text-red-400">Total de Despesas</h3>
-                        <p className="text-3xl font-bold text-red-800 dark:text-red-200">{formatCurrency(summary.expense)}</p>
+                        <p className="text-3xl font-bold text-red-800 dark:text-red-200">{formatCurrency(financeData.summary.expense)}</p>
                     </div>
-                    <div className={`p-4 rounded-lg ${summary.balance >= 0 ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-orange-100 dark:bg-orange-900/30'}`}>
-                        <h3 className={`text-lg font-semibold ${summary.balance >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-orange-600 dark:text-orange-400'}`}>Saldo Atual</h3>
-                        <p className={`text-3xl font-bold ${summary.balance >= 0 ? 'text-blue-800 dark:text-blue-200' : 'text-orange-800 dark:text-orange-200'}`}>{formatCurrency(summary.balance)}</p>
+                    <div className={`p-4 rounded-lg ${financeData.summary.balance >= 0 ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-orange-100 dark:bg-orange-900/30'}`}>
+                        <h3 className={`text-lg font-semibold ${financeData.summary.balance >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-orange-600 dark:text-orange-400'}`}>Saldo Atual</h3>
+                        <p className={`text-3xl font-bold ${financeData.summary.balance >= 0 ? 'text-blue-800 dark:text-blue-200' : 'text-orange-800 dark:text-orange-200'}`}>{formatCurrency(financeData.summary.balance)}</p>
                     </div>
                 </div>
             </section>
             
-            {monthlyChartData.labels.length > 0 && (
-                 <section className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg">
-                    <h2 className="text-2xl font-bold mb-4 text-gray-800 dark:text-gray-100">Receitas vs. Despesas por Mês</h2>
-                    <ChartComponent chartConfig={monthlyChartConfig} />
-                </section>
-            )}
-
-            {/* Status de Pagamento */}
-            {paymentStatus.length > 0 && (
-                 <section className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg">
-                    <h2 className="text-2xl font-bold mb-4 text-gray-800 dark:text-gray-100">Status de Pagamento dos Mensalistas</h2>
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                            <thead className="bg-gray-50 dark:bg-gray-700/50">
-                                <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Jogador</th>
-                                    {paymentHeaders.map(month => (
-                                        <th key={month} className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{month}</th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                                {paymentStatus.map(({ player, statuses }) => (
-                                    <tr key={player} className="even:bg-gray-50 dark:even:bg-gray-800/50">
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">{player}</td>
-                                        {paymentHeaders.map(month => (
-                                            <td key={month} className="px-6 py-4 whitespace-nowrap text-sm">
-                                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(statuses[month] || '')}`}>
-                                                    {statuses[month] || '-'}
-                                                </span>
-                                            </td>
-                                        ))}
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+            <section className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg">
+                <h2 className="text-2xl font-bold mb-4 text-gray-800 dark:text-gray-100">Histórico de Pagamentos</h2>
+                
+                {isAdmin && (
+                    <div className="mb-6">
+                        <label htmlFor="player-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Selecione um Jogador:</label>
+                        <select
+                            id="player-select"
+                            value={selectedPlayer}
+                            onChange={(e) => setSelectedPlayer(e.target.value)}
+                            className="w-full max-w-xs p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                        >
+                            {financeData.paymentStatus?.map(p => <option key={p.player} value={p.player}>{p.player}</option>)}
+                        </select>
                     </div>
-                </section>
-            )}
+                )}
 
-            {/* Detalhamento */}
-            {(revenues.length > 0 || expenses.length > 0) && (
-                <section>
-                     <div className="space-y-4">
-                        <AccordionItem title="Detalhamento de Receitas" isOpen={openAccordion === 'revenues'} onClick={() => toggleAccordion('revenues')}>
-                            <ul className="space-y-2">
-                                {revenues.map((item, index) => (
-                                    <li key={index} className="flex justify-between items-center p-2 bg-gray-50 dark:bg-gray-700/50 rounded">
-                                        <div>
-                                            <p className="font-semibold text-gray-800 dark:text-gray-200">{item.description}</p>
-                                            <p className="text-sm text-gray-500 dark:text-gray-400">{item.date.toLocaleDateString('pt-BR')}</p>
-                                        </div>
-                                        <p className="font-semibold text-green-600 dark:text-green-400">{formatCurrency(item.value)}</p>
-                                    </li>
-                                ))}
-                            </ul>
-                        </AccordionItem>
-                        <AccordionItem title="Detalhamento de Despesas" isOpen={openAccordion === 'expenses'} onClick={() => toggleAccordion('expenses')}>
-                             <ul className="space-y-2">
-                                {expenses.map((item, index) => (
-                                    <li key={index} className="flex justify-between items-center p-2 bg-gray-50 dark:bg-gray-700/50 rounded">
-                                        <div>
-                                            <p className="font-semibold text-gray-800 dark:text-gray-200">{item.description}</p>
-                                            <p className="text-sm text-gray-500 dark:text-gray-400">{item.date.toLocaleDateString('pt-BR')}</p>
-                                        </div>
-                                        <p className="font-semibold text-red-600 dark:text-red-400">{formatCurrency(item.value)}</p>
-                                    </li>
-                                ))}
-                            </ul>
-                        </AccordionItem>
+                {playerData ? (
+                    <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 animate-fade-in">
+                        <h3 className="text-xl font-bold text-blue-600 dark:text-blue-400 mb-6">{playerData.player}</h3>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                            {financeData.paymentHeaders?.map(month => {
+                                const statusInfo = getEnhancedStatus(month, playerData.statuses[month]);
+                                return (
+                                    <div key={month} className="flex flex-col items-center justify-center p-3 bg-white dark:bg-gray-700/50 rounded-lg shadow-sm">
+                                        <span className="font-semibold text-gray-700 dark:text-gray-200 mb-2">{month}</span>
+                                        {getStatusPill(statusInfo)}
+                                    </div>
+                                );
+                            })}
+                        </div>
                     </div>
-                </section>
-            )}
+                ) : (
+                    <p className="text-center text-gray-500 dark:text-gray-400 py-8">
+                        {isAdmin ? 'Selecione um jogador para ver seu histórico.' : 'Não foi possível encontrar seu histórico de pagamentos.'}
+                    </p>
+                )}
+            </section>
         </div>
     );
 };
@@ -1093,16 +1011,13 @@ const SorteioTab = ({ allPlayersData, scriptUrl, ModalComponent }) => {
             return;
         }
 
-        // Pega os 10 primeiros jogadores selecionados
         const playersToDraw = [...selectedPlayers].slice(0, 10);
 
-        // Embaralha os jogadores
         for (let i = playersToDraw.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [playersToDraw[i], playersToDraw[j]] = [playersToDraw[j], playersToDraw[i]];
         }
 
-        // Divide em dois times
         const teamBlack = playersToDraw.slice(0, 5);
         const teamRed = playersToDraw.slice(5, 10);
 
@@ -1157,7 +1072,6 @@ const SorteioTab = ({ allPlayersData, scriptUrl, ModalComponent }) => {
                 <p>{modalInfo.message}</p>
             </ModalComponent>
 
-            {/* Seção de Seleção de Jogadores */}
             {!teams && (
                 <section className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg">
                     <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-4">Seleção de Jogadores</h2>
@@ -1190,12 +1104,10 @@ const SorteioTab = ({ allPlayersData, scriptUrl, ModalComponent }) => {
                 </section>
             )}
 
-            {/* Seção de Exibição dos Times */}
             {teams && (
                 <section className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg text-center animate-fade-in-up">
                     <h2 className="text-3xl font-bold text-gray-800 dark:text-gray-100 mb-6">Times Sorteados!</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        {/* Time Preto */}
                         <div className="bg-gray-800 p-6 rounded-lg">
                             <h3 className="text-2xl font-bold text-white mb-4">Time Preto ⚫</h3>
                             <ul className="space-y-3">
@@ -1204,7 +1116,6 @@ const SorteioTab = ({ allPlayersData, scriptUrl, ModalComponent }) => {
                                 ))}
                             </ul>
                         </div>
-                        {/* Time Vermelho */}
                         <div className="bg-red-700 p-6 rounded-lg">
                              <h3 className="text-2xl font-bold text-white mb-4">Time Vermelho 🔴</h3>
                              <ul className="space-y-3">
@@ -1247,7 +1158,8 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, ModalComponent }) => {
     const [editingEvent, setEditingEvent] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [modalMessage, setModalMessage] = useState('');
-    const [confirmDelete, setConfirmDelete] = useState(null); // State for delete confirmation
+    const [confirmDelete, setConfirmDelete] = useState(null);
+    const [infoModal, setInfoModal] = useState({ isOpen: false, title: '', message: '' });
 
     const formatCurrency = (value) => {
         if (typeof value !== 'number') return 'R$ 0,00';
@@ -1345,7 +1257,7 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, ModalComponent }) => {
                  throw new Error(data.message || `Não foi possível ${actionType === 'confirmAttendance' ? 'confirmar a presença' : 'retirar o nome'}.`);
             }
         } catch (error) {
-            alert(error.message);
+            setInfoModal({ isOpen: true, title: 'Erro', message: error.message });
             setEvents(prevEvents => prevEvents.map(e => e.id === eventId ? {...e, isConfirming: false} : e));
         }
     };
@@ -1368,7 +1280,7 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, ModalComponent }) => {
                 throw new Error(data.message || "Não foi possível apagar o evento.");
             }
         } catch (err) {
-            alert(err.message);
+            setInfoModal({ isOpen: true, title: 'Erro ao Apagar', message: err.message });
         } finally {
             setIsLoading(false);
         }
@@ -1493,6 +1405,14 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, ModalComponent }) => {
                     </div>
                 </div>
             </ModalComponent>
+
+            <ModalComponent 
+                isOpen={infoModal.isOpen} 
+                onClose={() => setInfoModal({ isOpen: false, title: '', message: '' })} 
+                title={infoModal.title}
+            >
+                <p>{infoModal.message}</p>
+            </ModalComponent>
         </div>
     );
 };
@@ -1529,96 +1449,28 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
     }, [SCRIPT_URL]);
 
     const fetchFinanceData = useCallback(async () => {
-        const FINANCE_SHEET_URL = `https://docs.google.com/spreadsheets/d/e/2PACX-1vT0fIELkR4lk2apHxZ9JbhTUUI8M4ICKGCEe3ntox5zyYsaccFftSx4mFyne5xpzA/pub?output=csv&_=${new Date().getTime()}`;
         setFinanceData({ isLoading: true, data: null, error: null });
         try {
-            if (!window.Papa) {
-                throw new Error("A biblioteca de análise (PapaParse) não foi carregada.");
+            const res = await fetch(`${SCRIPT_URL}?action=getFinanceData`);
+            if (!res.ok) {
+                throw new Error(`HTTP error! status: ${res.status}`);
             }
-            const results = await new Promise((resolve, reject) => {
-                window.Papa.parse(FINANCE_SHEET_URL, {
-                    download: true,
-                    header: false,
-                    skipEmptyLines: true,
-                    complete: resolve,
-                    error: reject
-                });
-            });
-            
-            if (results.errors.length > 0) throw new Error(results.errors.map(e => e.message).join(', '));
-            if (!results.data || results.data.length === 0) throw new Error('A planilha de finanças parece estar vazia.');
+            const data = await res.json();
 
-            const data = results.data;
-            let revenues = [], expenses = [], paymentStatus = [];
-            let availableMonths = new Set();
-            const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-            let currentSection = null, isPaymentSection = false, paymentHeaders = [];
-
-            const parseCurrency = (value) => {
-                if (typeof value !== 'number' && (typeof value !== 'string' || !value.includes('R$'))) return 0;
-                const cleanStr = value.toString().replace('R$', '').replace(/\s/g, '').replace(/\./g, '').replace(',', '.');
-                return parseFloat(cleanStr) || 0;
-            };
-            
-            data.forEach(row => {
-                const firstCell = row[0]?.toUpperCase() || '';
-                if (firstCell.includes('RECEITAS')) { currentSection = 'revenue'; isPaymentSection = false; return; }
-                if (firstCell.includes('DESPESAS')) { currentSection = 'expense'; isPaymentSection = false; return; }
-                if (firstCell.includes('JOGADOR')) { currentSection = 'payment'; isPaymentSection = true; paymentHeaders = row.slice(1).filter(h => h); return; }
-
-                if (isPaymentSection && row[0]) {
-                    const playerPayment = { player: row[0], statuses: {} };
-                    paymentHeaders.forEach((month, index) => { playerPayment.statuses[month] = row[index + 1] || ''; });
-                    paymentStatus.push(playerPayment);
-                    return;
-                }
-
-                const dateParts = row[0]?.split('/');
-                const date = dateParts?.length === 3 ? new Date(dateParts[2], dateParts[1] - 1, dateParts[0]) : null;
-                const description = row[1];
-                const valueStr = row[2];
-
-                if (date && description && valueStr) {
-                    const value = parseCurrency(valueStr);
-                    const monthName = monthNames[date.getMonth()];
-                    const entry = { date, description, value, month: monthName };
-                    if (currentSection === 'revenue') revenues.push(entry);
-                    else if (currentSection === 'expense') expenses.push(entry);
-                    availableMonths.add(monthName);
-                }
-            });
-
-            const hasDetailedTransactions = revenues.length > 0 || expenses.length > 0;
-            if (hasDetailedTransactions) {
-                setFinanceData({ isLoading: false, data: { revenues, expenses, paymentStatus, paymentHeaders, availableMonths: [...availableMonths].sort((a,b) => monthNames.indexOf(a) - monthNames.indexOf(b)) }, error: null });
-            } else {
-                 const revenueCell = data[46]?.[15] || 'R$ 0,00'; // P39
-                 const expenseCell = data[54]?.[15] || 'R$ 0,00'; // P55
-                 const balanceCell = data[64]?.[15] || 'R$ 0,00'; // P57
-
-                 const summaryData = {
-                    revenue: parseCurrency(revenueCell),
-                    expense: parseCurrency(expenseCell),
-                    balance: parseCurrency(balanceCell)
-                 };
-
+            if (data.result === 'success') {
                 setFinanceData({ 
                     isLoading: false, 
-                    data: { 
-                        summary: summaryData, 
-                        paymentStatus, 
-                        paymentHeaders,
-                        revenues: [],
-                        expenses: [] 
-                    }, 
+                    data: data.data,
                     error: null 
                 });
+                setLastUpdated(new Date());
+            } else {
+                throw new Error(data.message || 'Falha ao buscar dados financeiros do script.');
             }
-            setLastUpdated(new Date());
         } catch (error) {
             setFinanceData({ isLoading: false, data: null, error: `Erro ao carregar dados financeiros: ${error.message}` });
         }
-    }, []);
+    }, [SCRIPT_URL]);
 
     const handleRefresh = useCallback(() => {
         setIsRefreshing(true);
@@ -1660,7 +1512,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
             case 'estatuto':
                 return <EstatutoTab />;
             case 'financas':
-                return <FinancasTab financeData={financeData.data} isLoading={financeData.isLoading} error={financeData.error} />;
+                return <FinancasTab financeData={financeData.data} isLoading={financeData.isLoading} error={financeData.error} currentUser={user} isAdmin={isAdmin} />;
             case 'sorteio':
                  return <SorteioTab allPlayersData={attendanceData.data?.players || []} scriptUrl={SCRIPT_URL} ModalComponent={Modal} />;
             case 'eventos':
@@ -1736,7 +1588,8 @@ export default function App() {
     const [auth, setAuth] = useState({ status: 'unauthenticated', user: null, error: null }); // unauthenticated, loading, pending, authenticated
     const [librariesLoaded, setLibrariesLoaded] = useState(false);
     
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwxdZM-hbXiQ21A8YAy6qDBsqObxa9UCVqjnA-To0cOTnu6ZDORqb_KRdQAiZ5YG5j-Jw/exec";
+    // MODIFICATION: Updated the SCRIPT_URL to the new endpoint you provided after re-deployment.
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbynaKHtL0nha4lEZY1tgS7mCn4TP5y-Lo-jIor8nC8fdiSRGftAi20K3Wsh5IRb-wJugg/exec";
 
     const handleLogin = async (e) => {
         e.preventDefault();
