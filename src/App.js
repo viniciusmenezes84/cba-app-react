@@ -852,8 +852,10 @@ const EstatutoTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
 };
 
 
-const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin }) => {
+const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin, scriptUrl }) => {
     const [selectedPlayer, setSelectedPlayer] = useState('');
+    const [isSending, setIsSending] = useState(false);
+    const [emailMessage, setEmailMessage] = useState({ text: '', type: '' });
 
     useEffect(() => {
         if (!financeData || !financeData.paymentStatus || financeData.paymentStatus.length === 0) return;
@@ -916,6 +918,29 @@ const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin }) =>
                 {statusInfo.text}
             </span>
         );
+    };
+
+    const handleSendReports = async () => {
+        setIsSending(true);
+        setEmailMessage({ text: 'A enviar relatórios...', type: 'info' });
+
+        try {
+            const res = await fetch(scriptUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({ action: 'sendFinanceReports' }).toString(),
+            });
+            const data = await res.json();
+            if (data.result === 'success') {
+                setEmailMessage({ text: data.message, type: 'success' });
+            } else {
+                throw new Error(data.message || 'Ocorreu um erro desconhecido.');
+            }
+        } catch (error) {
+            setEmailMessage({ text: `Erro ao enviar e-mails: ${error.message}`, type: 'error' });
+        } finally {
+            setIsSending(false);
+        }
     };
     
     if (isLoading) return <Loader message="A carregar dados financeiros..." />;
@@ -982,6 +1007,30 @@ const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin }) =>
                     </p>
                 )}
             </section>
+
+            {isAdmin && (
+                <section className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg">
+                    <h2 className="text-2xl font-bold mb-4 text-gray-800 dark:text-gray-100">Ações Administrativas</h2>
+                    <div className="flex flex-col items-start gap-4">
+                        <button
+                            onClick={handleSendReports}
+                            disabled={isSending}
+                            className="bg-cyan-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-cyan-700 disabled:bg-gray-400 transition-all shadow-md flex items-center"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                                <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
+                                <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
+                            </svg>
+                            {isSending ? 'Enviando...' : 'Enviar Relatório Mensal por Email'}
+                        </button>
+                        {emailMessage.text && (
+                            <div className={`p-3 rounded-md text-sm w-full ${emailMessage.type === 'error' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                                {emailMessage.text}
+                            </div>
+                        )}
+                    </div>
+                </section>
+            )}
         </div>
     );
 };
@@ -1512,7 +1561,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
             case 'estatuto':
                 return <EstatutoTab />;
             case 'financas':
-                return <FinancasTab financeData={financeData.data} isLoading={financeData.isLoading} error={financeData.error} currentUser={user} isAdmin={isAdmin} />;
+                return <FinancasTab financeData={financeData.data} isLoading={financeData.isLoading} error={financeData.error} currentUser={user} isAdmin={isAdmin} scriptUrl={SCRIPT_URL} />;
             case 'sorteio':
                  return <SorteioTab allPlayersData={attendanceData.data?.players || []} scriptUrl={SCRIPT_URL} ModalComponent={Modal} />;
             case 'eventos':
@@ -1589,7 +1638,7 @@ export default function App() {
     const [librariesLoaded, setLibrariesLoaded] = useState(false);
     
     // MODIFICATION: Updated the SCRIPT_URL to the new endpoint you provided after re-deployment.
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbynaKHtL0nha4lEZY1tgS7mCn4TP5y-Lo-jIor8nC8fdiSRGftAi20K3Wsh5IRb-wJugg/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwfRHw6-22GJloFomzNDemSd0QEZDbrtEWf2KBG4uq7Zq4FK_que-MUUwC7VCZXZ2jeYg/exec";
 
     const handleLogin = async (e) => {
         e.preventDefault();
