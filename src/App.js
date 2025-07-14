@@ -625,7 +625,7 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
                         </div>
                          <div className="text-center">
                             <p className="text-2xl font-bold text-blue-500 dark:text-blue-400">{modalPlayer?.rpj}</p>
-                            <p className="font-semibold text-gray-600 dark:text-gray-400">Ressaltos/Jogo</p>
+                            <p className="font-semibold text-gray-600 dark:text-gray-400">Rebotes/Jogo</p>
                         </div>
                     </div>
 
