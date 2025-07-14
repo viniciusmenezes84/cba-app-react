@@ -615,7 +615,7 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
                         <div className="col-span-2">
                             <p className="font-semibold text-gray-600 dark:text-gray-400">Especialidade</p>
                             <p className="text-lg font-bold text-gray-900 dark:text-white">{modalPlayer?.especialidade}</p>
-                        </div>
+                        </div> 
                     </div>
                     
                     <div className="grid grid-cols-2 gap-4 text-sm p-4 bg-gray-100 dark:bg-gray-700/50 rounded-lg">
