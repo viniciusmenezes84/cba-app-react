@@ -1668,7 +1668,7 @@ export default function App() {
     const [librariesLoaded, setLibrariesLoaded] = useState(false);
     
     // ATENÇÃO: URL atualizada com a que você forneceu.
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxg6ShBuiZGnv_JyUUxVehL6WmklJqMtxmubykPNPfnMaFbNCJ9mRia-hujYc0Uve0v5g/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxoEJuiDGcBMrm0MsYEenxfHwdcHwhKwvMwkV0kH9AUiW2PylqUYz-4GgBb9kGa7TjBsg/exec";
 
     const handleLogin = async (e) => {
         e.preventDefault();
