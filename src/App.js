@@ -4,17 +4,12 @@ import React, { useState, useEffect, useRef, useCallback, useMemo, createContext
 const ThemeContext = createContext();
 
 const ThemeProvider = ({ children }) => {
-    // O tema agora é fixo como 'dark'.
     const theme = 'dark';
-    
     useEffect(() => {
         const root = window.document.documentElement;
-        // Garante que a classe 'dark' está sempre aplicada e 'light' removida.
         root.classList.remove('light');
         root.classList.add('dark');
-    }, []); // Executa apenas uma vez na montagem.
-
-    // A função toggleTheme é um placeholder vazio, pois não é mais necessária.
+    }, []);
     return (
         <ThemeContext.Provider value={{ theme, toggleTheme: () => {} }}>
             {children}
@@ -24,9 +19,7 @@ const ThemeProvider = ({ children }) => {
 
 const useTheme = () => useContext(ThemeContext);
 
-
 // --- COMPONENTES AUXILIARES DE UI ---
-
 const Loader = ({ message }) => (
     <div className="flex flex-col justify-center items-center py-20 text-center text-gray-500 dark:text-gray-400">
         <div className="w-12 h-12 border-4 border-gray-200 dark:border-gray-700 border-t-blue-600 rounded-full animate-spin"></div>
@@ -74,7 +67,6 @@ const AccordionItem = ({ title, children, isOpen, onClick }) => {
         </div>
     );
 };
-
 
 const ChartComponent = ({ chartConfig }) => {
     const chartRef = useRef(null);
@@ -302,10 +294,6 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
         }
     }, [availableMonths, allPlayersData]);
 
-    if (isLoading) return <Loader message="A carregar dados da planilha de presença..." />;
-    if (error) return <p className="text-center text-red-500 py-8">{error}</p>;
-    if (!allPlayersData.length) return <p className="text-center text-gray-500 py-8">Nenhum dado de presença encontrado.</p>;
-
     const getHallOfFameData = () => {
         const sortedByAverage = [...allPlayersData].sort((a, b) => b.average - a.average || a.name.localeCompare(b.name));
         const sortedByTotalPresence = [...allPlayersData].sort((a, b) => b.presences - a.presences || a.name.localeCompare(b.name));
@@ -315,8 +303,46 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
     };
 
     const hallOfFame = getHallOfFameData();
-    const attendanceChartConfig = { type: 'line', data: { labels: dates, datasets: [{ label: 'Jogadores Presentes', data: dates.map(date => allPlayersData.reduce((count, player) => count + (player.attendance[date]?.includes('✅') ? 1 : 0), 0)), fill: false, borderColor: 'rgb(75, 192, 192)', tension: 0.1 }] }, options: { scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } } };
-    const averageBarChartConfig = { type: 'bar', data: { labels: [...allPlayersData].sort((a, b) => b.average - a.average).map(p => p.name), datasets: [{ label: 'Média de Presença (%)', data: [...allPlayersData].sort((a, b) => b.average - a.average).map(p => p.average), backgroundColor: [...allPlayersData].sort((a, b) => b.average - a.average).map(p => p.average >= 75 ? '#22c55e' : p.average >= 50 ? '#3b82f6' : '#f59e0b') }] }, options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false } } } };
+    
+    const attendanceChartConfig = useMemo(() => ({ 
+        type: 'line', 
+        data: { 
+            labels: dates, 
+            datasets: [{ 
+                label: 'Jogadores Presentes', 
+                data: dates.map(date => allPlayersData.reduce((count, player) => count + (player.attendance[date]?.includes('✅') ? 1 : 0), 0)), 
+                fill: false, 
+                borderColor: 'rgb(75, 192, 192)', 
+                tension: 0.1 
+            }] 
+        }, 
+        options: { 
+            scales: { 
+                y: { beginAtZero: true, ticks: { stepSize: 1 } } 
+            } 
+        } 
+    }), [dates, allPlayersData]);
+
+    const averageBarChartConfig = useMemo(() => {
+        const sortedPlayers = [...allPlayersData].sort((a, b) => b.average - a.average);
+        return { 
+            type: 'bar', 
+            data: { 
+                labels: sortedPlayers.map(p => p.name), 
+                datasets: [{ 
+                    label: 'Média de Presença (%)', 
+                    data: sortedPlayers.map(p => p.average), 
+                    backgroundColor: sortedPlayers.map(p => p.average >= 75 ? '#22c55e' : p.average >= 50 ? '#3b82f6' : '#f59e0b') 
+                }] 
+            }, 
+            options: { 
+                indexAxis: 'y', 
+                responsive: true, 
+                plugins: { legend: { display: false } } 
+            } 
+        };
+    }, [allPlayersData]);
+
     const filterButtons = [
         { key: 'desempenho', label: 'Desempenho', emoji: '📈' },
         { key: 'all', label: 'Todos', emoji: '👥' },
@@ -349,7 +375,7 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
             const [day, month, year] = d.split('/').map(Number);
             const date = new Date(year, month - 1, day);
             const startDate = new Date(startYear, startMonth - 1, 1);
-            const endDate = new Date(endYear, endMonth, 0); // Last day of the end month
+            const endDate = new Date(endYear, endMonth, 0); 
             return date >= startDate && date <= endDate;
         });
 
@@ -370,6 +396,10 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
             data: reportData
         });
     };
+
+    if (isLoading) return <Loader message="A carregar dados da planilha de presença..." />;
+    if (error) return <p className="text-center text-red-500 py-8">{error}</p>;
+    if (!allPlayersData.length) return <p className="text-center text-gray-500 py-8">Nenhum dado de presença encontrado.</p>;
 
     return (
         <div className="space-y-8">
@@ -1637,8 +1667,8 @@ export default function App() {
     const [auth, setAuth] = useState({ status: 'unauthenticated', user: null, error: null }); // unauthenticated, loading, pending, authenticated
     const [librariesLoaded, setLibrariesLoaded] = useState(false);
     
-    // MODIFICATION: Updated the SCRIPT_URL to the new endpoint you provided after re-deployment.
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwfRHw6-22GJloFomzNDemSd0QEZDbrtEWf2KBG4uq7Zq4FK_que-MUUwC7VCZXZ2jeYg/exec";
+    // ATENÇÃO: URL atualizada com a que você forneceu.
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxg6ShBuiZGnv_JyUUxVehL6WmklJqMtxmubykPNPfnMaFbNCJ9mRia-hujYc0Uve0v5g/exec";
 
     const handleLogin = async (e) => {
         e.preventDefault();
@@ -1695,7 +1725,11 @@ export default function App() {
         }
     
         if (auth.status === 'unauthenticated') {
-            return <LoginScreen onLogin={handleLogin} isLoading={auth.status === 'loading'} error={auth.error} />;
+            return <LoginScreen 
+                onLogin={handleLogin} 
+                isLoading={auth.status === 'loading'} 
+                error={auth.error} 
+            />;
         }
         
         if (auth.status === 'pending') {
