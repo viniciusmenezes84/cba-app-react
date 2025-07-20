@@ -19,6 +19,32 @@ const ThemeProvider = ({ children }) => {
 
 const useTheme = () => useContext(ThemeContext);
 
+// --- FUNÇÕES AUXILIARES DE COMUNICAÇÃO COM O SERVIDOR ---
+const fetchWithPost = async (baseUrl, params) => {
+    try {
+        const res = await fetch(baseUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams(params).toString(),
+        });
+        if (!res.ok) {
+            const errorText = await res.text().catch(() => 'Não foi possível ler o corpo do erro.');
+            // Verifica se o erro é uma página HTML, comum em erros de permissão do Apps Script
+            if (errorText.trim().toLowerCase().startsWith('<!doctype html')) {
+                 throw new Error(`Erro de Servidor (${res.status}). A resposta foi uma página HTML, o que pode indicar um problema de permissão ou implantação. Verifique se o script está publicado para acesso anônimo.`);
+            }
+            throw new Error(`Erro de HTTP: ${res.status}. Resposta do servidor: ${errorText}`);
+        }
+        return res.json();
+    } catch (error) {
+        console.error('Fetch POST error:', error.message);
+        throw error;
+    }
+};
+
+
 // --- COMPONENTES AUXILIARES DE UI ---
 const Loader = ({ message }) => (
     <div className="flex flex-col justify-center items-center py-20 text-center text-gray-500 dark:text-gray-400">
@@ -156,12 +182,7 @@ const ResetPasswordModal = ({ isOpen, onClose, user, scriptUrl }) => {
         };
 
         try {
-            const res = await fetch(scriptUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams(payload).toString(),
-            });
-            const data = await res.json();
+            const data = await fetchWithPost(scriptUrl, payload);
             if (data.result === 'success') {
                 setMessage({ type: 'success', text: 'Senha alterada com sucesso! A sair...' });
                 setTimeout(() => {
@@ -227,21 +248,21 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
 
     const availableMonths = useMemo(() => {
         const monthSet = new Set();
-        dates.forEach(d => {
-            const [day, month, year] = d.split('/');
-            monthSet.add(`${year}-${month.padStart(2, '0')}`);
-        });
+        if(dates) {
+            dates.forEach(d => {
+                // Dates are YYYY-MM-DD, so we take the first 7 characters for YYYY-MM
+                monthSet.add(d.substring(0, 7));
+            });
+        }
         return Array.from(monthSet).sort();
     }, [dates]);
 
     const performanceData = useMemo(() => {
+        if (!allPlayersData || !dates) return [];
         const sixtyDaysAgo = new Date();
         sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
 
-        const relevantDates = dates.filter(d => {
-            const [day, month, year] = d.split('/');
-            return new Date(`${year}-${month}-${day}`) >= sixtyDaysAgo;
-        });
+        const relevantDates = dates.filter(d => new Date(d) >= sixtyDaysAgo);
 
         if (relevantDates.length === 0) return [];
 
@@ -265,23 +286,14 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
     
     const teamPerformance = useMemo(() => {
         if (!performanceData || performanceData.length === 0) {
-            return {
-                average: 0,
-                status: 'N/A',
-                totalGames: 0,
-                totalPresences: 0,
-            };
+            return { average: 0, status: 'N/A' };
         }
         const totalPercentage = performanceData.reduce((sum, player) => sum + player.performancePercentage, 0);
         const average = totalPercentage / performanceData.length;
-        const totalGames = performanceData[0].gamesInPeriod;
-        const totalPresences = performanceData.reduce((sum, player) => sum + player.presencesInPeriod, 0);
         
         return {
             average,
             status: average >= 50 ? 'Em conformidade' : 'Abaixo da meta',
-            totalGames,
-            totalPresences,
         };
     }, [performanceData]);
 
@@ -289,12 +301,13 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
         if (availableMonths.length > 0) {
             setMonthRange({ start: availableMonths[0], end: availableMonths[availableMonths.length - 1] });
         }
-        if(allPlayersData.length > 0) {
+        if(allPlayersData && allPlayersData.length > 0) {
             setSelectedPerformancePlayer(allPlayersData[0].name);
         }
     }, [availableMonths, allPlayersData]);
 
     const getHallOfFameData = () => {
+        if (!allPlayersData) return { onFire: null, mostPresent: null, leastPresent: [] };
         const sortedByAverage = [...allPlayersData].sort((a, b) => b.average - a.average || a.name.localeCompare(b.name));
         const sortedByTotalPresence = [...allPlayersData].sort((a, b) => b.presences - a.presences || a.name.localeCompare(b.name));
         const leastPresentSorted = [...allPlayersData].sort((a, b) => a.average - b.average || a.name.localeCompare(b.name));
@@ -304,26 +317,30 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
 
     const hallOfFame = getHallOfFameData();
     
-    const attendanceChartConfig = useMemo(() => ({ 
-        type: 'line', 
-        data: { 
-            labels: dates, 
-            datasets: [{ 
-                label: 'Jogadores Presentes', 
-                data: dates.map(date => allPlayersData.reduce((count, player) => count + (player.attendance[date]?.includes('✅') ? 1 : 0), 0)), 
-                fill: false, 
-                borderColor: 'rgb(75, 192, 192)', 
-                tension: 0.1 
-            }] 
-        }, 
-        options: { 
-            scales: { 
-                y: { beginAtZero: true, ticks: { stepSize: 1 } } 
+    const attendanceChartConfig = useMemo(() => {
+        if (!allPlayersData || !dates) return {};
+        return { 
+            type: 'line', 
+            data: { 
+                labels: dates.map(d => new Date(d).toLocaleDateString('pt-BR')), 
+                datasets: [{ 
+                    label: 'Jogadores Presentes', 
+                    data: dates.map(date => allPlayersData.reduce((count, player) => count + (player.attendance[date]?.includes('✅') ? 1 : 0), 0)), 
+                    fill: false, 
+                    borderColor: 'rgb(75, 192, 192)', 
+                    tension: 0.1 
+                }] 
+            }, 
+            options: { 
+                scales: { 
+                    y: { beginAtZero: true, ticks: { stepSize: 1 } } 
+                } 
             } 
-        } 
-    }), [dates, allPlayersData]);
+        }
+    }, [dates, allPlayersData]);
 
     const averageBarChartConfig = useMemo(() => {
+        if (!allPlayersData) return {};
         const sortedPlayers = [...allPlayersData].sort((a, b) => b.average - a.average);
         return { 
             type: 'bar', 
@@ -352,8 +369,8 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
         { key: 'faltas', label: 'Faltosos', emoji: '⚠️' }
     ];
     const filterFunctions = { 'all': () => true, 'good': p => p.average >= 75, 'regular': p => p.average >= 50 && p.average < 75, 'bad': p => p.average < 50, 'faltas': p => p.unjustifiedAbsences > 0, 'desempenho': () => true };
-    const sortedData = (filter === 'faltas') ? [...allPlayersData].sort((a, b) => b.unjustifiedAbsences - a.unjustifiedAbsences) : [...allPlayersData].sort((a, b) => b.average - a.average);
-    const filteredData = (filter === 'desempenho') ? performanceData : sortedData.filter(filterFunctions[filter]);
+    const sortedData = (allPlayersData && filter === 'faltas') ? [...allPlayersData].sort((a, b) => b.unjustifiedAbsences - a.unjustifiedAbsences) : (allPlayersData ? [...allPlayersData].sort((a, b) => b.average - a.average) : []);
+    const filteredData = (filter === 'desempenho') ? performanceData : (allPlayersData ? sortedData.filter(filterFunctions[filter]) : []);
     const selectedPlayerData = performanceData.find(p => p.name === selectedPerformancePlayer);
 
 
@@ -372,8 +389,7 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
         }
 
         const periodDates = dates.filter(d => {
-            const [day, month, year] = d.split('/').map(Number);
-            const date = new Date(year, month - 1, day);
+            const date = new Date(d);
             const startDate = new Date(startYear, startMonth - 1, 1);
             const endDate = new Date(endYear, endMonth, 0); 
             return date >= startDate && date <= endDate;
@@ -399,7 +415,7 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
 
     if (isLoading) return <Loader message="A carregar dados da planilha de presença..." />;
     if (error) return <p className="text-center text-red-500 py-8">{error}</p>;
-    if (!allPlayersData.length) return <p className="text-center text-gray-500 py-8">Nenhum dado de presença encontrado.</p>;
+    if (!allPlayersData || !allPlayersData.length) return <p className="text-center text-gray-500 py-8">Nenhum dado de presença encontrado.</p>;
 
     return (
         <div className="space-y-8">
@@ -540,7 +556,7 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
                                                     <div className="w-1/2 text-right"><span className="font-semibold text-orange-600 dark:text-orange-400">{player.unjustifiedAbsences} falta(s)</span></div>
                                                 </div>
                                                 <div className="text-xs text-gray-500 dark:text-gray-400 pl-4 mt-1">
-                                                    Datas: {player.unjustifiedAbsenceDates.join(', ')}
+                                                    Datas: {player.unjustifiedAbsenceDates.map(d => new Date(d).toLocaleDateString('pt-BR')).join(', ')}
                                                 </div>
                                             </div>
                                         ) : (
@@ -610,7 +626,7 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
                         </div>
                         <div>
                             <p className="font-semibold text-gray-600 dark:text-gray-400">Membro Desde</p>
-                            <p className="text-lg font-bold text-gray-900 dark:text-white">{modalPlayer?.dataEntrada}</p>
+                            <p className="text-lg font-bold text-gray-900 dark:text-white">{new Date(modalPlayer?.dataEntrada).toLocaleDateString('pt-BR')}</p>
                         </div>
                         <div className="col-span-2">
                             <p className="font-semibold text-gray-600 dark:text-gray-400">Especialidade</p>
@@ -625,7 +641,7 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
                         </div>
                          <div className="text-center">
                             <p className="text-2xl font-bold text-blue-500 dark:text-blue-400">{modalPlayer?.rpj}</p>
-                            <p className="font-semibold text-gray-600 dark:text-gray-400">Rebotes/Jogo</p>
+                            <p className="font-semibold text-gray-600 dark:text-gray-400">Ressaltos/Jogo</p>
                         </div>
                     </div>
 
@@ -641,7 +657,7 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
                                 if (status.includes('✅')) colorClass = 'bg-green-500';
                                 else if (status.toUpperCase() === 'NÃO JUSTIFICOU') colorClass = 'bg-orange-500';
                                 else if (status.includes('❌')) colorClass = 'bg-red-500';
-                                return <div key={date} className={`w-5 h-5 border border-gray-400 dark:border-gray-500 ${colorClass}`} title={`${date}: ${status}`}></div>;
+                                return <div key={date} className={`w-5 h-5 border border-gray-400 dark:border-gray-500 ${colorClass}`} title={`${new Date(date).toLocaleDateString('pt-BR')}: ${status}`}></div>;
                             })}
                         </div>
                     </div>
@@ -659,7 +675,7 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
     );
 };
 
-const EstatutoTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }) => {
+const EstatutoTab = () => {
     const [openAccordion, setOpenAccordion] = useState('Regulamento');
 
     const toggleAccordion = (title) => {
@@ -924,11 +940,8 @@ const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin, scri
         
         const now = new Date();
         const currentMonth = now.getMonth();
-        const currentYear = now.getFullYear();
         
         const monthIndex = monthMap[monthName.toLowerCase()];
-
-        const monthDate = new Date(currentYear, monthIndex, 1);
 
         if (monthIndex < currentMonth) {
             return { text: 'Em débito', type: 'atrasado' };
@@ -955,12 +968,7 @@ const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin, scri
         setEmailMessage({ text: 'A enviar relatórios...', type: 'info' });
 
         try {
-            const res = await fetch(scriptUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams({ action: 'sendFinanceReports' }).toString(),
-            });
-            const data = await res.json();
+            const data = await fetchWithPost(scriptUrl, { action: 'sendFinanceReports' });
             if (data.result === 'success') {
                 setEmailMessage({ text: data.message, type: 'success' });
             } else {
@@ -1118,12 +1126,7 @@ const SorteioTab = ({ allPlayersData, scriptUrl, ModalComponent }) => {
         };
 
         try {
-            const res = await fetch(scriptUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams(payload).toString(),
-            });
-            const data = await res.json();
+            const data = await fetchWithPost(scriptUrl, payload);
             if (data.result === 'success') {
                 setModalInfo({ isOpen: true, title: 'Sucesso', message: 'Times salvos com sucesso na planilha!' });
             } else {
@@ -1229,7 +1232,7 @@ const SorteioTab = ({ allPlayersData, scriptUrl, ModalComponent }) => {
 };
 
 
-const EventosTab = ({ scriptUrl, currentUser, isAdmin, ModalComponent }) => {
+const EventosTab = ({ scriptUrl, currentUser, isAdmin, ModalComponent, refreshKey }) => {
     const [events, setEvents] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -1249,8 +1252,7 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, ModalComponent }) => {
         setIsLoading(true);
         setError(null);
         try {
-            const res = await fetch(`${scriptUrl}?action=getEvents`);
-            const data = await res.json();
+            const data = await fetchWithPost(scriptUrl, { action: 'getEvents' });
             if (data.result === 'success') {
                 const formattedEvents = data.data.map(event => ({
                     ...event,
@@ -1270,7 +1272,7 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, ModalComponent }) => {
 
     useEffect(() => {
         fetchEvents();
-    }, [fetchEvents]);
+    }, [fetchEvents, refreshKey]);
 
     const handleOpenModal = (event = null) => {
         setEditingEvent(event);
@@ -1295,12 +1297,7 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, ModalComponent }) => {
         };
 
         try {
-            const res = await fetch(scriptUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams(Object.entries(payload).filter(([_, v]) => v !== undefined)).toString(),
-            });
-            const data = await res.json();
+            const data = await fetchWithPost(scriptUrl, payload);
             if (data.result === 'success') {
                 setIsModalOpen(false);
                 setEditingEvent(null);
@@ -1319,21 +1316,18 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, ModalComponent }) => {
         setEvents(prevEvents => prevEvents.map(e => e.id === eventId ? {...e, isConfirming: true} : e));
 
         const payload = {
-            action: actionType,
-            eventId: eventId,
-            userName: currentUser,
+            action: 'handleAttendanceUpdate',
+            itemId: eventId,
+            playerName: currentUser.name,
+            actionType: actionType,
+            type: 'event'
         };
         try {
-             const res = await fetch(scriptUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams(payload).toString(),
-            });
-            const data = await res.json();
+             const data = await fetchWithPost(scriptUrl, payload);
             if (data.result === 'success') {
                 fetchEvents();
             } else {
-                 throw new Error(data.message || `Não foi possível ${actionType === 'confirmAttendance' ? 'confirmar a presença' : 'retirar o nome'}.`);
+                 throw new Error(data.message || `Não foi possível atualizar a presença.`);
             }
         } catch (error) {
             setInfoModal({ isOpen: true, title: 'Erro', message: error.message });
@@ -1347,12 +1341,7 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, ModalComponent }) => {
         setIsLoading(true);
         try {
             const payload = { action: 'deleteEvent', id: event.id };
-            const res = await fetch(scriptUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams(payload).toString(),
-            });
-            const data = await res.json();
+            const data = await fetchWithPost(scriptUrl, payload);
             if (data.result === 'success') {
                 fetchEvents();
             } else {
@@ -1384,7 +1373,7 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, ModalComponent }) => {
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                     {events.map(event => {
-                        const isConfirmed = event.attendees.includes(currentUser);
+                        const isConfirmed = event.attendees.includes(currentUser.name);
                         const deadlineDate = new Date(event.deadline);
                         const isDeadlinePassed = new Date() > deadlineDate;
                         const totalCollected = event.attendees.length * event.value;
@@ -1428,16 +1417,16 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, ModalComponent }) => {
                             <div className="mt-auto pt-4 border-t border-gray-200 dark:border-gray-700">
                                 {isConfirmed ? (
                                     <button
-                                        onClick={() => handleAttendance(event.id, 'withdrawAttendance')}
+                                        onClick={() => handleAttendance(event.id, 'withdraw')}
                                         disabled={isDeadlinePassed || event.isConfirming}
                                         className={`w-full font-bold py-2 px-4 rounded-lg transition-all ${isDeadlinePassed ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-red-500 text-white hover:bg-red-600'}`}>
                                         {event.isConfirming ? 'A processar...' : 'Desistir'}
                                     </button>
                                 ) : (
                                     <button
-                                        onClick={() => handleAttendance(event.id, 'confirmAttendance')}
+                                        onClick={() => handleAttendance(event.id, 'confirm')}
                                         disabled={isDeadlinePassed || event.isConfirming}
-                                        className={`w-full font-bold py-2 px-4 rounded-lg transition-all ${isDeadlinePassed ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-green-500 text-white hover:bg-green-600'}`}>
+                                        className={`w-full font-bold py-2 px-4 rounded-lg transition-all ${!isDeadlinePassed ? 'bg-green-500 text-white hover:bg-green-600' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}>
                                         {event.isConfirming ? 'A processar...' : 'Confirmar Presença'}
                                     </button>
                                 )}
@@ -1453,12 +1442,12 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, ModalComponent }) => {
                     <input name="name" type="text" placeholder="Nome do Evento" defaultValue={editingEvent?.name || ''} className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md" required />
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Data do Evento</label>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Data do Evento</label>
                             <input name="date" type="datetime-local" defaultValue={editingEvent?.date ? new Date(editingEvent.date).toISOString().substring(0, 16) : ''} className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md" required />
                         </div>
                         <div>
-                            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Data Limite para Confirmação</label>
-                            <input name="deadline" type="date" defaultValue={editingEvent?.deadline ? new Date(editingEvent.deadline).toISOString().substring(0, 10) : ''} className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md" required />
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Data Limite para Confirmação</label>
+                            <input name="deadline" type="date" defaultValue={editingEvent?.deadline || ''} className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md" required />
                         </div>
                     </div>
                     <input name="location" type="text" placeholder="Local do Evento" defaultValue={editingEvent?.location || ''} className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md" required />
@@ -1496,29 +1485,209 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, ModalComponent }) => {
     );
 };
 
+// --- NOVA ABA DE JOGOS ---
+const JogosTab = ({ currentUser, isAdmin, scriptUrl, ModalComponent, refreshKey }) => {
+    const [games, setGames] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [modalMessage, setModalMessage] = useState('');
+    const [infoModal, setInfoModal] = useState({ isOpen: false, title: '', message: '' });
+
+    const fetchGames = useCallback(async () => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            const data = await fetchWithPost(scriptUrl, { action: 'getGames' });
+            if (data.result === 'success') {
+                const sortedGames = data.data.sort((a, b) => new Date(b.data) - new Date(a.data));
+                setGames(sortedGames);
+            } else {
+                throw new Error(data.message || 'Falha ao buscar jogos.');
+            }
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [scriptUrl]);
+
+    useEffect(() => {
+        fetchGames();
+    }, [fetchGames, refreshKey]);
+
+    const handleCreateGame = async (e) => {
+        e.preventDefault();
+        setIsSubmitting(true);
+        setModalMessage('');
+        const formData = new FormData(e.target);
+        const payload = {
+            action: 'createGame',
+            data: formData.get('data'),
+            horario: formData.get('horario'),
+            local: formData.get('local'),
+        };
+
+        try {
+            const data = await fetchWithPost(scriptUrl, payload);
+            if (data.result === 'success') {
+                setIsModalOpen(false);
+                fetchGames();
+            } else {
+                throw new Error(data.message || 'Ocorreu um erro desconhecido.');
+            }
+        } catch (error) {
+            setModalMessage(error.message);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleAttendance = async (gameId, actionType) => {
+        const payload = {
+            action: 'handleAttendanceUpdate',
+            itemId: gameId,
+            playerName: currentUser.name,
+            actionType: actionType,
+            type: 'game'
+        };
+
+        try {
+            const data = await fetchWithPost(scriptUrl, payload);
+            if (data.result !== 'success') {
+                throw new Error(data.message || 'Erro ao atualizar presença.');
+            }
+            fetchGames(); // Re-fetch to get the latest state
+        } catch (err) {
+            setInfoModal({isOpen: true, title: "Erro", message: err.message});
+        }
+    };
+
+    if (isLoading) return <Loader message="A carregar jogos..." />;
+    if (error) return <p className="text-center text-red-500 py-8">{error}</p>;
+
+    return (
+        <div className="space-y-8">
+            <div className="flex justify-between items-center">
+                <h2 className="text-3xl font-bold text-gray-800 dark:text-gray-100">Próximos Jogos</h2>
+                {isAdmin && (
+                    <button onClick={() => setIsModalOpen(true)} className="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition-all shadow-md">
+                        Criar Jogo
+                    </button>
+                )}
+            </div>
+
+            {games.length === 0 ? (
+                <p className="text-center text-gray-500 py-8">Nenhum jogo agendado no momento.</p>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    {games.map(game => {
+                        const isConfirmed = game.confirmados.includes(currentUser.name);
+                        return (
+                            <div key={game.id} className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg flex flex-col">
+                                <div className="flex justify-between items-start mb-2">
+                                    <div>
+                                        <p className="text-xl font-bold text-gray-800 dark:text-white">{new Date(game.data).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</p>
+                                        <p className="text-sm font-semibold text-gray-600 dark:text-gray-300">{game.horario} @ {game.local}</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-2xl font-bold text-blue-500">{game.confirmados.length}</p>
+                                        <p className="text-xs text-gray-500">Confirmados</p>
+                                    </div>
+                                </div>
+                                
+                                <div className="border-t border-gray-200 dark:border-gray-700 my-4"></div>
+                                
+                                <div className="flex-grow mb-4">
+                                    <h4 className="font-bold text-sm mb-2 text-gray-800 dark:text-gray-200">Lista de Presença:</h4>
+                                    <div className="flex flex-wrap gap-2">
+                                        {game.confirmados.length > 0 ? game.confirmados.map(name => (
+                                            <span key={name} className="bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 px-2 py-1 text-xs font-semibold rounded-full">{name}</span>
+                                        )) : <p className="text-xs text-gray-500 dark:text-gray-400">Ninguém confirmado ainda.</p>}
+                                    </div>
+                                </div>
+
+                                <div className="mt-auto">
+                                    {isConfirmed ? (
+                                        <button
+                                            onClick={() => handleAttendance(game.id, 'withdraw')}
+                                            className="w-full font-bold py-2 px-4 rounded-lg transition-all bg-red-500 text-white hover:bg-red-600">
+                                            Desistir
+                                        </button>
+                                    ) : (
+                                        <button
+                                            onClick={() => handleAttendance(game.id, 'confirm')}
+                                            className="w-full font-bold py-2 px-4 rounded-lg transition-all bg-green-500 text-white hover:bg-green-600">
+                                            Confirmar Presença
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+
+            <ModalComponent isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Criar Novo Jogo">
+                <form onSubmit={handleCreateGame} className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Data do Jogo</label>
+                        <input name="data" type="date" className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md" required />
+                    </div>
+                     <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Horário</label>
+                        <input name="horario" type="time" className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md" required />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Local</label>
+                        <input name="local" type="text" placeholder="Local do Jogo" className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md" required />
+                    </div>
+                    {modalMessage && <p className="text-red-500 text-sm">{modalMessage}</p>}
+                    <button type="submit" disabled={isSubmitting} className="w-full bg-blue-600 text-white font-bold py-3 rounded-md hover:bg-blue-700 disabled:bg-blue-400">
+                        {isSubmitting ? 'A Criar...' : 'Criar Jogo'}
+                    </button>
+                </form>
+            </ModalComponent>
+            <ModalComponent 
+                isOpen={infoModal.isOpen} 
+                onClose={() => setInfoModal({ isOpen: false, title: '', message: '' })} 
+                title={infoModal.title}
+            >
+                <p>{infoModal.message}</p>
+            </ModalComponent>
+        </div>
+    );
+};
 
 // --- APLICAÇÃO PRINCIPAL (APÓS LOGIN) ---
 
 const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
     const [activeTab, setActiveTab] = useState('presenca');
-    const [lastUpdated, setLastUpdated] = useState(new Date());
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isResetPasswordModalOpen, setIsResetPasswordModalOpen] = useState(false);
-    const { theme } = useTheme();
 
     const [attendanceData, setAttendanceData] = useState({ isLoading: true, data: null, error: null });
     const [financeData, setFinanceData] = useState({ isLoading: true, data: null, error: null });
     
+    const [lastKnownTimestamp, setLastKnownTimestamp] = useState(null);
+    const [notifications, setNotifications] = useState({});
+    const [refreshKey, setRefreshKey] = useState(0);
+    
     const isAdmin = user && user.role && user.role.toUpperCase() === 'ADMIN';
+    const TABS = useMemo(() => ['presenca', 'jogos', 'estatuto', 'financas', 'sorteio', 'eventos'], []);
+    
+    const activeTabRef = useRef(activeTab);
+    useEffect(() => {
+        activeTabRef.current = activeTab;
+    }, [activeTab]);
 
     const fetchDashboardData = useCallback(async () => {
         setAttendanceData(prev => ({ ...prev, isLoading: true }));
         try {
-            const res = await fetch(`${SCRIPT_URL}?action=getDashboardData`);
-            const data = await res.json();
+            const data = await fetchWithPost(SCRIPT_URL, { action: 'getDashboardData' });
             if (data.result === 'success') {
                 setAttendanceData({ isLoading: false, data: data.data, error: null });
-                setLastUpdated(new Date());
             } else {
                 throw new Error(data.message || 'Falha ao buscar dados do dashboard.');
             }
@@ -1530,19 +1699,13 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
     const fetchFinanceData = useCallback(async () => {
         setFinanceData({ isLoading: true, data: null, error: null });
         try {
-            const res = await fetch(`${SCRIPT_URL}?action=getFinanceData`);
-            if (!res.ok) {
-                throw new Error(`HTTP error! status: ${res.status}`);
-            }
-            const data = await res.json();
-
+            const data = await fetchWithPost(SCRIPT_URL, { action: 'getFinanceData' });
             if (data.result === 'success') {
                 setFinanceData({ 
                     isLoading: false, 
                     data: data.data,
                     error: null 
                 });
-                setLastUpdated(new Date());
             } else {
                 throw new Error(data.message || 'Falha ao buscar dados financeiros do script.');
             }
@@ -1553,15 +1716,10 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
 
     const handleRefresh = useCallback(() => {
         setIsRefreshing(true);
-        const promises = [fetchDashboardData()];
-        if(activeTab === 'financas') {
-            promises.push(fetchFinanceData());
-        }
-        if(activeTab === 'eventos') {
-            // A lógica de fetch já está no componente, mas podemos forçar aqui se quisermos
-        }
+        const promises = [fetchDashboardData(), fetchFinanceData()];
+        setRefreshKey(prev => prev + 1);
         Promise.all(promises).finally(() => setIsRefreshing(false));
-    }, [activeTab, fetchDashboardData, fetchFinanceData]);
+    }, [fetchDashboardData, fetchFinanceData]);
 
     const handleResetPasswordClose = (shouldLogout) => {
         setIsResetPasswordModalOpen(false);
@@ -1569,16 +1727,66 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
             onLogout();
         }
     };
+    
+    useEffect(() => {
+        if (librariesLoaded) {
+            const getInitialTimestampAndData = async () => {
+                try {
+                    const data = await fetchWithPost(SCRIPT_URL, { action: 'getLastUpdate' });
+                    // MODIFICATION: Check if the response is successful and timestamp is a string (even if empty).
+                    if (data && data.result === 'success' && typeof data.timestamp === 'string') {
+                        // If the timestamp is empty, it's likely the first run.
+                        // We'll set a default value to allow the app to load,
+                        // and the polling will sync it later.
+                        setLastKnownTimestamp(data.timestamp || new Date().toISOString());
+                        handleRefresh(); 
+                    } else {
+                       console.error("Resposta inesperada do servidor ao obter timestamp:", data);
+                       throw new Error(data?.message || 'Falha ao obter timestamp inicial. A resposta do servidor não foi válida.');
+                    }
+                } catch (error) {
+                    console.error("Falha na carga inicial:", error);
+                    setAttendanceData({ isLoading: false, data: null, error: `Erro na carga inicial: ${error.message}` });
+                    setFinanceData({ isLoading: false, data: null, error: `Erro na carga inicial: ${error.message}` });
+                }
+            };
+            getInitialTimestampAndData();
+        }
+    }, [librariesLoaded, SCRIPT_URL, handleRefresh]);
 
     useEffect(() => {
-        if (!librariesLoaded) return;
-        handleRefresh();
-        const intervalId = setInterval(handleRefresh, 120000);
+        if (!librariesLoaded || !lastKnownTimestamp) return;
+
+        const checkForUpdates = async () => {
+            try {
+                const data = await fetchWithPost(SCRIPT_URL, { action: 'getLastUpdate' });
+                if (data.result === 'success' && data.timestamp && data.timestamp !== lastKnownTimestamp) {
+                    handleRefresh();
+                    
+                    const newNotifications = {};
+                    TABS.forEach(tab => {
+                        if (tab !== activeTabRef.current) {
+                            newNotifications[tab] = true;
+                        }
+                    });
+                    setNotifications(prev => ({ ...prev, ...newNotifications }));
+                    setLastKnownTimestamp(data.timestamp);
+                }
+            } catch (error) {
+                console.error("Falha ao verificar atualizações:", error);
+            }
+        };
+
+        const intervalId = setInterval(checkForUpdates, 30000);
         return () => clearInterval(intervalId);
-    }, [librariesLoaded, handleRefresh]);
+    }, [librariesLoaded, lastKnownTimestamp, SCRIPT_URL, TABS, handleRefresh]);
     
     const handleTabClick = (tab) => {
         setActiveTab(tab);
+        if (notifications[tab]) {
+            setNotifications(prev => ({ ...prev, [tab]: false }));
+        }
+        
         if (tab === 'financas' && !financeData.data && !financeData.error && librariesLoaded) {
             fetchFinanceData();
         }
@@ -1588,6 +1796,8 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
         switch (activeTab) {
             case 'presenca':
                 return <PresencaTab allPlayersData={attendanceData.data?.players || []} dates={attendanceData.data?.dates || []} isLoading={attendanceData.isLoading} error={attendanceData.error} ModalComponent={Modal} />;
+            case 'jogos':
+                return <JogosTab currentUser={user} isAdmin={isAdmin} scriptUrl={SCRIPT_URL} ModalComponent={Modal} refreshKey={refreshKey} />;
             case 'estatuto':
                 return <EstatutoTab />;
             case 'financas':
@@ -1595,15 +1805,15 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
             case 'sorteio':
                  return <SorteioTab allPlayersData={attendanceData.data?.players || []} scriptUrl={SCRIPT_URL} ModalComponent={Modal} />;
             case 'eventos':
-                return <EventosTab scriptUrl={SCRIPT_URL} currentUser={user.name} isAdmin={isAdmin} ModalComponent={Modal} />;
+                return <EventosTab scriptUrl={SCRIPT_URL} currentUser={user} isAdmin={isAdmin} ModalComponent={Modal} refreshKey={refreshKey} />;
             default:
                 return null;
         }
     };
     
-    const TABS = ['presenca', 'estatuto', 'financas', 'sorteio', 'eventos'];
     const TAB_ICONS = {
         presenca: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>,
+        jogos: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a1 1 0 011-1h14a1 1 0 110 2H3a1 1 0 01-1-1z" /></svg>,
         estatuto: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>,
         financas: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>,
         sorteio: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.121 15.536c-1.171 1.952-3.07 1.952-4.242 0-1.172-1.953-1.172-5.119 0-7.072 1.171-1.952 3.07-1.952 4.242 0 1.172 1.953 1.172 5.119 0 7.072z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 21a9 9 0 100-18 9 9 0 000 18z" /></svg>,
@@ -1626,7 +1836,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
                         <button onClick={onLogout} className="text-sm font-semibold text-red-600 dark:text-red-400 hover:underline">Sair</button>
                         <button onClick={handleRefresh} disabled={isRefreshing} className="p-1.5 rounded-full bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
                             <svg className={`w-5 h-5 text-gray-600 dark:text-gray-300 ${isRefreshing ? 'animate-spin' : ''}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h5M20 20v-5h-5M4 4a14.95 14.95 0 0117.47 9.47M20 20a14.95 14.95 0 01-17.47-9.47" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h5M20 20v-5h-5M4 4a14.95 14.95 0 0117.47 9.47M20 20a14.95 14.95 0 01-17.47-9.47" />
                             </svg>
                         </button>
                     </div>
@@ -1638,10 +1848,13 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
                             <button
                                 key={tab}
                                 onClick={() => handleTabClick(tab)}
-                                className={`w-full py-2.5 px-2 sm:px-4 text-xs sm:text-sm font-medium rounded-md transition-colors duration-300 flex items-center justify-center ${activeTab === tab ? 'bg-white dark:bg-gray-700 shadow text-blue-600 dark:text-white' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-700/50 hover:text-gray-800 dark:hover:text-gray-200'}`}
+                                className={`w-full relative py-2.5 px-2 sm:px-4 text-xs sm:text-sm font-medium rounded-md transition-colors duration-300 flex items-center justify-center ${activeTab === tab ? 'bg-white dark:bg-gray-700 shadow text-blue-600 dark:text-white' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-700/50 hover:text-gray-800 dark:hover:text-gray-200'}`}
                             >
                                 {TAB_ICONS[tab]}
                                 <span className="hidden sm:inline">{tab.charAt(0).toUpperCase() + tab.slice(1)}</span>
+                                {notifications[tab] && (
+                                    <span className="absolute top-1 right-1 h-2.5 w-2.5 rounded-full bg-red-500 border-2 border-white dark:border-gray-800"></span>
+                                )}
                             </button>
                         ))}
                     </nav>
@@ -1664,11 +1877,11 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
 
 // --- COMPONENTE ROOT ---
 export default function App() {
-    const [auth, setAuth] = useState({ status: 'unauthenticated', user: null, error: null }); // unauthenticated, loading, pending, authenticated
+    const [auth, setAuth] = useState({ status: 'unauthenticated', user: null, error: null });
     const [librariesLoaded, setLibrariesLoaded] = useState(false);
     
-    // ATENÇÃO: URL atualizada com a que você forneceu.
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxoEJuiDGcBMrm0MsYEenxfHwdcHwhKwvMwkV0kH9AUiW2PylqUYz-4GgBb9kGa7TjBsg/exec";
+    // NOVO LINK DO SCRIPT ATUALIZADO
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwFHd7ux4LL-23nwb2LCJcYSaILW0ZWmjR-FKp1ufmh9uf9oeuyAg7hny22B7-wjCgZKQ/exec";
 
     const handleLogin = async (e) => {
         e.preventDefault();
@@ -1680,11 +1893,9 @@ export default function App() {
         };
         
         try {
-            const res = await fetch(SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(payload).toString() });
-            const data = await res.json();
-
+            const data = await fetchWithPost(SCRIPT_URL, payload);
             if (data.status === 'approved') {
-                setAuth({ status: 'authenticated', user: { name: data.name, email: payload.email, role: data.role }, error: null });
+                setAuth({ status: 'authenticated', user: { name: data.name, email: data.email, role: data.role }, error: null });
             } else if (data.status === 'pending') {
                 setAuth({ status: 'pending', user: null, error: null });
             } else {
@@ -1720,6 +1931,9 @@ export default function App() {
     }, []);
 
     const renderContent = () => {
+        if (!librariesLoaded && auth.status !== 'authenticated') {
+             return <Loader message="A carregar bibliotecas..." />;
+        }
         if (auth.status === 'loading') {
             return <Loader message="A processar..." />;
         }
@@ -1736,7 +1950,6 @@ export default function App() {
             return <PendingScreen />;
         }
     
-        // Se autenticado, renderiza a aplicação principal
         return (
             <MainApp user={auth.user} onLogout={handleLogout} SCRIPT_URL={SCRIPT_URL} librariesLoaded={librariesLoaded} />
         );
