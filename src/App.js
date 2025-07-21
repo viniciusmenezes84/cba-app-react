@@ -20,18 +20,45 @@ const ThemeProvider = ({ children }) => {
 const useTheme = () => useContext(ThemeContext);
 
 // --- FUNÇÕES AUXILIARES DE COMUNICAÇÃO COM O SERVIDOR ---
+const fetchWithGet = async (baseUrl, params) => {
+    try {
+        const url = new URL(baseUrl);
+        const allParams = { ...params, cacheBust: new Date().getTime() };
+        Object.keys(allParams).forEach(key => url.searchParams.append(key, allParams[key]));
+        
+        const res = await fetch(url, {
+            method: 'GET',
+            mode: 'cors',
+            cache: 'no-cache'
+        });
+
+        if (!res.ok) {
+            throw new Error(`Erro de HTTP: ${res.status}`);
+        }
+        return res.json();
+    } catch (error) {
+        console.error('Fetch GET error:', error);
+        throw error;
+    }
+};
+
 const fetchWithPost = async (baseUrl, params) => {
     try {
+        // Adiciona um parâmetro extra para evitar cache do lado do servidor/navegador
+        const body = new URLSearchParams(params).toString();
+        
         const res = await fetch(baseUrl, {
             method: 'POST',
+            mode: 'cors', // Garante que a requisição siga as políticas de CORS
+            redirect: 'follow', // Segue redirecionamentos, que o Apps Script usa para autorização
             headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
+                'Content-Type': 'text/plain;charset=utf-8', // Alterado para um tipo mais simples
             },
-            body: new URLSearchParams(params).toString(),
+            body: JSON.stringify(params), // Envia como texto JSON
         });
+
         if (!res.ok) {
-            const errorText = await res.text().catch(() => 'Não foi possível ler o corpo do erro.');
-            // Verifica se o erro é uma página HTML, comum em erros de permissão do Apps Script
+             const errorText = await res.text().catch(() => 'Não foi possível ler o corpo do erro.');
             if (errorText.trim().toLowerCase().startsWith('<!doctype html')) {
                  throw new Error(`Erro de Servidor (${res.status}). A resposta foi uma página HTML, o que pode indicar um problema de permissão ou implantação. Verifique se o script está publicado para acesso anônimo.`);
             }
@@ -308,9 +335,14 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
 
     const getHallOfFameData = () => {
         if (!allPlayersData) return { onFire: null, mostPresent: null, leastPresent: [] };
-        const sortedByAverage = [...allPlayersData].sort((a, b) => b.average - a.average || a.name.localeCompare(b.name));
-        const sortedByTotalPresence = [...allPlayersData].sort((a, b) => b.presences - a.presences || a.name.localeCompare(b.name));
-        const leastPresentSorted = [...allPlayersData].sort((a, b) => a.average - b.average || a.name.localeCompare(b.name));
+        // Filtra jogadores elegíveis para o Quadro de Honra
+        const eligiblePlayers = allPlayersData.filter(p => p.isEligibleForHoF);
+
+        if (eligiblePlayers.length === 0) return { onFire: null, mostPresent: null, leastPresent: [] };
+
+        const sortedByAverage = [...eligiblePlayers].sort((a, b) => b.average - a.average || a.name.localeCompare(b.name));
+        const sortedByTotalPresence = [...eligiblePlayers].sort((a, b) => b.presences - a.presences || a.name.localeCompare(b.name));
+        const leastPresentSorted = [...eligiblePlayers].sort((a, b) => a.average - b.average || a.name.localeCompare(b.name));
         
         return { onFire: sortedByAverage[0], mostPresent: sortedByTotalPresence[0], leastPresent: leastPresentSorted.slice(0, 3) };
     };
@@ -1667,8 +1699,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isResetPasswordModalOpen, setIsResetPasswordModalOpen] = useState(false);
 
-    const [attendanceData, setAttendanceData] = useState({ isLoading: true, data: null, error: null });
-    const [financeData, setFinanceData] = useState({ isLoading: true, data: null, error: null });
+    const [appData, setAppData] = useState({ isLoading: true, data: null, error: null });
     
     const [lastKnownTimestamp, setLastKnownTimestamp] = useState(null);
     const [notifications, setNotifications] = useState({});
@@ -1682,44 +1713,28 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
         activeTabRef.current = activeTab;
     }, [activeTab]);
 
-    const fetchDashboardData = useCallback(async () => {
-        setAttendanceData(prev => ({ ...prev, isLoading: true }));
+    const fetchInitialAppData = useCallback(async () => {
+        setAppData(prev => ({ ...prev, isLoading: true }));
         try {
-            const data = await fetchWithPost(SCRIPT_URL, { action: 'getDashboardData' });
+            const data = await fetchWithPost(SCRIPT_URL, { action: 'getInitialAppData' });
             if (data.result === 'success') {
-                setAttendanceData({ isLoading: false, data: data.data, error: null });
+                setAppData({ isLoading: false, data: data.data, error: null });
             } else {
-                throw new Error(data.message || 'Falha ao buscar dados do dashboard.');
+                throw new Error(data.message || 'Falha ao buscar dados do aplicativo.');
             }
         } catch (error) {
-            setAttendanceData({ isLoading: false, data: null, error: `Erro ao carregar dados: ${error.message}` });
-        }
-    }, [SCRIPT_URL]);
-
-    const fetchFinanceData = useCallback(async () => {
-        setFinanceData({ isLoading: true, data: null, error: null });
-        try {
-            const data = await fetchWithPost(SCRIPT_URL, { action: 'getFinanceData' });
-            if (data.result === 'success') {
-                setFinanceData({ 
-                    isLoading: false, 
-                    data: data.data,
-                    error: null 
-                });
-            } else {
-                throw new Error(data.message || 'Falha ao buscar dados financeiros do script.');
-            }
-        } catch (error) {
-            setFinanceData({ isLoading: false, data: null, error: `Erro ao carregar dados financeiros: ${error.message}` });
+            setAppData({ isLoading: false, data: null, error: `Erro ao carregar dados: ${error.message}` });
         }
     }, [SCRIPT_URL]);
 
     const handleRefresh = useCallback(() => {
         setIsRefreshing(true);
-        const promises = [fetchDashboardData(), fetchFinanceData()];
+        // Limpa o cache no servidor antes de buscar novos dados
+        fetchWithPost(SCRIPT_URL, { action: 'clearCache' })
+            .then(() => fetchInitialAppData())
+            .finally(() => setIsRefreshing(false));
         setRefreshKey(prev => prev + 1);
-        Promise.all(promises).finally(() => setIsRefreshing(false));
-    }, [fetchDashboardData, fetchFinanceData]);
+    }, [fetchInitialAppData, SCRIPT_URL]);
 
     const handleResetPasswordClose = (shouldLogout) => {
         setIsResetPasswordModalOpen(false);
@@ -1732,27 +1747,22 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
         if (librariesLoaded) {
             const getInitialTimestampAndData = async () => {
                 try {
-                    const data = await fetchWithPost(SCRIPT_URL, { action: 'getLastUpdate' });
-                    // MODIFICATION: Check if the response is successful and timestamp is a string (even if empty).
+                    const data = await fetchWithGet(SCRIPT_URL, { action: 'getLastUpdate' });
                     if (data && data.result === 'success' && typeof data.timestamp === 'string') {
-                        // If the timestamp is empty, it's likely the first run.
-                        // We'll set a default value to allow the app to load,
-                        // and the polling will sync it later.
                         setLastKnownTimestamp(data.timestamp || new Date().toISOString());
-                        handleRefresh(); 
+                        fetchInitialAppData(); 
                     } else {
                        console.error("Resposta inesperada do servidor ao obter timestamp:", data);
                        throw new Error(data?.message || 'Falha ao obter timestamp inicial. A resposta do servidor não foi válida.');
                     }
                 } catch (error) {
                     console.error("Falha na carga inicial:", error);
-                    setAttendanceData({ isLoading: false, data: null, error: `Erro na carga inicial: ${error.message}` });
-                    setFinanceData({ isLoading: false, data: null, error: `Erro na carga inicial: ${error.message}` });
+                    setAppData({ isLoading: false, data: null, error: `Erro na carga inicial: ${error.message}` });
                 }
             };
             getInitialTimestampAndData();
         }
-    }, [librariesLoaded, SCRIPT_URL, handleRefresh]);
+    }, [librariesLoaded, SCRIPT_URL, fetchInitialAppData]);
 
     useEffect(() => {
         if (!librariesLoaded || !lastKnownTimestamp) return;
@@ -1786,24 +1796,23 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
         if (notifications[tab]) {
             setNotifications(prev => ({ ...prev, [tab]: false }));
         }
-        
-        if (tab === 'financas' && !financeData.data && !financeData.error && librariesLoaded) {
-            fetchFinanceData();
-        }
     };
 
     const renderTabContent = () => {
+        const attendanceData = appData.data?.dashboard;
+        const financeData = appData.data?.finance;
+
         switch (activeTab) {
             case 'presenca':
-                return <PresencaTab allPlayersData={attendanceData.data?.players || []} dates={attendanceData.data?.dates || []} isLoading={attendanceData.isLoading} error={attendanceData.error} ModalComponent={Modal} />;
+                return <PresencaTab allPlayersData={attendanceData?.players || []} dates={attendanceData?.dates || []} isLoading={appData.isLoading} error={appData.error} ModalComponent={Modal} />;
             case 'jogos':
                 return <JogosTab currentUser={user} isAdmin={isAdmin} scriptUrl={SCRIPT_URL} ModalComponent={Modal} refreshKey={refreshKey} />;
             case 'estatuto':
                 return <EstatutoTab />;
             case 'financas':
-                return <FinancasTab financeData={financeData.data} isLoading={financeData.isLoading} error={financeData.error} currentUser={user} isAdmin={isAdmin} scriptUrl={SCRIPT_URL} />;
+                return <FinancasTab financeData={financeData} isLoading={appData.isLoading} error={appData.error} currentUser={user} isAdmin={isAdmin} scriptUrl={SCRIPT_URL} />;
             case 'sorteio':
-                 return <SorteioTab allPlayersData={attendanceData.data?.players || []} scriptUrl={SCRIPT_URL} ModalComponent={Modal} />;
+                 return <SorteioTab allPlayersData={attendanceData?.players || []} scriptUrl={SCRIPT_URL} ModalComponent={Modal} />;
             case 'eventos':
                 return <EventosTab scriptUrl={SCRIPT_URL} currentUser={user} isAdmin={isAdmin} ModalComponent={Modal} refreshKey={refreshKey} />;
             default:
@@ -1881,7 +1890,7 @@ export default function App() {
     const [librariesLoaded, setLibrariesLoaded] = useState(false);
     
     // NOVO LINK DO SCRIPT ATUALIZADO
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwFHd7ux4LL-23nwb2LCJcYSaILW0ZWmjR-FKp1ufmh9uf9oeuyAg7hny22B7-wjCgZKQ/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbydLIlFajjG5lM0DQa24yGrEwarxZctdOB4c9gDiaOwpqUJynb9ediyOU5cKDRAeg_2EQ/exec";
 
     const handleLogin = async (e) => {
         e.preventDefault();
