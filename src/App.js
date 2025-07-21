@@ -1523,9 +1523,11 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, ModalComponent, refreshKey 
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingGame, setEditingGame] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [modalMessage, setModalMessage] = useState('');
     const [infoModal, setInfoModal] = useState({ isOpen: false, title: '', message: '' });
+    const [confirmDelete, setConfirmDelete] = useState(null);
 
     const fetchGames = useCallback(async () => {
         setIsLoading(true);
@@ -1549,13 +1551,20 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, ModalComponent, refreshKey 
         fetchGames();
     }, [fetchGames, refreshKey]);
 
-    const handleCreateGame = async (e) => {
+    const handleOpenModal = (game = null) => {
+        setEditingGame(game);
+        setIsModalOpen(true);
+        setModalMessage('');
+    };
+
+    const handleFormSubmit = async (e) => {
         e.preventDefault();
         setIsSubmitting(true);
         setModalMessage('');
         const formData = new FormData(e.target);
         const payload = {
-            action: 'createGame',
+            action: editingGame ? 'updateGame' : 'createGame',
+            id: editingGame ? editingGame.id : undefined,
             data: formData.get('data'),
             horario: formData.get('horario'),
             local: formData.get('local'),
@@ -1565,6 +1574,7 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, ModalComponent, refreshKey 
             const data = await fetchWithPost(scriptUrl, payload);
             if (data.result === 'success') {
                 setIsModalOpen(false);
+                setEditingGame(null);
                 fetchGames();
             } else {
                 throw new Error(data.message || 'Ocorreu um erro desconhecido.');
@@ -1595,6 +1605,25 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, ModalComponent, refreshKey 
             setInfoModal({isOpen: true, title: "Erro", message: err.message});
         }
     };
+    
+    const handleDeleteGame = async (game) => {
+        if (!game) return;
+        setConfirmDelete(null); // Close confirmation modal
+        setIsLoading(true);
+        try {
+            const payload = { action: 'deleteGame', id: game.id };
+            const data = await fetchWithPost(scriptUrl, payload);
+            if (data.result === 'success') {
+                fetchGames();
+            } else {
+                throw new Error(data.message || "Não foi possível apagar o jogo.");
+            }
+        } catch (err) {
+            setInfoModal({ isOpen: true, title: 'Erro ao Apagar', message: err.message });
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     if (isLoading) return <Loader message="A carregar jogos..." />;
     if (error) return <p className="text-center text-red-500 py-8">{error}</p>;
@@ -1604,7 +1633,7 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, ModalComponent, refreshKey 
             <div className="flex justify-between items-center">
                 <h2 className="text-3xl font-bold text-gray-800 dark:text-gray-100">Próximos Jogos</h2>
                 {isAdmin && (
-                    <button onClick={() => setIsModalOpen(true)} className="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition-all shadow-md">
+                    <button onClick={() => handleOpenModal()} className="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition-all shadow-md">
                         Criar Jogo
                     </button>
                 )}
@@ -1617,7 +1646,17 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, ModalComponent, refreshKey 
                     {games.map(game => {
                         const isConfirmed = game.confirmados.includes(currentUser.name);
                         return (
-                            <div key={game.id} className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg flex flex-col">
+                            <div key={game.id} className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg flex flex-col relative">
+                                {isAdmin && (
+                                    <div className="absolute top-2 right-2 flex gap-2">
+                                        <button onClick={() => handleOpenModal(game)} className="p-1 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fillRule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clipRule="evenodd" /></svg>
+                                        </button>
+                                        <button onClick={() => setConfirmDelete(game)} className="p-1 text-gray-400 hover:text-red-600 dark:hover:text-red-400">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clipRule="evenodd" /></svg>
+                                        </button>
+                                    </div>
+                                )}
                                 <div className="flex justify-between items-start mb-2">
                                     <div>
                                         <p className="text-xl font-bold text-gray-800 dark:text-white">{new Date(game.data).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</p>
@@ -1661,26 +1700,41 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, ModalComponent, refreshKey 
                 </div>
             )}
 
-            <ModalComponent isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Criar Novo Jogo">
-                <form onSubmit={handleCreateGame} className="space-y-4">
+            <ModalComponent isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setEditingGame(null); }} title={editingGame ? "Editar Jogo" : "Criar Novo Jogo"}>
+                <form onSubmit={handleFormSubmit} className="space-y-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Data do Jogo</label>
-                        <input name="data" type="date" className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md" required />
+                        <input name="data" type="date" defaultValue={editingGame?.data} className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md" required />
                     </div>
                      <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Horário</label>
-                        <input name="horario" type="time" className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md" required />
+                        <input name="horario" type="time" defaultValue={editingGame?.horario} className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md" required />
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Local</label>
-                        <input name="local" type="text" placeholder="Local do Jogo" className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md" required />
+                        <input name="local" type="text" placeholder="Local do Jogo" defaultValue={editingGame?.local} className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md" required />
                     </div>
                     {modalMessage && <p className="text-red-500 text-sm">{modalMessage}</p>}
                     <button type="submit" disabled={isSubmitting} className="w-full bg-blue-600 text-white font-bold py-3 rounded-md hover:bg-blue-700 disabled:bg-blue-400">
-                        {isSubmitting ? 'A Criar...' : 'Criar Jogo'}
+                        {isSubmitting ? (editingGame ? 'A Guardar...' : 'A Criar...') : (editingGame ? 'Guardar Alterações' : 'Criar Jogo')}
                     </button>
                 </form>
             </ModalComponent>
+            
+            <ModalComponent 
+                isOpen={!!confirmDelete} 
+                onClose={() => setConfirmDelete(null)}
+                title="Confirmar Exclusão"
+            >
+                <div>
+                    <p>Tem a certeza que quer apagar o jogo do dia "<strong>{confirmDelete ? new Date(confirmDelete.data).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : ''}</strong>"? Esta ação não pode ser desfeita.</p>
+                    <div className="flex justify-end gap-4 mt-6">
+                        <button onClick={() => setConfirmDelete(null)} className="py-2 px-4 bg-gray-200 text-gray-800 font-semibold rounded-lg hover:bg-gray-300">Cancelar</button>
+                        <button onClick={() => handleDeleteGame(confirmDelete)} className="py-2 px-4 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700">Apagar</button>
+                    </div>
+                </div>
+            </ModalComponent>
+
             <ModalComponent 
                 isOpen={infoModal.isOpen} 
                 onClose={() => setInfoModal({ isOpen: false, title: '', message: '' })} 
