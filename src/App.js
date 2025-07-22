@@ -640,6 +640,15 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
 
             <ModalComponent isOpen={!!modalPlayer} onClose={() => setModalPlayer(null)} title={`Detalhes de ${modalPlayer?.name}`}>
                 <div className="text-left space-y-4">
+                    <div className="flex justify-center mb-4">
+                        {modalPlayer?.fotoUrl ? (
+                            <img src={modalPlayer.fotoUrl} alt={modalPlayer.name} className="w-32 h-32 rounded-full object-cover border-4 border-blue-500" onError={(e) => { e.target.onerror = null; e.target.src='https://placehold.co/128x128/e2e8f0/4a5568?text=' + modalPlayer.name.charAt(0); }} />
+                        ) : (
+                            <div className="w-32 h-32 rounded-full bg-gray-300 dark:bg-gray-700 flex items-center justify-center border-4 border-blue-500">
+                                <span className="text-5xl text-gray-500 dark:text-gray-400">{modalPlayer?.name.charAt(0)}</span>
+                            </div>
+                        )}
+                    </div>
                     <div className="grid grid-cols-2 gap-4 text-sm p-4 bg-gray-100 dark:bg-gray-700/50 rounded-lg">
                         <div>
                             <p className="font-semibold text-gray-600 dark:text-gray-400">Posição</p>
@@ -1931,7 +1940,13 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
             <div className="container mx-auto p-4 md:p-8">
                 <header className="mb-8 flex flex-col sm:flex-row justify-between items-center text-center sm:text-left">
                     <div className="flex items-center space-x-4">
-                        <img src="https://i.ibb.co/pGnycLc/ICONE-CBA.jpg" alt="Logo CBA" className="h-16 w-16 rounded-full shadow-lg" onError={(e) => { e.target.onerror = null; e.target.src='https://placehold.co/64x64/1e3a8a/ffffff?text=CBA'; }} />
+                        {user.fotoUrl ? (
+                            <img src={user.fotoUrl} alt={user.name} className="h-16 w-16 rounded-full shadow-lg object-cover" onError={(e) => { e.target.onerror = null; e.target.src='https://placehold.co/64x64/e2e8f0/4a5568?text=' + user.name.charAt(0); }} />
+                        ) : (
+                           <div className="h-16 w-16 rounded-full shadow-lg bg-gray-300 dark:bg-gray-700 flex items-center justify-center">
+                                <span className="text-3xl text-gray-500 dark:text-gray-400">{user.name.charAt(0)}</span>
+                           </div>
+                        )}
                         <div>
                             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white tracking-tight">Portal do CBA</h1>
                             <p className="text-gray-500 dark:text-gray-400 mt-1">Bem-vindo, {user.name}!</p>
@@ -2001,7 +2016,7 @@ export default function App() {
         try {
             const data = await fetchWithPost(SCRIPT_URL, payload);
             if (data.status === 'approved') {
-                setAuth({ status: 'authenticated', user: { name: data.name, email: data.email, role: data.role }, error: null });
+                setAuth({ status: 'authenticated', user: { name: data.name, email: data.email, role: data.role, fotoUrl: data.fotoUrl }, error: null });
             } else if (data.status === 'pending') {
                 setAuth({ status: 'pending', user: null, error: null });
             } else {
