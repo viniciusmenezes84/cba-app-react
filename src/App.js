@@ -44,17 +44,14 @@ const fetchWithGet = async (baseUrl, params) => {
 
 const fetchWithPost = async (baseUrl, params) => {
     try {
-        // Adiciona um parâmetro extra para evitar cache do lado do servidor/navegador
-        const body = new URLSearchParams(params).toString();
-        
         const res = await fetch(baseUrl, {
             method: 'POST',
-            mode: 'cors', // Garante que a requisição siga as políticas de CORS
-            redirect: 'follow', // Segue redirecionamentos, que o Apps Script usa para autorização
+            mode: 'cors',
+            redirect: 'follow',
             headers: {
-                'Content-Type': 'text/plain;charset=utf-8', // Alterado para um tipo mais simples
+                'Content-Type': 'text/plain;charset=utf-8',
             },
-            body: JSON.stringify(params), // Envia como texto JSON
+            body: JSON.stringify(params),
         });
 
         if (!res.ok) {
@@ -930,23 +927,45 @@ const EstatutoTab = () => {
 };
 
 
-const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin, scriptUrl }) => {
+const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin, scriptUrl, pixCode }) => {
     const [selectedPlayer, setSelectedPlayer] = useState('');
     const [isSending, setIsSending] = useState(false);
     const [emailMessage, setEmailMessage] = useState({ text: '', type: '' });
+    const [copySuccess, setCopySuccess] = useState('');
 
     useEffect(() => {
         if (!financeData || !financeData.paymentStatus || financeData.paymentStatus.length === 0) return;
 
         if (isAdmin) {
+            // Set default to the first player for admins
             setSelectedPlayer(financeData.paymentStatus[0].player);
         } else {
+            // Find and set the current user for non-admins
             const userRecord = financeData.paymentStatus.find(p => p.player.toLowerCase() === currentUser.name.toLowerCase());
             if (userRecord) {
                 setSelectedPlayer(userRecord.player);
             }
         }
     }, [financeData, isAdmin, currentUser.name]);
+
+    const handleCopyToClipboard = (e) => {
+        const textToCopy = pixCode;
+        const textArea = document.createElement("textarea");
+        textArea.value = textToCopy;
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+            document.execCommand('copy');
+            setCopySuccess('Copiado!');
+            setTimeout(() => setCopySuccess(''), 2000);
+        } catch (err) {
+            console.error('Fallback: Oops, unable to copy', err);
+            setCopySuccess('Falha ao copiar');
+             setTimeout(() => setCopySuccess(''), 2000);
+        }
+        document.body.removeChild(textArea);
+    };
 
 
     const formatCurrency = (value) => {
@@ -957,12 +976,12 @@ const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin, scri
     const getEnhancedStatus = (monthName, originalStatus) => {
         const statusStr = String(originalStatus || '').trim();
         
-        if (isNaN(parseInt(statusStr)) && statusStr !== '') {
-            return { text: statusStr, type: 'info' };
+        if (statusStr.toLowerCase() === 'isento') {
+            return { text: 'Isento', type: 'info' };
         }
         
         if (statusStr === '20') {
-            return { text: 'Pagamento Efetuado', type: 'pago' };
+            return { text: 'Pago', type: 'pago' };
         }
 
         const monthMap = {
@@ -972,7 +991,9 @@ const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin, scri
         
         const now = new Date();
         const currentMonth = now.getMonth();
+        const currentYear = now.getFullYear();
         
+        // Assuming the data is always for the current year. This can be enhanced with a year selector.
         const monthIndex = monthMap[monthName.toLowerCase()];
 
         if (monthIndex < currentMonth) {
@@ -1018,6 +1039,8 @@ const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin, scri
     if (!financeData) return <p className="text-center text-gray-500 py-8">Nenhum dado financeiro encontrado.</p>;
 
     const playerData = financeData.paymentStatus?.find(p => p.player === selectedPlayer);
+    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(pixCode)}&size=180x180&margin=10`;
+
 
     return (
         <div className="space-y-8">
@@ -1038,45 +1061,64 @@ const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin, scri
                     </div>
                 </div>
             </section>
-            
-            <section className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg">
-                <h2 className="text-2xl font-bold mb-4 text-gray-800 dark:text-gray-100">Histórico de Pagamentos</h2>
-                
-                {isAdmin && (
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <section className="lg:col-span-2 bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg">
+                    <h2 className="text-2xl font-bold mb-4 text-gray-800 dark:text-gray-100">Histórico de Pagamentos</h2>
+                    
                     <div className="mb-6">
                         <label htmlFor="player-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Selecione um Jogador:</label>
                         <select
                             id="player-select"
                             value={selectedPlayer}
                             onChange={(e) => setSelectedPlayer(e.target.value)}
-                            className="w-full max-w-xs p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                            disabled={!isAdmin}
+                            className="w-full max-w-xs p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-200 dark:disabled:bg-gray-700/50"
                         >
                             {financeData.paymentStatus?.map(p => <option key={p.player} value={p.player}>{p.player}</option>)}
                         </select>
                     </div>
-                )}
 
-                {playerData ? (
-                    <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 animate-fade-in">
-                        <h3 className="text-xl font-bold text-blue-600 dark:text-blue-400 mb-6">{playerData.player}</h3>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                            {financeData.paymentHeaders?.map(month => {
-                                const statusInfo = getEnhancedStatus(month, playerData.statuses[month]);
-                                return (
-                                    <div key={month} className="flex flex-col items-center justify-center p-3 bg-white dark:bg-gray-700/50 rounded-lg shadow-sm">
-                                        <span className="font-semibold text-gray-700 dark:text-gray-200 mb-2">{month}</span>
-                                        {getStatusPill(statusInfo)}
-                                    </div>
-                                );
-                            })}
+                    {playerData ? (
+                        <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 animate-fade-in">
+                            <h3 className="text-xl font-bold text-blue-600 dark:text-blue-400 mb-6">{playerData.player}</h3>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                                {financeData.paymentHeaders?.map(month => {
+                                    const statusInfo = getEnhancedStatus(month, playerData.statuses[month]);
+                                    return (
+                                        <div key={month} className="flex flex-col items-center justify-center p-3 bg-white dark:bg-gray-700/50 rounded-lg shadow-sm">
+                                            <span className="font-semibold text-gray-700 dark:text-gray-200 mb-2 capitalize">{month}</span>
+                                            {getStatusPill(statusInfo)}
+                                        </div>
+                                    );
+                                })}
+                            </div>
                         </div>
+                    ) : (
+                        <p className="text-center text-gray-500 dark:text-gray-400 py-8">
+                            {isAdmin ? 'Selecione um jogador para ver seu histórico.' : 'Não foi possível encontrar seu histórico de pagamentos.'}
+                        </p>
+                    )}
+                </section>
+                
+                <section className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg flex flex-col items-center">
+                    <h2 className="text-2xl font-bold mb-4 text-gray-800 dark:text-gray-100">Pagamento via PIX</h2>
+                    <div className="p-2 bg-white rounded-lg">
+                        <img src={qrCodeUrl} alt="QR Code PIX" className="w-48 h-48" />
                     </div>
-                ) : (
-                    <p className="text-center text-gray-500 dark:text-gray-400 py-8">
-                        {isAdmin ? 'Selecione um jogador para ver seu histórico.' : 'Não foi possível encontrar seu histórico de pagamentos.'}
-                    </p>
-                )}
-            </section>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-4 text-center">Aponte a câmera do seu celular para pagar.</p>
+                    <div className="mt-4 w-full">
+                        <label className="text-xs font-semibold text-gray-500 dark:text-gray-400">PIX Copia e Cola</label>
+                        <div className="relative">
+                            <input type="text" readOnly value={pixCode} className="w-full p-2 pr-10 text-xs bg-gray-100 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md" />
+                            <button onClick={handleCopyToClipboard} className="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-blue-600">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M7 9a2 2 0 012-2h6a2 2 0 012 2v6a2 2 0 01-2 2H9a2 2 0 01-2-2V9z" /><path d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2V5a2 2 0 00-2-2H4z" /></svg>
+                            </button>
+                        </div>
+                        {copySuccess && <p className="text-green-600 text-xs mt-1 text-center">{copySuccess}</p>}
+                    </div>
+                </section>
+            </div>
 
             {isAdmin && (
                 <section className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg">
@@ -1855,6 +1897,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
     const renderTabContent = () => {
         const attendanceData = appData.data?.dashboard;
         const financeData = appData.data?.finance;
+        const pixCode = appData.data?.pixCode;
 
         switch (activeTab) {
             case 'presenca':
@@ -1864,7 +1907,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
             case 'estatuto':
                 return <EstatutoTab />;
             case 'financas':
-                return <FinancasTab financeData={financeData} isLoading={appData.isLoading} error={appData.error} currentUser={user} isAdmin={isAdmin} scriptUrl={SCRIPT_URL} />;
+                return <FinancasTab financeData={financeData} isLoading={appData.isLoading} error={appData.error} currentUser={user} isAdmin={isAdmin} scriptUrl={SCRIPT_URL} pixCode={pixCode} />;
             case 'sorteio':
                  return <SorteioTab allPlayersData={attendanceData?.players || []} scriptUrl={SCRIPT_URL} ModalComponent={Modal} />;
             case 'eventos':
