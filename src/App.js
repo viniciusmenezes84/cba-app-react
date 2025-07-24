@@ -2076,18 +2076,23 @@ export default function App() {
         return () => clearInterval(interval);
     }, []);
     async function handleLogin(e) {
-        e.preventDefault();
+      e.preventDefault();
         setAuth({ status: 'loading', user: null, error: null });
-        const payload = {
+        // CORREÇÃO: Definimos as variáveis email e password aqui no início
+        const email = e.target.email.value;
+        const password = e.target.password.value;
+ 
+         const payload = {
             action: 'loginUser',
-            email: e.target.email.value,
-            password: e.target.password.value
-        };
-
+             email: email,
+                 password: password
+             };
         try {
-            const data = await fetchWithPost(SCRIPT_URL, payload);
+             const data = await fetchWithPost(SCRIPT_URL, payload);
             if (data.status === 'approved') {
                 setAuth({ status: 'authenticated', user: { name: data.name, email: data.email, role: data.role, fotoUrl: data.fotoUrl }, error: null });
+
+                // Este bloco agora funcionará porque a variável 'email' está disponível
                 if (expoPushToken) {
                     console.log(`Enviando token ${expoPushToken} para o email ${email}`);
                     fetchWithPost(SCRIPT_URL, { 
@@ -2096,16 +2101,16 @@ export default function App() {
                         token: expoPushToken 
                     }).catch(err => console.error("Falha ao guardar o token:", err));
                 }
+
             } else if (data.status === 'pending') {
                 setAuth({ status: 'pending', user: null, error: null });
-            } else {
-                setAuth({ status: 'unauthenticated', user: null, error: data.message });
-            }
-        } catch (error) {
+             } else {
+                 setAuth({ status: 'unauthenticated', user: null, error: data.message });
+             }
+             } catch (error) {
             setAuth({ status: 'unauthenticated', user: null, error: 'Falha na comunicação com o servidor.' });
-        }
-    }
-    
+         } };
+
     const handleLogout = () => {
         setAuth({ status: 'unauthenticated', user: null, error: null });
     };
