@@ -1406,6 +1406,7 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, ModalComponent, refreshKe
 
         // --- BLOCO DE CÓDIGO CORRIGIDO ---
         // Se for um evento novo (e não uma edição), pergunta se o usuário quer salvar no calendário.
+        // CORREÇÃO AQUI: Trocamos !isEditing por !editingEvent
         if (!editingEvent && window.ReactNativeWebView) {
           const eventDetails = {
             title: payload.name,
@@ -1432,7 +1433,7 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, ModalComponent, refreshKe
       setIsSubmitting(false);
     }
   };
-    
+
     const handleAttendance = async (eventId, actionType) => {
         setEvents(prevEvents => prevEvents.map(e => e.id === eventId ? {...e, isConfirming: true} : e));
 
@@ -1647,7 +1648,7 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, ModalComponent, refreshKey 
     };
 
     const handleFormSubmit = async (e) => {
-        e.preventDefault();
+       e.preventDefault();
     setIsSubmitting(true);
     setModalMessage('');
     const formData = new FormData(e.target);
@@ -1669,6 +1670,7 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, ModalComponent, refreshKey 
 
         // --- BLOCO DE CÓDIGO CORRIGIDO ---
         // Se for um jogo novo (e não uma edição), pergunta se o usuário quer salvar no calendário.
+        // CORREÇÃO AQUI: Trocamos !isEditing por !editingGame
         if (!editingGame && window.ReactNativeWebView) {
           const eventDetails = {
             title: `Jogo CBA - ${payload.local}`,
