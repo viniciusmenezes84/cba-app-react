@@ -1381,7 +1381,7 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, ModalComponent, refreshKe
     };
 
     const handleFormSubmit = async (e) => {
-          e.preventDefault();
+        e.preventDefault();
     setIsSubmitting(true);
     setModalMessage('');
     const formData = new FormData(e.target);
@@ -1404,9 +1404,9 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, ModalComponent, refreshKe
         setEditingEvent(null);
         fetchEvents(); // Refresh
 
-        // --- NOVO BLOCO DE CÓDIGO ADICIONADO ---
+        // --- BLOCO DE CÓDIGO CORRIGIDO ---
         // Se for um evento novo (e não uma edição), pergunta se o usuário quer salvar no calendário.
-        if (!isEditing && window.ReactNativeWebView) {
+        if (!editingEvent && window.ReactNativeWebView) {
           const eventDetails = {
             title: payload.name,
             // O campo 'date' do formulário já vem no formato datetime-local (YYYY-MM-DDTHH:mm)
@@ -1421,7 +1421,7 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, ModalComponent, refreshKe
             payload: eventDetails
           }));
         }
-        // --- FIM DO NOVO BLOCO ---
+        // --- FIM DO BLOCO CORRIGIDO ---
 
       } else {
         throw new Error(data.message || 'Ocorreu um erro desconhecido.');
@@ -1431,7 +1431,7 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, ModalComponent, refreshKe
     } finally {
       setIsSubmitting(false);
     }
-  }
+  };
     
     const handleAttendance = async (eventId, actionType) => {
         setEvents(prevEvents => prevEvents.map(e => e.id === eventId ? {...e, isConfirming: true} : e));
@@ -1647,7 +1647,7 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, ModalComponent, refreshKey 
     };
 
     const handleFormSubmit = async (e) => {
-         e.preventDefault();
+        e.preventDefault();
     setIsSubmitting(true);
     setModalMessage('');
     const formData = new FormData(e.target);
@@ -1667,9 +1667,9 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, ModalComponent, refreshKey 
         setEditingGame(null);
         fetchGames();
 
-        // --- NOVO BLOCO DE CÓDIGO ADICIONADO ---
+        // --- BLOCO DE CÓDIGO CORRIGIDO ---
         // Se for um jogo novo (e não uma edição), pergunta se o usuário quer salvar no calendário.
-        if (!isEditing && window.ReactNativeWebView) {
+        if (!editingGame && window.ReactNativeWebView) {
           const eventDetails = {
             title: `Jogo CBA - ${payload.local}`,
             // Combina data e hora para criar um formato ISO 8601 que o app entende
@@ -1684,7 +1684,7 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, ModalComponent, refreshKey 
             payload: eventDetails
           }));
         }
-        // --- FIM DO NOVO BLOCO ---
+        // --- FIM DO BLOCO CORRIGIDO ---
 
       } else {
         throw new Error(data.message || 'Ocorreu um erro desconhecido.');
