@@ -1381,36 +1381,57 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, ModalComponent, refreshKe
     };
 
     const handleFormSubmit = async (e) => {
-        e.preventDefault();
-        setIsSubmitting(true);
-        setModalMessage('');
-        const formData = new FormData(e.target);
-        const payload = {
-            action: editingEvent ? 'updateEvent' : 'createEvent',
-            id: editingEvent ? editingEvent.id : undefined,
-            name: formData.get('name'),
-            date: formData.get('date'),
-            deadline: formData.get('deadline'),
-            location: formData.get('location'),
-            value: formData.get('value'),
-            description: formData.get('description'),
-        };
-
-        try {
-            const data = await fetchWithPost(scriptUrl, payload);
-            if (data.result === 'success') {
-                setIsModalOpen(false);
-                setEditingEvent(null);
-                fetchEvents(); // Refresh
-            } else {
-                throw new Error(data.message || 'Ocorreu um erro desconhecido.');
-            }
-        } catch (error) {
-            setModalMessage(error.message);
-        } finally {
-            setIsSubmitting(false);
-        }
+          e.preventDefault();
+    setIsSubmitting(true);
+    setModalMessage('');
+    const formData = new FormData(e.target);
+    const payload = {
+      action: editingEvent ? 'updateEvent' : 'createEvent',
+      id: editingEvent ? editingEvent.id : undefined,
+      name: formData.get('name'),
+      date: formData.get('date'),
+      deadline: formData.get('deadline'),
+      location: formData.get('location'),
+      value: formData.get('value'),
+      description: formData.get('description'),
     };
+
+    try {
+      const data = await fetchWithPost(scriptUrl, payload);
+      if (data.result === 'success') {
+        // --- SEU CÓDIGO ATUAL ---
+        setIsModalOpen(false);
+        setEditingEvent(null);
+        fetchEvents(); // Refresh
+
+        // --- NOVO BLOCO DE CÓDIGO ADICIONADO ---
+        // Se for um evento novo (e não uma edição), pergunta se o usuário quer salvar no calendário.
+        if (!isEditing && window.ReactNativeWebView) {
+          const eventDetails = {
+            title: payload.name,
+            // O campo 'date' do formulário já vem no formato datetime-local (YYYY-MM-DDTHH:mm)
+            startDate: payload.date, 
+            // O app vai calcular a data final se não for enviada (duração de 2h)
+            location: payload.location
+          };
+          
+          // Envia a mensagem para o App para mostrar o pop-up de confirmação
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'PROMPT_SAVE_TO_CALENDAR',
+            payload: eventDetails
+          }));
+        }
+        // --- FIM DO NOVO BLOCO ---
+
+      } else {
+        throw new Error(data.message || 'Ocorreu um erro desconhecido.');
+      }
+    } catch (error) {
+      setModalMessage(error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
     
     const handleAttendance = async (eventId, actionType) => {
         setEvents(prevEvents => prevEvents.map(e => e.id === eventId ? {...e, isConfirming: true} : e));
@@ -1626,33 +1647,55 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, ModalComponent, refreshKey 
     };
 
     const handleFormSubmit = async (e) => {
-        e.preventDefault();
-        setIsSubmitting(true);
-        setModalMessage('');
-        const formData = new FormData(e.target);
-        const payload = {
-            action: editingGame ? 'updateGame' : 'createGame',
-            id: editingGame ? editingGame.id : undefined,
-            data: formData.get('data'),
-            horario: formData.get('horario'),
-            local: formData.get('local'),
-        };
-
-        try {
-            const data = await fetchWithPost(scriptUrl, payload);
-            if (data.result === 'success') {
-                setIsModalOpen(false);
-                setEditingGame(null);
-                fetchGames();
-            } else {
-                throw new Error(data.message || 'Ocorreu um erro desconhecido.');
-            }
-        } catch (error) {
-            setModalMessage(error.message);
-        } finally {
-            setIsSubmitting(false);
-        }
+         e.preventDefault();
+    setIsSubmitting(true);
+    setModalMessage('');
+    const formData = new FormData(e.target);
+    const payload = {
+      action: editingGame ? 'updateGame' : 'createGame',
+      id: editingGame ? editingGame.id : undefined,
+      data: formData.get('data'),
+      horario: formData.get('horario'),
+      local: formData.get('local'),
     };
+
+    try {
+      const data = await fetchWithPost(scriptUrl, payload);
+      if (data.result === 'success') {
+        // --- SEU CÓDIGO ATUAL ---
+        setIsModalOpen(false);
+        setEditingGame(null);
+        fetchGames();
+
+        // --- NOVO BLOCO DE CÓDIGO ADICIONADO ---
+        // Se for um jogo novo (e não uma edição), pergunta se o usuário quer salvar no calendário.
+        if (!isEditing && window.ReactNativeWebView) {
+          const eventDetails = {
+            title: `Jogo CBA - ${payload.local}`,
+            // Combina data e hora para criar um formato ISO 8601 que o app entende
+            startDate: `${payload.data}T${payload.horario}:00`,
+            // O app vai calcular a data final se não for enviada (duração de 2h)
+            location: payload.local
+          };
+
+          // Envia a mensagem para o App para mostrar o pop-up de confirmação
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'PROMPT_SAVE_TO_CALENDAR',
+            payload: eventDetails
+          }));
+        }
+        // --- FIM DO NOVO BLOCO ---
+
+      } else {
+        throw new Error(data.message || 'Ocorreu um erro desconhecido.');
+      }
+    } catch (error) {
+      setModalMessage(error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+ 
 
     const handleAttendance = async (gameId, actionType) => {
         const payload = {
