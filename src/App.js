@@ -1869,7 +1869,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
         if (librariesLoaded) {
             const getInitialTimestampAndData = async () => {
                 try {
-                    const data = await fetchWithGet(SCRIPT_URL, { action: 'getLastUpdate' });
+                    const data = await fetchWithPost(SCRIPT_URL, { action: 'getLastUpdate' });
                     if (data && data.result === 'success' && typeof data.timestamp === 'string') {
                         setLastKnownTimestamp(data.timestamp || new Date().toISOString());
                         fetchInitialAppData(); 
