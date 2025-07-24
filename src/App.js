@@ -1405,9 +1405,8 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, ModalComponent, refreshKe
         fetchEvents(); // Refresh
 
         // --- BLOCO DE CÓDIGO CORRIGIDO ---
-        // Se for um evento novo (e não uma edição), pergunta se o usuário quer salvar no calendário.
-        // CORREÇÃO AQUI: Trocamos !isEditing por !editingEvent
-        if (!editingEvent && window.ReactNativeWebView) {
+        // Se a ação for criar um novo evento (e não editar), pergunta se o usuário quer salvar no calendário.
+        if (payload.action === 'createEvent' && window.ReactNativeWebView) {
           const eventDetails = {
             title: payload.name,
             // O campo 'date' do formulário já vem no formato datetime-local (YYYY-MM-DDTHH:mm)
@@ -1434,8 +1433,8 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, ModalComponent, refreshKe
     }
   };
 
-    const handleAttendance = async (eventId, actionType) => {
-        setEvents(prevEvents => prevEvents.map(e => e.id === eventId ? {...e, isConfirming: true} : e));
+    async function handleAttendance(eventId, actionType) {
+        setEvents(prevEvents => prevEvents.map(e => e.id === eventId ? { ...e, isConfirming: true } : e));
 
         const payload = {
             action: 'handleAttendanceUpdate',
@@ -1445,17 +1444,17 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, ModalComponent, refreshKe
             type: 'event'
         };
         try {
-             const data = await fetchWithPost(scriptUrl, payload);
+            const data = await fetchWithPost(scriptUrl, payload);
             if (data.result === 'success') {
                 fetchEvents();
             } else {
-                 throw new Error(data.message || `Não foi possível atualizar a presença.`);
+                throw new Error(data.message || `Não foi possível atualizar a presença.`);
             }
         } catch (error) {
             setInfoModal({ isOpen: true, title: 'Erro', message: error.message });
-            setEvents(prevEvents => prevEvents.map(e => e.id === eventId ? {...e, isConfirming: false} : e));
+            setEvents(prevEvents => prevEvents.map(e => e.id === eventId ? { ...e, isConfirming: false } : e));
         }
-    };
+    }
 
      const handleDeleteEvent = async (event) => {
         if (!event) return;
@@ -1648,7 +1647,7 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, ModalComponent, refreshKey 
     };
 
     const handleFormSubmit = async (e) => {
-       e.preventDefault();
+      e.preventDefault();
     setIsSubmitting(true);
     setModalMessage('');
     const formData = new FormData(e.target);
@@ -1669,9 +1668,8 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, ModalComponent, refreshKey 
         fetchGames();
 
         // --- BLOCO DE CÓDIGO CORRIGIDO ---
-        // Se for um jogo novo (e não uma edição), pergunta se o usuário quer salvar no calendário.
-        // CORREÇÃO AQUI: Trocamos !isEditing por !editingGame
-        if (!editingGame && window.ReactNativeWebView) {
+        // Se a ação for criar um novo jogo (e não editar), pergunta se o usuário quer salvar no calendário.
+        if (payload.action === 'createGame' && window.ReactNativeWebView) {
           const eventDetails = {
             title: `Jogo CBA - ${payload.local}`,
             // Combina data e hora para criar um formato ISO 8601 que o app entende
@@ -1685,7 +1683,7 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, ModalComponent, refreshKey 
             type: 'PROMPT_SAVE_TO_CALENDAR',
             payload: eventDetails
           }));
-        } 
+        }
         // --- FIM DO BLOCO CORRIGIDO ---
 
       } else {
@@ -1699,7 +1697,7 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, ModalComponent, refreshKey 
   };
  
 
-    const handleAttendance = async (gameId, actionType) => {
+    async function handleAttendance(gameId, actionType) {
         const payload = {
             action: 'handleAttendanceUpdate',
             itemId: gameId,
@@ -1715,9 +1713,9 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, ModalComponent, refreshKey 
             }
             fetchGames(); // Re-fetch to get the latest state
         } catch (err) {
-            setInfoModal({isOpen: true, title: "Erro", message: err.message});
+            setInfoModal({ isOpen: true, title: "Erro", message: err.message });
         }
-    };
+    }
     
     const handleDeleteGame = async (game) => {
         if (!game) return;
