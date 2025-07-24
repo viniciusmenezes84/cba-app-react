@@ -1685,7 +1685,7 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, ModalComponent, refreshKey 
             type: 'PROMPT_SAVE_TO_CALENDAR',
             payload: eventDetails
           }));
-        }
+        } 
         // --- FIM DO BLOCO CORRIGIDO ---
 
       } else {
