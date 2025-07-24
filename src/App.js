@@ -2060,11 +2060,22 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
 export default function App() {
     const [auth, setAuth] = useState({ status: 'unauthenticated', user: null, error: null });
     const [librariesLoaded, setLibrariesLoaded] = useState(false);
-    
+    const [expoPushToken, setExpoPushToken] = useState(null);
     // NOVO LINK DO SCRIPT ATUALIZADO
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbydLIlFajjG5lM0DQa24yGrEwarxZctdOB4c9gDiaOwpqUJynb9ediyOU5cKDRAeg_2EQ/exec";
-
-    const handleLogin = async (e) => {
+     useEffect(() => {
+        // O aplicativo injeta o token na 'window'. Nós verificamos a cada segundo
+        // até o encontrarmos, pois o site pode carregar antes da injeção.
+        const interval = setInterval(() => {
+            if (window.expoPushToken) {
+                console.log("Token do Expo encontrado:", window.expoPushToken);
+                setExpoPushToken(window.expoPushToken);
+                clearInterval(interval);
+            }
+        }, 1000);
+        return () => clearInterval(interval);
+    }, []);
+    async function handleLogin(e) {
         e.preventDefault();
         setAuth({ status: 'loading', user: null, error: null });
         const payload = {
@@ -2072,11 +2083,19 @@ export default function App() {
             email: e.target.email.value,
             password: e.target.password.value
         };
-          
+
         try {
             const data = await fetchWithPost(SCRIPT_URL, payload);
             if (data.status === 'approved') {
                 setAuth({ status: 'authenticated', user: { name: data.name, email: data.email, role: data.role, fotoUrl: data.fotoUrl }, error: null });
+                if (expoPushToken) {
+                    console.log(`Enviando token ${expoPushToken} para o email ${email}`);
+                    fetchWithPost(SCRIPT_URL, { 
+                        action: 'savePushToken', 
+                        email: email, 
+                        token: expoPushToken 
+                    }).catch(err => console.error("Falha ao guardar o token:", err));
+                }
             } else if (data.status === 'pending') {
                 setAuth({ status: 'pending', user: null, error: null });
             } else {
@@ -2085,7 +2104,7 @@ export default function App() {
         } catch (error) {
             setAuth({ status: 'unauthenticated', user: null, error: 'Falha na comunicação com o servidor.' });
         }
-    };
+    }
     
     const handleLogout = () => {
         setAuth({ status: 'unauthenticated', user: null, error: null });
