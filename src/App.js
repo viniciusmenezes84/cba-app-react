@@ -2029,7 +2029,7 @@ export default function App() {
             email: e.target.email.value,
             password: e.target.password.value
         };
-        
+         
         try {
             const data = await fetchWithPost(SCRIPT_URL, payload);
             if (data.status === 'approved') {
