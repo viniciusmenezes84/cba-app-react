@@ -639,67 +639,84 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
             </section>
 
             <ModalComponent isOpen={!!modalPlayer} onClose={() => setModalPlayer(null)} title={`Detalhes de ${modalPlayer?.name}`}>
-                <div className="text-left space-y-4">
-                    <div className="flex justify-center mb-4">
-                        {modalPlayer?.fotoUrl ? (
-                            <img src={modalPlayer.fotoUrl} alt={modalPlayer.name} className="w-32 h-32 rounded-full object-cover border-4 border-blue-500" onError={(e) => { e.target.onerror = null; e.target.src='https://placehold.co/128x128/e2e8f0/4a5568?text=' + modalPlayer.name.charAt(0); }} />
-                        ) : (
-                            <div className="w-32 h-32 rounded-full bg-gray-300 dark:bg-gray-700 flex items-center justify-center border-4 border-blue-500">
-                                <span className="text-5xl text-gray-500 dark:text-gray-400">{modalPlayer?.name.charAt(0)}</span>
+                {modalPlayer && (
+                    <div className="text-left space-y-4">
+                        <div className="flex justify-center mb-4">
+                            {modalPlayer?.fotoUrl ? (
+                                <img src={modalPlayer.fotoUrl} alt={modalPlayer.name} className="w-32 h-32 rounded-full object-cover border-4 border-blue-500" onError={(e) => { e.target.onerror = null; e.target.src='https://placehold.co/128x128/e2e8f0/4a5568?text=' + modalPlayer.name.charAt(0); }} />
+                            ) : (
+                                <div className="w-32 h-32 rounded-full bg-gray-300 dark:bg-gray-700 flex items-center justify-center border-4 border-blue-500">
+                                    <span className="text-5xl text-gray-500 dark:text-gray-400">{modalPlayer?.name.charAt(0)}</span>
+                                </div>
+                            )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 text-sm p-4 bg-gray-100 dark:bg-gray-700/50 rounded-lg">
+                            <div>
+                                <p className="font-semibold text-gray-600 dark:text-gray-400">Posição</p>
+                                <p className="text-lg font-bold text-gray-900 dark:text-white">{modalPlayer?.posicao}</p>
                             </div>
-                        )}
-                    </div>
-                    <div className="grid grid-cols-2 gap-4 text-sm p-4 bg-gray-100 dark:bg-gray-700/50 rounded-lg">
-                        <div>
-                            <p className="font-semibold text-gray-600 dark:text-gray-400">Posição</p>
-                            <p className="text-lg font-bold text-gray-900 dark:text-white">{modalPlayer?.posicao}</p>
+                            <div>
+                                <p className="font-semibold text-gray-600 dark:text-gray-400">Nº Camisa</p>
+                                <p className="text-lg font-bold text-gray-900 dark:text-white">{modalPlayer?.numero}</p>
+                            </div>
+                            <div>
+                                <p className="font-semibold text-gray-600 dark:text-gray-400">Altura</p>
+                                <p className="text-lg font-bold text-gray-900 dark:text-white">{modalPlayer?.altura}</p>
+                            </div>
+                            <div>
+                                <p className="font-semibold text-gray-600 dark:text-gray-400">Membro Desde</p>
+                                <p className="text-lg font-bold text-gray-900 dark:text-white">{new Date(modalPlayer?.dataEntrada + 'T00:00:00').toLocaleDateString('pt-BR')}</p>
+                            </div>
+                            <div className="col-span-2">
+                                <p className="font-semibold text-gray-600 dark:text-gray-400">Especialidade</p>
+                                <p className="text-lg font-bold text-gray-900 dark:text-white">{modalPlayer?.especialidade}</p>
+                            </div>
                         </div>
-                        <div>
-                            <p className="font-semibold text-gray-600 dark:text-gray-400">Nº Camisa</p>
-                            <p className="text-lg font-bold text-gray-900 dark:text-white">{modalPlayer?.numero}</p>
+                        
+                        <div className="grid grid-cols-2 gap-4 text-sm p-4 bg-gray-100 dark:bg-gray-700/50 rounded-lg">
+                             <div className="text-center">
+                                <p className="text-2xl font-bold text-blue-500 dark:text-blue-400">{modalPlayer?.ppj}</p>
+                                <p className="font-semibold text-gray-600 dark:text-gray-400">Pontos/Jogo</p>
+                            </div>
+                             <div className="text-center">
+                                <p className="text-2xl font-bold text-blue-500 dark:text-blue-400">{modalPlayer?.rpj}</p>
+                                <p className="font-semibold text-gray-600 dark:text-gray-400">Ressaltos/Jogo</p>
+                            </div>
                         </div>
-                        <div>
-                            <p className="font-semibold text-gray-600 dark:text-gray-400">Altura</p>
-                            <p className="text-lg font-bold text-gray-900 dark:text-white">{modalPlayer?.altura}</p>
-                        </div>
-                        <div>
-                            <p className="font-semibold text-gray-600 dark:text-gray-400">Membro Desde</p>
-                            <p className="text-lg font-bold text-gray-900 dark:text-white">{new Date(modalPlayer?.dataEntrada).toLocaleDateString('pt-BR')}</p>
-                        </div>
-                        <div className="col-span-2">
-                            <p className="font-semibold text-gray-600 dark:text-gray-400">Especialidade</p>
-                            <p className="text-lg font-bold text-gray-900 dark:text-white">{modalPlayer?.especialidade}</p>
-                        </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-4 text-sm p-4 bg-gray-100 dark:bg-gray-700/50 rounded-lg">
-                         <div className="text-center">
-                            <p className="text-2xl font-bold text-blue-500 dark:text-blue-400">{modalPlayer?.ppj}</p>
-                            <p className="font-semibold text-gray-600 dark:text-gray-400">Pontos/Jogo</p>
-                        </div>
-                         <div className="text-center">
-                            <p className="text-2xl font-bold text-blue-500 dark:text-blue-400">{modalPlayer?.rpj}</p>
-                            <p className="font-semibold text-gray-600 dark:text-gray-400">Ressaltos/Jogo</p>
-                        </div>
-                    </div>
 
-                    <div>
-                        <h4 className="font-bold text-gray-800 dark:text-gray-200 mb-2">Histórico de Presença</h4>
-                        <div className="mb-2 p-2 bg-gray-100 dark:bg-gray-700/50 rounded-md text-center text-gray-800 dark:text-gray-200">
-                            <strong>{modalPlayer?.presences}</strong> Presenças | <strong>{modalPlayer?.totalGames - modalPlayer?.presences}</strong> Ausências
-                        </div>
-                        <div className="flex flex-wrap gap-1">
-                            {dates.map(date => {
-                                const status = modalPlayer?.attendance[date]?.trim() || '❌';
-                                let colorClass = 'bg-gray-300 dark:bg-gray-600';
-                                if (status.includes('✅')) colorClass = 'bg-green-500';
-                                else if (status.toUpperCase() === 'NÃO JUSTIFICOU') colorClass = 'bg-orange-500';
-                                else if (status.includes('❌')) colorClass = 'bg-red-500';
-                                return <div key={date} className={`w-5 h-5 border border-gray-400 dark:border-gray-500 ${colorClass}`} title={`${new Date(date).toLocaleDateString('pt-BR')}: ${status}`}></div>;
-                            })}
+                        <div>
+                            <h4 className="font-bold text-gray-800 dark:text-gray-200 mb-2">Histórico de Presença</h4>
+                            <div className="mb-2 p-2 bg-gray-100 dark:bg-gray-700/50 rounded-md text-center text-gray-800 dark:text-gray-200">
+                                <strong>{modalPlayer?.presences}</strong> Presenças | <strong>{modalPlayer?.totalGames - modalPlayer?.presences}</strong> Ausências
+                            </div>
+                            <div className="flex flex-wrap gap-1">
+                                {(() => {
+                                    // Filtra as datas para exibir apenas a partir da data de entrada do jogador.
+                                    const playerEntryDate = modalPlayer?.dataEntrada && modalPlayer.dataEntrada !== 'N/A' 
+                                        ? new Date(modalPlayer.dataEntrada + 'T00:00:00') 
+                                        : null;
+
+                                    const visibleDates = playerEntryDate
+                                        ? dates.filter(dateStr => new Date(dateStr + 'T00:00:00') >= playerEntryDate)
+                                        : dates;
+
+                                    return visibleDates.map(date => {
+                                        const status = modalPlayer?.attendance[date]?.trim() || '❌';
+                                        let colorClass = 'bg-gray-300 dark:bg-gray-600';
+                                        if (status.includes('✅')) colorClass = 'bg-green-500';
+                                        else if (status.toUpperCase() === 'NÃO JUSTIFICOU') colorClass = 'bg-orange-500';
+                                        else if (status.includes('❌')) colorClass = 'bg-red-500';
+                                        
+                                        // Adiciona 'T00:00:00' para garantir que a data seja interpretada no fuso horário local e não UTC, evitando erros de um dia.
+                                        const displayDate = new Date(date + 'T00:00:00');
+                                        
+                                        return <div key={date} className={`w-5 h-5 border border-gray-400 dark:border-gray-500 ${colorClass}`} title={`${displayDate.toLocaleDateString('pt-BR')}: ${status}`}></div>;
+                                    });
+                                })()}
+                            </div>
                         </div>
                     </div>
-                </div>
+                )}
             </ModalComponent>
             
             <ModalComponent 
