@@ -1444,11 +1444,11 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, ModalComponent, refreshKe
             type: 'event'
         };
         try {
-            const data = await fetchWithPost(scriptUrl, payload);
+             const data = await fetchWithPost(scriptUrl, payload);
             if (data.result === 'success') {
                 fetchEvents();
             } else {
-                throw new Error(data.message || `Não foi possível atualizar a presença.`);
+                 throw new Error(data.message || `Não foi possível atualizar a presença.`);
             }
         } catch (error) {
             setInfoModal({ isOpen: true, title: 'Erro', message: error.message });
@@ -1500,61 +1500,61 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, ModalComponent, refreshKe
                         const totalCollected = event.attendees.length * event.value;
 
                         return (
-                        <div key={event.id} className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg flex flex-col">
-                            <div className="flex justify-between items-start">
-                                <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-1">{event.name}</h3>
-                                {isAdmin && (
-                                    <div className="flex gap-2">
-                                        <button onClick={() => handleOpenModal(event)} className="p-1 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fillRule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clipRule="evenodd" /></svg></button>
-                                        <button onClick={() => setConfirmDelete(event)} className="p-1 text-gray-400 hover:text-red-600 dark:hover:text-red-400"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clipRule="evenodd" /></svg></button>
+                            <div key={event.id} className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg flex flex-col">
+                                <div className="flex justify-between items-start">
+                                    <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-1">{event.name}</h3>
+                                    {isAdmin && (
+                                        <div className="flex gap-2">
+                                            <button onClick={() => handleOpenModal(event)} className="p-1 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fillRule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clipRule="evenodd" /></svg></button>
+                                            <button onClick={() => setConfirmDelete(event)} className="p-1 text-gray-400 hover:text-red-600 dark:hover:text-red-400"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clipRule="evenodd" /></svg></button>
+                                        </div>
+                                    )}
+                                </div>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{new Date(event.date).toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                                <p className="text-sm font-semibold text-gray-600 dark:text-gray-300 mb-2">{event.location}</p>
+                                <p className="text-xs text-red-600 font-bold mb-4">Data limite para confirmação: {new Date(event.deadline).toLocaleDateString('pt-BR')}</p>
+                                
+                                <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg mb-4">
+                                    <p className="text-gray-700 dark:text-gray-300 mb-2 flex-grow">{event.description}</p>
+                                    <div className="flex justify-between items-center text-sm">
+                                        <span className="font-semibold text-gray-600 dark:text-gray-300">Valor por pessoa:</span>
+                                        <span className="font-bold text-blue-600 dark:text-blue-400">{formatCurrency(event.value)}</span>
                                     </div>
-                                )}
-                            </div>
-                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{new Date(event.date).toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
-                            <p className="text-sm font-semibold text-gray-600 dark:text-gray-300 mb-2">{event.location}</p>
-                            <p className="text-xs text-red-600 font-bold mb-4">Data limite para confirmação: {new Date(event.deadline).toLocaleDateString('pt-BR')}</p>
-                            
-                            <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-lg mb-4">
-                                <p className="text-gray-700 dark:text-gray-300 mb-2 flex-grow">{event.description}</p>
-                                <div className="flex justify-between items-center text-sm">
-                                    <span className="font-semibold text-gray-600 dark:text-gray-300">Valor por pessoa:</span>
-                                    <span className="font-bold text-blue-600 dark:text-blue-400">{formatCurrency(event.value)}</span>
+                                     <div className="flex justify-between items-center text-sm mt-1">
+                                        <span className="font-semibold text-gray-600 dark:text-gray-300">Total arrecadado:</span>
+                                        <span className="font-bold text-green-600 dark:text-green-400">{formatCurrency(totalCollected)}</span>
+                                    </div>
                                 </div>
-                                 <div className="flex justify-between items-center text-sm mt-1">
-                                    <span className="font-semibold text-gray-600 dark:text-gray-300">Total arrecadado:</span>
-                                    <span className="font-bold text-green-600 dark:text-green-400">{formatCurrency(totalCollected)}</span>
+                                
+                                <div className="mb-4">
+                                    <h4 className="font-bold text-sm mb-2 text-gray-800 dark:text-gray-200">Confirmados ({event.attendees.length}):</h4>
+                                    <div className="flex flex-wrap gap-2">
+                                        {event.attendees.length > 0 ? event.attendees.map(name => (
+                                            <span key={name} className="bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 px-2 py-1 text-xs font-semibold rounded-full">{name}</span>
+                                        )) : <p className="text-xs text-gray-500 dark:text-gray-400">Ninguém confirmado ainda.</p>}
+                                    </div>
                                 </div>
-                            </div>
-                            
-                            <div className="mb-4">
-                                <h4 className="font-bold text-sm mb-2 text-gray-800 dark:text-gray-200">Confirmados ({event.attendees.length}):</h4>
-                                <div className="flex flex-wrap gap-2">
-                                    {event.attendees.length > 0 ? event.attendees.map(name => (
-                                        <span key={name} className="bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 px-2 py-1 text-xs font-semibold rounded-full">{name}</span>
-                                    )) : <p className="text-xs text-gray-500 dark:text-gray-400">Ninguém confirmado ainda.</p>}
-                                </div>
-                            </div>
 
-                            <div className="mt-auto pt-4 border-t border-gray-200 dark:border-gray-700">
-                                {isConfirmed ? (
-                                    <button
-                                        onClick={() => handleAttendance(event.id, 'withdraw')}
-                                        disabled={isDeadlinePassed || event.isConfirming}
-                                        className={`w-full font-bold py-2 px-4 rounded-lg transition-all ${isDeadlinePassed ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-red-500 text-white hover:bg-red-600'}`}>
-                                        {event.isConfirming ? 'A processar...' : 'Desistir'}
-                                    </button>
-                                ) : (
-                                    <button
-                                        onClick={() => handleAttendance(event.id, 'confirm')}
-                                        disabled={isDeadlinePassed || event.isConfirming}
-                                        className={`w-full font-bold py-2 px-4 rounded-lg transition-all ${!isDeadlinePassed ? 'bg-green-500 text-white hover:bg-green-600' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}>
-                                        {event.isConfirming ? 'A processar...' : 'Confirmar Presença'}
-                                    </button>
-                                )}
+                                <div className="mt-auto pt-4 border-t border-gray-200 dark:border-gray-700">
+                                    {isConfirmed ? (
+                                        <button
+                                            onClick={() => handleAttendance(event.id, 'withdraw')}
+                                            disabled={isDeadlinePassed || event.isConfirming}
+                                            className={`w-full font-bold py-2 px-4 rounded-lg transition-all ${isDeadlinePassed ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-red-500 text-white hover:bg-red-600'}`}>
+                                            {event.isConfirming ? 'A processar...' : 'Desistir'}
+                                        </button>
+                                    ) : (
+                                        <button
+                                            onClick={() => handleAttendance(event.id, 'confirm')}
+                                            disabled={isDeadlinePassed || event.isConfirming}
+                                            className={`w-full font-bold py-2 px-4 rounded-lg transition-all ${!isDeadlinePassed ? 'bg-green-500 text-white hover:bg-green-600' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}>
+                                            {event.isConfirming ? 'A processar...' : 'Confirmar Presença'}
+                                        </button>
+                                    )}
+                                </div>
                             </div>
-                        </div>
-                        );
-                    })}
+                            );
+                        })}
                 </div>
             )}
 
@@ -1713,7 +1713,7 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, ModalComponent, refreshKey 
             }
             fetchGames(); // Re-fetch to get the latest state
         } catch (err) {
-            setInfoModal({ isOpen: true, title: "Erro", message: err.message });
+            setInfoModal({isOpen: true, title: "Erro", message: err.message});
         }
     }
     
@@ -1806,8 +1806,8 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, ModalComponent, refreshKey 
                                     )}
                                 </div>
                             </div>
-                        );
-                    })}
+                            );
+                        })}
                 </div>
             )}
 
@@ -2075,7 +2075,7 @@ export default function App() {
         }, 1000);
         return () => clearInterval(interval);
     }, []);
-    async function handleLogin(e) {
+    const handleLogin = async (e) => {
       e.preventDefault();
         setAuth({ status: 'loading', user: null, error: null });
         // CORREÇÃO: Definimos as variáveis email e password aqui no início
@@ -2086,7 +2086,7 @@ export default function App() {
             action: 'loginUser',
              email: email,
                  password: password
-             };
+              };
         try {
              const data = await fetchWithPost(SCRIPT_URL, payload);
             if (data.status === 'approved') {
@@ -2109,7 +2109,7 @@ export default function App() {
              }
              } catch (error) {
             setAuth({ status: 'unauthenticated', user: null, error: 'Falha na comunicação com o servidor.' });
-         } };
+       } };
 
     const handleLogout = () => {
         setAuth({ status: 'unauthenticated', user: null, error: null });
