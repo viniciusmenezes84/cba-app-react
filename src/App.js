@@ -1381,7 +1381,7 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, ModalComponent, refreshKe
     };
 
     const handleFormSubmit = async (e) => {
-        e.preventDefault();
+      e.preventDefault();
     setIsSubmitting(true);
     setModalMessage('');
     const formData = new FormData(e.target);
@@ -1713,7 +1713,7 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, ModalComponent, refreshKey 
             }
             fetchGames(); // Re-fetch to get the latest state
         } catch (err) {
-            setInfoModal({isOpen: true, title: "Erro", message: err.message});
+            setInfoModal({ isOpen: true, title: "Erro", message: err.message });
         }
     }
     
@@ -2060,12 +2060,13 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
 export default function App() {
     const [auth, setAuth] = useState({ status: 'unauthenticated', user: null, error: null });
     const [librariesLoaded, setLibrariesLoaded] = useState(false);
+    // ADICIONADO: Estado para guardar o token de notificação
     const [expoPushToken, setExpoPushToken] = useState(null);
-    // NOVO LINK DO SCRIPT ATUALIZADO
+    
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbydLIlFajjG5lM0DQa24yGrEwarxZctdOB4c9gDiaOwpqUJynb9ediyOU5cKDRAeg_2EQ/exec";
-     useEffect(() => {
-        // O aplicativo injeta o token na 'window'. Nós verificamos a cada segundo
-        // até o encontrarmos, pois o site pode carregar antes da injeção.
+
+    // ADICIONADO: useEffect para capturar o token injetado pelo app
+    useEffect(() => {
         const interval = setInterval(() => {
             if (window.expoPushToken) {
                 console.log("Token do Expo encontrado:", window.expoPushToken);
@@ -2075,20 +2076,23 @@ export default function App() {
         }, 1000);
         return () => clearInterval(interval);
     }, []);
+
+    // ATUALIZADO: handleLogin agora envia o token para o servidor
     const handleLogin = async (e) => {
-      e.preventDefault();
+        e.preventDefault();
         setAuth({ status: 'loading', user: null, error: null });
         // CORREÇÃO: Definimos as variáveis email e password aqui no início
         const email = e.target.email.value;
         const password = e.target.password.value;
- 
-         const payload = {
+        
+        const payload = {
             action: 'loginUser',
-             email: email,
-                 password: password
-              };
+            email: email,
+            password: password
+        };
+         
         try {
-             const data = await fetchWithPost(SCRIPT_URL, payload);
+            const data = await fetchWithPost(SCRIPT_URL, payload);
             if (data.status === 'approved') {
                 setAuth({ status: 'authenticated', user: { name: data.name, email: data.email, role: data.role, fotoUrl: data.fotoUrl }, error: null });
 
@@ -2104,13 +2108,14 @@ export default function App() {
 
             } else if (data.status === 'pending') {
                 setAuth({ status: 'pending', user: null, error: null });
-             } else {
-                 setAuth({ status: 'unauthenticated', user: null, error: data.message });
-             }
-             } catch (error) {
+            } else {
+                setAuth({ status: 'unauthenticated', user: null, error: data.message });
+            }
+        } catch (error) {
             setAuth({ status: 'unauthenticated', user: null, error: 'Falha na comunicação com o servidor.' });
-       } };
-
+        }
+    };
+    
     const handleLogout = () => {
         setAuth({ status: 'unauthenticated', user: null, error: null });
     };
