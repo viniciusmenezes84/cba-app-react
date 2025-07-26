@@ -2060,28 +2060,28 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
 export default function App() {
     const [auth, setAuth] = useState({ status: 'unauthenticated', user: null, error: null });
     const [librariesLoaded, setLibrariesLoaded] = useState(false);
-    // ADICIONADO: Estado para guardar o token de notificação
     const [expoPushToken, setExpoPushToken] = useState(null);
     
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbydLIlFajjG5lM0DQa24yGrEwarxZctdOB4c9gDiaOwpqUJynb9ediyOU5cKDRAeg_2EQ/exec";
 
-    // ADICIONADO: useEffect para capturar o token injetado pelo app
     useEffect(() => {
-        const interval = setInterval(() => {
-            if (window.expoPushToken) {
-                console.log("Token do Expo encontrado:", window.expoPushToken);
-                setExpoPushToken(window.expoPushToken);
-                clearInterval(interval);
-            }
-        }, 1000);
-        return () => clearInterval(interval);
+        const handleMessageFromRN = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'EXPO_PUSH_TOKEN' && data.token) {
+                    console.log("Token recebido do app:", data.token);
+                    setExpoPushToken(data.token);
+                }
+            } catch (e) { /* Ignora mensagens não-JSON */ }
+        };
+
+        window.addEventListener("message", handleMessageFromRN);
+        return () => window.removeEventListener("message", handleMessageFromRN);
     }, []);
 
-    // ATUALIZADO: handleLogin agora envia o token para o servidor
     const handleLogin = async (e) => {
         e.preventDefault();
         setAuth({ status: 'loading', user: null, error: null });
-        // CORREÇÃO: Definimos as variáveis email e password aqui no início
         const email = e.target.email.value;
         const password = e.target.password.value;
         
@@ -2096,14 +2096,9 @@ export default function App() {
             if (data.status === 'approved') {
                 setAuth({ status: 'authenticated', user: { name: data.name, email: data.email, role: data.role, fotoUrl: data.fotoUrl }, error: null });
 
-                // Este bloco agora funcionará porque a variável 'email' está disponível
-                if (expoPushToken) {
-                    console.log(`Enviando token ${expoPushToken} para o email ${email}`);
-                    fetchWithPost(SCRIPT_URL, { 
-                        action: 'savePushToken', 
-                        email: email, 
-                        token: expoPushToken 
-                    }).catch(err => console.error("Falha ao guardar o token:", err));
+                if (window.ReactNativeWebView) {
+                    console.log("A pedir o token ao aplicativo...");
+                    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'REQUEST_PUSH_TOKEN' }));
                 }
 
             } else if (data.status === 'pending') {
@@ -2115,6 +2110,17 @@ export default function App() {
             setAuth({ status: 'unauthenticated', user: null, error: 'Falha na comunicação com o servidor.' });
         }
     };
+
+    useEffect(() => {
+        if (expoPushToken && auth.status === 'authenticated' && auth.user) {
+            console.log(`Enviando token ${expoPushToken} para o email ${auth.user.email}`);
+            fetchWithPost(SCRIPT_URL, { 
+                action: 'savePushToken', 
+                email: auth.user.email, 
+                token: expoPushToken 
+            }).catch(err => console.error("Falha ao guardar o token:", err));
+        }
+    }, [expoPushToken, auth.status, auth.user]);
     
     const handleLogout = () => {
         setAuth({ status: 'unauthenticated', user: null, error: null });
