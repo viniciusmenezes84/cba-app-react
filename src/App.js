@@ -1907,6 +1907,16 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
             onLogout();
         }
     };
+
+    // ADICIONADO: Função para o botão de teste da ponte
+    const handleTestBridge = () => {
+        if (window.ReactNativeWebView) {
+            console.log("Enviando mensagem de teste para o app...");
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'TEST_BRIDGE' }));
+        } else {
+            alert("Este botão só funciona dentro do aplicativo móvel.");
+        }
+    };
     
     useEffect(() => {
         if (librariesLoaded) {
@@ -2013,6 +2023,8 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
                         </div>
                     </div>
                     <div className="flex items-center gap-4 pt-4 sm:pt-0">
+                        {/* ADICIONADO: Botão de Teste */}
+                        <button onClick={handleTestBridge} className="text-sm font-semibold text-green-600 dark:text-green-400 hover:underline">Testar Ponte</button>
                         <button onClick={() => setIsResetPasswordModalOpen(true)} className="text-sm font-semibold text-blue-600 dark:text-blue-400 hover:underline">Resetar Senha</button>
                         <button onClick={onLogout} className="text-sm font-semibold text-red-600 dark:text-red-400 hover:underline">Sair</button>
                         <button onClick={handleRefresh} disabled={isRefreshing} className="p-1.5 rounded-full bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
@@ -2060,24 +2072,8 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
 export default function App() {
     const [auth, setAuth] = useState({ status: 'unauthenticated', user: null, error: null });
     const [librariesLoaded, setLibrariesLoaded] = useState(false);
-    const [expoPushToken, setExpoPushToken] = useState(null);
     
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbydLIlFajjG5lM0DQa24yGrEwarxZctdOB4c9gDiaOwpqUJynb9ediyOU5cKDRAeg_2EQ/exec";
-
-    useEffect(() => {
-        const handleMessageFromRN = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                if (data.type === 'EXPO_PUSH_TOKEN' && data.token) {
-                    console.log("Token recebido do app:", data.token);
-                    setExpoPushToken(data.token);
-                }
-            } catch (e) { /* Ignora mensagens não-JSON */ }
-        };
-
-        window.addEventListener("message", handleMessageFromRN);
-        return () => window.removeEventListener("message", handleMessageFromRN);
-    }, []);
 
     const handleLogin = async (e) => {
         e.preventDefault();
@@ -2095,12 +2091,6 @@ export default function App() {
             const data = await fetchWithPost(SCRIPT_URL, payload);
             if (data.status === 'approved') {
                 setAuth({ status: 'authenticated', user: { name: data.name, email: data.email, role: data.role, fotoUrl: data.fotoUrl }, error: null });
-
-                if (window.ReactNativeWebView) {
-                    console.log("A pedir o token ao aplicativo...");
-                    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'REQUEST_PUSH_TOKEN' }));
-                }
-
             } else if (data.status === 'pending') {
                 setAuth({ status: 'pending', user: null, error: null });
             } else {
@@ -2110,17 +2100,6 @@ export default function App() {
             setAuth({ status: 'unauthenticated', user: null, error: 'Falha na comunicação com o servidor.' });
         }
     };
-
-    useEffect(() => {
-        if (expoPushToken && auth.status === 'authenticated' && auth.user) {
-            console.log(`Enviando token ${expoPushToken} para o email ${auth.user.email}`);
-            fetchWithPost(SCRIPT_URL, { 
-                action: 'savePushToken', 
-                email: auth.user.email, 
-                token: expoPushToken 
-            }).catch(err => console.error("Falha ao guardar o token:", err));
-        }
-    }, [expoPushToken, auth.status, auth.user]);
     
     const handleLogout = () => {
         setAuth({ status: 'unauthenticated', user: null, error: null });
