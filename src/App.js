@@ -2081,7 +2081,7 @@ export default function App() {
         setAuth({ status: 'loading', user: null, error: null });
         const email = e.target.email.value;
         const password = e.target.password.value;
-        
+         
         const payload = {
             action: 'loginUser',
             email: email,
