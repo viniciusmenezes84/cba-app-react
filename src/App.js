@@ -1908,7 +1908,6 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
         }
     };
 
-    // ADICIONADO: Função para o botão de teste da ponte
     const handleTestBridge = () => {
         if (window.ReactNativeWebView) {
             console.log("Enviando mensagem de teste para o app...");
@@ -2024,7 +2023,9 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
                     </div>
                     <div className="flex items-center gap-4 pt-4 sm:pt-0">
                         {/* ADICIONADO: Botão de Teste */}
-                        <button onClick={handleTestBridge} className="text-sm font-semibold text-green-600 dark:text-green-400 hover:underline">Testar Ponte</button>
+                        {window.ReactNativeWebView && (
+                            <button onClick={handleTestBridge} className="text-sm font-semibold text-green-600 dark:text-green-400 hover:underline">Testar Ponte</button>
+                        )}
                         <button onClick={() => setIsResetPasswordModalOpen(true)} className="text-sm font-semibold text-blue-600 dark:text-blue-400 hover:underline">Resetar Senha</button>
                         <button onClick={onLogout} className="text-sm font-semibold text-red-600 dark:text-red-400 hover:underline">Sair</button>
                         <button onClick={handleRefresh} disabled={isRefreshing} className="p-1.5 rounded-full bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
@@ -2091,6 +2092,16 @@ export default function App() {
             const data = await fetchWithPost(SCRIPT_URL, payload);
             if (data.status === 'approved') {
                 setAuth({ status: 'authenticated', user: { name: data.name, email: data.email, role: data.role, fotoUrl: data.fotoUrl }, error: null });
+
+                // ATUALIZADO: Agora enviamos uma mensagem para o app
+                if (window.ReactNativeWebView) {
+                    console.log("Login bem-sucedido. A informar o aplicativo...");
+                    window.ReactNativeWebView.postMessage(JSON.stringify({
+                        type: 'USER_LOGGED_IN',
+                        email: email
+                    }));
+                }
+
             } else if (data.status === 'pending') {
                 setAuth({ status: 'pending', user: null, error: null });
             } else {
