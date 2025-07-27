@@ -1871,7 +1871,14 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
     const [refreshKey, setRefreshKey] = useState(0);
     
     const isAdmin = user && user.role && user.role.toUpperCase() === 'ADMIN';
-    const TABS = useMemo(() => ['presenca', 'jogos', 'estatuto', 'financas', 'sorteio', 'eventos'], []);
+    // ATUALIZADO: Adicionada a nova aba de Notificações
+    const TABS = useMemo(() => {
+        const baseTabs = ['presenca', 'jogos', 'estatuto', 'financas', 'sorteio', 'eventos'];
+        if (isAdmin) {
+            return [...baseTabs, 'notificacoes'];
+        }
+        return baseTabs;
+    }, [isAdmin]);
     
     const activeTabRef = useRef(activeTab);
     useEffect(() => {
@@ -1905,15 +1912,6 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
         setIsResetPasswordModalOpen(false);
         if (shouldLogout) {
             onLogout();
-        }
-    };
-
-    const handleTestBridge = () => {
-        if (window.ReactNativeWebView) {
-            console.log("Enviando mensagem de teste para o app...");
-            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'TEST_BRIDGE' }));
-        } else {
-            alert("Este botão só funciona dentro do aplicativo móvel.");
         }
     };
     
@@ -1990,6 +1988,9 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
                  return <SorteioTab allPlayersData={attendanceData?.players || []} scriptUrl={SCRIPT_URL} ModalComponent={Modal} />;
             case 'eventos':
                 return <EventosTab scriptUrl={SCRIPT_URL} currentUser={user} isAdmin={isAdmin} ModalComponent={Modal} refreshKey={refreshKey} />;
+            // ATUALIZADO: Adicionada a nova aba
+            case 'notificacoes':
+                return <NotificacoesTab scriptUrl={SCRIPT_URL} />;
             default:
                 return null;
         }
@@ -2002,6 +2003,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
         financas: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>,
         sorteio: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.121 15.536c-1.171 1.952-3.07 1.952-4.242 0-1.172-1.953-1.172-5.119 0-7.072 1.171-1.952 3.07-1.952 4.242 0 1.172 1.953 1.172 5.119 0 7.072z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 21a9 9 0 100-18 9 9 0 000 18z" /></svg>,
         eventos: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
+        notificacoes: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>,
     };
 
     return (
@@ -2022,10 +2024,6 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
                         </div>
                     </div>
                     <div className="flex items-center gap-4 pt-4 sm:pt-0">
-                        {/* ADICIONADO: Botão de Teste */}
-                        {window.ReactNativeWebView && (
-                            <button onClick={handleTestBridge} className="text-sm font-semibold text-green-600 dark:text-green-400 hover:underline">Testar Ponte</button>
-                        )}
                         <button onClick={() => setIsResetPasswordModalOpen(true)} className="text-sm font-semibold text-blue-600 dark:text-blue-400 hover:underline">Resetar Senha</button>
                         <button onClick={onLogout} className="text-sm font-semibold text-red-600 dark:text-red-400 hover:underline">Sair</button>
                         <button onClick={handleRefresh} disabled={isRefreshing} className="p-1.5 rounded-full bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
@@ -2081,7 +2079,7 @@ export default function App() {
         setAuth({ status: 'loading', user: null, error: null });
         const email = e.target.email.value;
         const password = e.target.password.value;
-         
+        
         const payload = {
             action: 'loginUser',
             email: email,
