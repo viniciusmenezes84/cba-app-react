@@ -1857,6 +1857,112 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, ModalComponent, refreshKey 
     );
 };
 
+// ==================================================================
+// --- COMPONENTE DE NOTIFICAÇÕES CORRIGIDO ---
+// ==================================================================
+const NotificacoesTab = ({ scriptUrl }) => {
+    const [notifications, setNotifications] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [submitStatus, setSubmitStatus] = useState({ message: '', type: '' });
+
+    const fetchNotifications = useCallback(async () => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            // Ação correta para buscar o histórico
+            const data = await fetchWithPost(scriptUrl, { action: 'getNotifications' });
+            if (data.result === 'success') {
+                // Ordena as notificações da mais recente para a mais antiga
+                const sortedNotifications = data.data.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                setNotifications(sortedNotifications);
+            } else {
+                throw new Error(data.message || 'Falha ao buscar notificações.');
+            }
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [scriptUrl]);
+
+    useEffect(() => {
+        fetchNotifications();
+    }, [fetchNotifications]);
+
+    const handleFormSubmit = async (e) => {
+        e.preventDefault();
+        setIsSubmitting(true);
+        setSubmitStatus({ message: '', type: '' });
+        const formData = new FormData(e.target);
+        
+        const payload = {
+            action: 'sendPushNotificationToAll',
+            title: formData.get('title'),
+            message: formData.get('message'),
+        };
+
+        try {
+            const data = await fetchWithPost(scriptUrl, payload);
+            if (data.result === 'success') {
+                setSubmitStatus({ message: data.message || 'Notificação enviada com sucesso!', type: 'success' });
+                e.target.reset(); // Limpa o formulário
+                fetchNotifications(); // Atualiza a lista de notificações
+            } else {
+                throw new Error(data.message || 'Ocorreu um erro desconhecido.');
+            }
+        } catch (error) {
+            setSubmitStatus({ message: error.message, type: 'error' });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    return (
+        <div className="space-y-8">
+            <section className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg">
+                <h2 className="text-3xl font-bold text-gray-800 dark:text-gray-100 mb-4">Enviar Notificação Push</h2>
+                <p className="text-gray-600 dark:text-gray-400 mb-6">Envie uma mensagem para todos os jogadores que têm o aplicativo instalado.</p>
+                <form onSubmit={handleFormSubmit} className="space-y-4">
+                    <input name="title" type="text" placeholder="Título da Notificação" className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md" required />
+                    <textarea name="message" placeholder="Mensagem da Notificação" className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md" rows="4" required></textarea>
+                    {submitStatus.message && (
+                        <p className={`text-sm p-3 rounded-md ${submitStatus.type === 'error' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                            {submitStatus.message}
+                        </p>
+                    )}
+                    <button type="submit" disabled={isSubmitting} className="w-full bg-blue-600 text-white font-bold py-3 rounded-md hover:bg-blue-700 disabled:bg-blue-400">
+                        {isSubmitting ? 'A enviar...' : 'Enviar Notificação'}
+                    </button>
+                </form>
+            </section>
+
+            <section className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg">
+                <h2 className="text-3xl font-bold text-gray-800 dark:text-gray-100 mb-6">Histórico de Notificações</h2>
+                {isLoading ? <Loader message="A carregar histórico..."/> : error ? <p className="text-center text-red-500">{error}</p> : (
+                    <div className="space-y-4">
+                        {notifications.length === 0 ? (
+                            <p className="text-center text-gray-500 dark:text-gray-400">Nenhuma notificação enviada ainda.</p>
+                        ) : (
+                            notifications.map((notif, index) => (
+                                <div key={index} className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800">
+                                    <h3 className="font-bold text-lg text-gray-800 dark:text-gray-100">{notif.title}</h3>
+                                    <p className="text-gray-600 dark:text-gray-300 my-1">{notif.message}</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400 text-right">
+                                        Enviado em: {new Date(notif.timestamp).toLocaleString('pt-BR')}
+                                    </p>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                )}
+            </section>
+        </div>
+    );
+};
+
+
 // --- APLICAÇÃO PRINCIPAL (APÓS LOGIN) ---
 
 const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
@@ -2072,7 +2178,7 @@ export default function App() {
     const [auth, setAuth] = useState({ status: 'unauthenticated', user: null, error: null });
     const [librariesLoaded, setLibrariesLoaded] = useState(false);
     
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzlE3aa0ZU59vg_dx3T8HcGWK2yZIbte8MKBUo0mR3xSnkuLVuwSyc6JIPhwTEaEE-naw/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby5--HfZ840iF66l36ILdbrvBQ6DW74kAbPmPgterp2oqCN9qCSD59JoFvbmT_pvIbFtA/exec";
 
     const handleLogin = async (e) => {
         e.preventDefault();
@@ -2085,7 +2191,7 @@ export default function App() {
             email: email,
             password: password
         };
-         
+        
         try {
             const data = await fetchWithPost(SCRIPT_URL, payload);
             if (data.status === 'approved') {
