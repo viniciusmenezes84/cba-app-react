@@ -2207,7 +2207,7 @@ export default function App() {
     const [auth, setAuth] = useState({ status: 'unauthenticated', user: null, error: null });
     const [librariesLoaded, setLibrariesLoaded] = useState(false);
     
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby5--HfZ840iF66l36ILdbrvBQ6DW74kAbPmPgterp2oqCN9qCSD59JoFvbmT_pvIbFtA/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwZG1Nehr7egE-ZDUS_yqIUQYXsxtUJQFqdU85ADV-O2e7b63CmRrUgispvtM8JhrRVqg/exec";
 
     const handleLogin = async (e) => {
         e.preventDefault();
