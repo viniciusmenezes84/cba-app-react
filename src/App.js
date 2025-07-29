@@ -1858,7 +1858,7 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, ModalComponent, refreshKey 
 };
 
 // ==================================================================
-// --- COMPONENTE DE NOTIFICAÇÕES CORRIGIDO ---
+// --- COMPONENTE DE NOTIFICAÇÕES ATUALIZADO PARA DEEP LINKING ---
 // ==================================================================
 const NotificacoesTab = ({ scriptUrl }) => {
     const [notifications, setNotifications] = useState([]);
@@ -1866,15 +1866,14 @@ const NotificacoesTab = ({ scriptUrl }) => {
     const [error, setError] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitStatus, setSubmitStatus] = useState({ message: '', type: '' });
+    const [targetTab, setTargetTab] = useState('presenca'); // Estado para a aba de destino
 
     const fetchNotifications = useCallback(async () => {
         setIsLoading(true);
         setError(null);
         try {
-            // Ação correta para buscar o histórico
             const data = await fetchWithPost(scriptUrl, { action: 'getNotifications' });
             if (data.result === 'success') {
-                // Ordena as notificações da mais recente para a mais antiga
                 const sortedNotifications = data.data.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
                 setNotifications(sortedNotifications);
             } else {
@@ -1901,14 +1900,15 @@ const NotificacoesTab = ({ scriptUrl }) => {
             action: 'sendPushNotificationToAll',
             title: formData.get('title'),
             message: formData.get('message'),
+            targetTab: targetTab, // Envia a aba de destino para o servidor
         };
 
         try {
             const data = await fetchWithPost(scriptUrl, payload);
             if (data.result === 'success') {
                 setSubmitStatus({ message: data.message || 'Notificação enviada com sucesso!', type: 'success' });
-                e.target.reset(); // Limpa o formulário
-                fetchNotifications(); // Atualiza a lista de notificações
+                e.target.reset();
+                fetchNotifications();
             } else {
                 throw new Error(data.message || 'Ocorreu um erro desconhecido.');
             }
@@ -1923,10 +1923,28 @@ const NotificacoesTab = ({ scriptUrl }) => {
         <div className="space-y-8">
             <section className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg">
                 <h2 className="text-3xl font-bold text-gray-800 dark:text-gray-100 mb-4">Enviar Notificação Push</h2>
-                <p className="text-gray-600 dark:text-gray-400 mb-6">Envie uma mensagem para todos os jogadores que têm o aplicativo instalado.</p>
+                <p className="text-gray-600 dark:text-gray-400 mb-6">Envie uma mensagem e escolha para qual aba o aplicativo deve abrir.</p>
                 <form onSubmit={handleFormSubmit} className="space-y-4">
                     <input name="title" type="text" placeholder="Título da Notificação" className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md" required />
                     <textarea name="message" placeholder="Mensagem da Notificação" className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md" rows="4" required></textarea>
+                    
+                    {/* NOVO MENU PARA ESCOLHER A ABA DE DESTINO */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Abrir na aba:</label>
+                        <select 
+                            value={targetTab} 
+                            onChange={(e) => setTargetTab(e.target.value)}
+                            className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md"
+                        >
+                            <option value="presenca">Presença</option>
+                            <option value="jogos">Jogos</option>
+                            <option value="eventos">Eventos</option>
+                            <option value="financas">Finanças</option>
+                            <option value="sorteio">Sorteio</option>
+                            <option value="estatuto">Estatuto</option>
+                        </select>
+                    </div>
+
                     {submitStatus.message && (
                         <p className={`text-sm p-3 rounded-md ${submitStatus.type === 'error' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
                             {submitStatus.message}
@@ -1977,7 +1995,6 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
     const [refreshKey, setRefreshKey] = useState(0);
     
     const isAdmin = user && user.role && user.role.toUpperCase() === 'ADMIN';
-    // ATUALIZADO: Adicionada a nova aba de Notificações
     const TABS = useMemo(() => {
         const baseTabs = ['presenca', 'jogos', 'estatuto', 'financas', 'sorteio', 'eventos'];
         if (isAdmin) {
@@ -1990,6 +2007,20 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
     useEffect(() => {
         activeTabRef.current = activeTab;
     }, [activeTab]);
+
+    // ATUALIZADO: Expõe a função de navegação para o app nativo
+    useEffect(() => {
+        window.navigateToTab = (tabName) => {
+            console.log(`Recebido comando para navegar para a aba: ${tabName}`);
+            if (TABS.includes(tabName)) {
+                setActiveTab(tabName);
+            }
+        };
+        // Limpa a função quando o componente é desmontado
+        return () => {
+            delete window.navigateToTab;
+        };
+    }, [TABS]);
 
     const fetchInitialAppData = useCallback(async () => {
         setAppData(prev => ({ ...prev, isLoading: true }));
@@ -2007,7 +2038,6 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
 
     const handleRefresh = useCallback(() => {
         setIsRefreshing(true);
-        // Limpa o cache no servidor antes de buscar novos dados
         fetchWithPost(SCRIPT_URL, { action: 'clearCache' })
             .then(() => fetchInitialAppData())
             .finally(() => setIsRefreshing(false));
@@ -2094,7 +2124,6 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
                  return <SorteioTab allPlayersData={attendanceData?.players || []} scriptUrl={SCRIPT_URL} ModalComponent={Modal} />;
             case 'eventos':
                 return <EventosTab scriptUrl={SCRIPT_URL} currentUser={user} isAdmin={isAdmin} ModalComponent={Modal} refreshKey={refreshKey} />;
-            // ATUALIZADO: Adicionada a nova aba
             case 'notificacoes':
                 return <NotificacoesTab scriptUrl={SCRIPT_URL} />;
             default:
@@ -2178,7 +2207,7 @@ export default function App() {
     const [auth, setAuth] = useState({ status: 'unauthenticated', user: null, error: null });
     const [librariesLoaded, setLibrariesLoaded] = useState(false);
     
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwZG1Nehr7egE-ZDUS_yqIUQYXsxtUJQFqdU85ADV-O2e7b63CmRrUgispvtM8JhrRVqg/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby5--HfZ840iF66l36ILdbrvBQ6DW74kAbPmPgterp2oqCN9qCSD59JoFvbmT_pvIbFtA/exec";
 
     const handleLogin = async (e) => {
         e.preventDefault();
@@ -2272,4 +2301,4 @@ export default function App() {
             </div>
         </ThemeProvider>
     );
-} 
+}
