@@ -259,10 +259,57 @@ const ResetPasswordModal = ({ isOpen, onClose, user, scriptUrl }) => {
     );
 };
 
+// --- NOVO COMPONENTE PARA O CARTÃO DE DESTAQUE ---
+const ProximoJogoCard = ({ game, currentUser, onAttendanceUpdate }) => {
+    if (!game) {
+        return (
+            <section className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg text-center">
+                <h2 className="text-2xl font-bold mb-2 text-gray-800 dark:text-gray-100">Nenhum próximo jogo agendado</h2>
+                <p className="text-gray-500 dark:text-gray-400">Fique atento para novas marcações.</p>
+            </section>
+        );
+    }
+
+    const isConfirmed = game.confirmados.includes(currentUser.name);
+    const gameDate = new Date(game.data + 'T' + game.horario);
+
+    return (
+        <section className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg">
+            <h2 className="text-2xl font-bold mb-4 text-center text-gray-800 dark:text-gray-100">Próximo Jogo</h2>
+            <div className="text-center space-y-2">
+                <p className="text-xl font-semibold text-blue-600 dark:text-blue-400">
+                    📅 {gameDate.toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} - {game.horario}
+                </p>
+                <p className="text-lg text-gray-600 dark:text-gray-300">
+                    📍 {game.local}
+                </p>
+                <p className="text-lg font-medium text-gray-700 dark:text-gray-200">
+                    ✅ {game.confirmados.length} Jogadores Confirmados
+                </p>
+            </div>
+            <div className="mt-6">
+                {isConfirmed ? (
+                    <button
+                        onClick={() => onAttendanceUpdate(game.id, 'withdraw')}
+                        className="w-full font-bold py-3 px-4 rounded-lg transition-all bg-red-500 text-white hover:bg-red-600 shadow-md">
+                        Desistir do Jogo
+                    </button>
+                ) : (
+                    <button
+                        onClick={() => onAttendanceUpdate(game.id, 'confirm')}
+                        className="w-full font-bold py-3 px-4 rounded-lg transition-all bg-green-500 text-white hover:bg-green-600 shadow-md">
+                        Confirmar Presença
+                    </button>
+                )}
+            </div>
+        </section>
+    );
+};
+
 
 // --- COMPONENTES DAS ABAS ---
 
-const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }) => {
+const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent, nextGame, currentUser, onAttendanceUpdate }) => {
     const [filter, setFilter] = useState('all');
     const [report, setReport] = useState(null);
     const [monthRange, setMonthRange] = useState({ start: '', end: '' });
@@ -274,7 +321,6 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
         const monthSet = new Set();
         if(dates) {
             dates.forEach(d => {
-                // Dates are YYYY-MM-DD, so we take the first 7 characters for YYYY-MM
                 monthSet.add(d.substring(0, 7));
             });
         }
@@ -332,7 +378,6 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
 
     const getHallOfFameData = () => {
         if (!allPlayersData) return { onFire: null, mostPresent: null, leastPresent: [] };
-        // Filtra jogadores elegíveis para o Quadro de Honra
         const eligiblePlayers = allPlayersData.filter(p => p.isEligibleForHoF);
 
         if (eligiblePlayers.length === 0) return { onFire: null, mostPresent: null, leastPresent: [] };
@@ -448,6 +493,8 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
 
     return (
         <div className="space-y-8">
+            <ProximoJogoCard game={nextGame} currentUser={currentUser} onAttendanceUpdate={onAttendanceUpdate} />
+
             <section className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg">
                 <h2 className="text-2xl font-bold mb-4 text-center text-gray-800 dark:text-gray-100">🏆 Quadro de Honra 🏆</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -691,7 +738,6 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
                             </div>
                             <div className="flex flex-wrap gap-1">
                                 {(() => {
-                                    // Filtra as datas para exibir apenas a partir da data de entrada do jogador.
                                     const playerEntryDate = modalPlayer?.dataEntrada && modalPlayer.dataEntrada !== 'N/A' 
                                         ? new Date(modalPlayer.dataEntrada + 'T00:00:00') 
                                         : null;
@@ -707,7 +753,6 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent }
                                         else if (status.toUpperCase() === 'NÃO JUSTIFICOU') colorClass = 'bg-orange-500';
                                         else if (status.includes('❌')) colorClass = 'bg-red-500';
                                         
-                                        // Adiciona 'T00:00:00' para garantir que a data seja interpretada no fuso horário local e não UTC, evitando erros de um dia.
                                         const displayDate = new Date(date + 'T00:00:00');
                                         
                                         return <div key={date} className={`w-5 h-5 border border-gray-400 dark:border-gray-500 ${colorClass}`} title={`${displayDate.toLocaleDateString('pt-BR')}: ${status}`}></div>;
@@ -1399,29 +1444,22 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, ModalComponent, refreshKe
     try {
       const data = await fetchWithPost(scriptUrl, payload);
       if (data.result === 'success') {
-        // --- SEU CÓDIGO ATUAL ---
         setIsModalOpen(false);
         setEditingEvent(null);
         fetchEvents(); // Refresh
 
-        // --- BLOCO DE CÓDIGO CORRIGIDO ---
-        // Se a ação for criar um novo evento (e não editar), pergunta se o usuário quer salvar no calendário.
         if (payload.action === 'createEvent' && window.ReactNativeWebView) {
           const eventDetails = {
             title: payload.name,
-            // O campo 'date' do formulário já vem no formato datetime-local (YYYY-MM-DDTHH:mm)
             startDate: payload.date, 
-            // O app vai calcular a data final se não for enviada (duração de 2h)
             location: payload.location
           };
           
-          // Envia a mensagem para o App para mostrar o pop-up de confirmação
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'PROMPT_SAVE_TO_CALENDAR',
             payload: eventDetails
           }));
         }
-        // --- FIM DO BLOCO CORRIGIDO ---
 
       } else {
         throw new Error(data.message || 'Ocorreu um erro desconhecido.');
@@ -1662,29 +1700,22 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, ModalComponent, refreshKey 
     try {
       const data = await fetchWithPost(scriptUrl, payload);
       if (data.result === 'success') {
-        // --- SEU CÓDIGO ATUAL ---
         setIsModalOpen(false);
         setEditingGame(null);
         fetchGames();
 
-        // --- BLOCO DE CÓDIGO CORRIGIDO ---
-        // Se a ação for criar um novo jogo (e não editar), pergunta se o usuário quer salvar no calendário.
         if (payload.action === 'createGame' && window.ReactNativeWebView) {
           const eventDetails = {
             title: `Jogo CBA - ${payload.local}`,
-            // Combina data e hora para criar um formato ISO 8601 que o app entende
             startDate: `${payload.data}T${payload.horario}:00`,
-            // O app vai calcular a data final se não for enviada (duração de 2h)
             location: payload.local
           };
 
-          // Envia a mensagem para o App para mostrar o pop-up de confirmação
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'PROMPT_SAVE_TO_CALENDAR',
             payload: eventDetails
           }));
         }
-        // --- FIM DO BLOCO CORRIGIDO ---
 
       } else {
         throw new Error(data.message || 'Ocorreu um erro desconhecido.');
@@ -2008,15 +2039,12 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
         activeTabRef.current = activeTab;
     }, [activeTab]);
 
-    // ATUALIZADO: Expõe a função de navegação para o app nativo
     useEffect(() => {
         window.navigateToTab = (tabName) => {
-            console.log(`Recebido comando para navegar para a aba: ${tabName}`);
             if (TABS.includes(tabName)) {
                 setActiveTab(tabName);
             }
         };
-        // Limpa a função quando o componente é desmontado
         return () => {
             delete window.navigateToTab;
         };
@@ -2106,14 +2134,44 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
         }
     };
 
+    const handleAttendanceUpdate = async (gameId, actionType) => {
+        const payload = {
+            action: 'handleAttendanceUpdate',
+            itemId: gameId,
+            playerName: user.name,
+            actionType: actionType,
+            type: 'game'
+        };
+
+        try {
+            const data = await fetchWithPost(SCRIPT_URL, payload);
+            if (data.result !== 'success') {
+                throw new Error(data.message || 'Erro ao atualizar presença.');
+            }
+            handleRefresh();
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
     const renderTabContent = () => {
         const attendanceData = appData.data?.dashboard;
         const financeData = appData.data?.finance;
         const pixCode = appData.data?.pixCode;
+        const nextGame = appData.data?.nextGame;
 
         switch (activeTab) {
             case 'presenca':
-                return <PresencaTab allPlayersData={attendanceData?.players || []} dates={attendanceData?.dates || []} isLoading={appData.isLoading} error={appData.error} ModalComponent={Modal} />;
+                return <PresencaTab 
+                            allPlayersData={attendanceData?.players || []} 
+                            dates={attendanceData?.dates || []} 
+                            isLoading={appData.isLoading} 
+                            error={appData.error} 
+                            ModalComponent={Modal}
+                            nextGame={nextGame}
+                            currentUser={user}
+                            onAttendanceUpdate={handleAttendanceUpdate}
+                        />;
             case 'jogos':
                 return <JogosTab currentUser={user} isAdmin={isAdmin} scriptUrl={SCRIPT_URL} ModalComponent={Modal} refreshKey={refreshKey} />;
             case 'estatuto':
@@ -2207,7 +2265,7 @@ export default function App() {
     const [auth, setAuth] = useState({ status: 'unauthenticated', user: null, error: null });
     const [librariesLoaded, setLibrariesLoaded] = useState(false);
     
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwbBwlSE8T2t2zuTBEWQpoxUVHMMxori9KMZEDiS60KKszqGLTor-R8jQ8963NC4inG2A/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyRBMjXEXSjPLwL9s7YOVcfaTeJHZ5HSjZHSw8xEOfb1mHONs-nlWDW0C3BcC1-Ig4PLA/exec";
 
     const handleLogin = async (e) => {
         e.preventDefault();
@@ -2226,7 +2284,6 @@ export default function App() {
             if (data.status === 'approved') {
                 setAuth({ status: 'authenticated', user: { name: data.name, email: data.email, role: data.role, fotoUrl: data.fotoUrl }, error: null });
 
-                // ATUALIZADO: Agora enviamos uma mensagem para o app
                 if (window.ReactNativeWebView) {
                     console.log("Login bem-sucedido. A informar o aplicativo...");
                     window.ReactNativeWebView.postMessage(JSON.stringify({
