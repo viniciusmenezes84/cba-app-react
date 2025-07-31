@@ -292,7 +292,7 @@ const ProximoJogoCard = ({ game, currentUser, onAttendanceUpdate }) => {
                     <button
                         onClick={() => onAttendanceUpdate(game.id, 'withdraw')}
                         className="w-full font-bold py-3 px-4 rounded-lg transition-all bg-red-500 text-white hover:bg-red-600 shadow-md">
-                        Desistir da Partida
+                        Desistir da Convocatória
                     </button>
                 ) : (
                     <button
@@ -2265,7 +2265,7 @@ export default function App() {
     const [auth, setAuth] = useState({ status: 'unauthenticated', user: null, error: null });
     const [librariesLoaded, setLibrariesLoaded] = useState(false);
     
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwNXGI4Cc5qGBye-IfWW_qqUcJ04NfArulExPXE4jgX0SZhWAmeWCjjKg2U9FFfHkHE/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby5--HfZ840iF66l36ILdbrvBQ6DW74kAbPmPgterp2oqCN9qCSD59JoFvbmT_pvIbFtA/exec";
 
     const handleLogin = async (e) => {
         e.preventDefault();
