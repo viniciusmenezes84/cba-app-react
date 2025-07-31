@@ -278,7 +278,7 @@ const ProximoJogoCard = ({ game, currentUser, onAttendanceUpdate }) => {
             <h2 className="text-2xl font-bold mb-4 text-center text-gray-800 dark:text-gray-100">Próximo Jogo</h2>
             <div className="text-center space-y-2">
                 <p className="text-xl font-semibold text-blue-600 dark:text-blue-400">
-                    📅 {gameDate.toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} - {game.horario}
+                    📅 {gameDate.toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })} - {game.horario}
                 </p>
                 <p className="text-lg text-gray-600 dark:text-gray-300">
                     📍 {game.local}
@@ -292,7 +292,7 @@ const ProximoJogoCard = ({ game, currentUser, onAttendanceUpdate }) => {
                     <button
                         onClick={() => onAttendanceUpdate(game.id, 'withdraw')}
                         className="w-full font-bold py-3 px-4 rounded-lg transition-all bg-red-500 text-white hover:bg-red-600 shadow-md">
-                        Desistir do Jogo
+                        Desistir da Partida
                     </button>
                 ) : (
                     <button
@@ -1801,7 +1801,7 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, ModalComponent, refreshKey 
                                 )}
                                 <div className="flex justify-between items-start mb-2">
                                     <div>
-                                        <p className="text-xl font-bold text-gray-800 dark:text-white">{new Date(game.data).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</p>
+                                        <p className="text-xl font-bold text-gray-800 dark:text-white">{new Date(game.data + 'T00:00:00').toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</p>
                                         <p className="text-sm font-semibold text-gray-600 dark:text-gray-300">{game.horario} @ {game.local}</p>
                                     </div>
                                     <div className="text-right">
@@ -1869,7 +1869,7 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, ModalComponent, refreshKey 
                 title="Confirmar Exclusão"
             >
                 <div>
-                    <p>Tem a certeza que quer apagar o jogo do dia "<strong>{confirmDelete ? new Date(confirmDelete.data).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : ''}</strong>"? Esta ação não pode ser desfeita.</p>
+                    <p>Tem a certeza que quer apagar o jogo do dia "<strong>{confirmDelete ? new Date(confirmDelete.data + 'T00:00:00').toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : ''}</strong>"? Esta ação não pode ser desfeita.</p>
                     <div className="flex justify-end gap-4 mt-6">
                         <button onClick={() => setConfirmDelete(null)} className="py-2 px-4 bg-gray-200 text-gray-800 font-semibold rounded-lg hover:bg-gray-300">Cancelar</button>
                         <button onClick={() => handleDeleteGame(confirmDelete)} className="py-2 px-4 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700">Apagar</button>
@@ -2265,7 +2265,7 @@ export default function App() {
     const [auth, setAuth] = useState({ status: 'unauthenticated', user: null, error: null });
     const [librariesLoaded, setLibrariesLoaded] = useState(false);
     
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyRBMjXEXSjPLwL9s7YOVcfaTeJHZ5HSjZHSw8xEOfb1mHONs-nlWDW0C3BcC1-Ig4PLA/exec";
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwNXGI4Cc5qGBye-IfWW_qqUcJ04NfArulExPXE4jgX0SZhWAmeWCjjKg2U9FFfHkHE/exec";
 
     const handleLogin = async (e) => {
         e.preventDefault();
