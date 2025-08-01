@@ -1343,11 +1343,11 @@ const SorteioTab = ({ allPlayersData, scriptUrl, ModalComponent }) => {
                                 ))}
                             </ul>
                         </div>
-                        <div className="bg-red-700 p-6 rounded-lg">
-                             <h3 className="text-2xl font-bold text-white mb-4">Time Vermelho 🔴</h3>
+                        <div className="bg-green-700 p-6 rounded-lg">
+                             <h3 className="text-2xl font-bold text-white mb-4">Time Verde 🟢</h3>
                              <ul className="space-y-3">
                                 {teams.teamRed.map(player => (
-                                    <li key={player} className="text-white text-lg font-medium bg-red-600 p-2 rounded-md">{player}</li>
+                                    <li key={player} className="text-white text-lg font-medium bg-green-600 p-2 rounded-md">{player}</li>
                                 ))}
                             </ul>
                         </div>
