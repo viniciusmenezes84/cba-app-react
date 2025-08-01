@@ -2355,6 +2355,7 @@ export default function App() {
         <ThemeProvider>
             <div className="bg-gray-100 dark:bg-gray-900 min-h-screen transition-colors duration-300">
                 {renderContent()}
+                <Analytics />
             </div>
         </ThemeProvider>
     );
