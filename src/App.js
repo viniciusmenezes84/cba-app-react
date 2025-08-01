@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo, createContext, useContext } from 'react';
-
+import { Analytics } from '@vercel/analytics/react';
 // --- CONTEXTO DE TEMA (Light/Dark Mode) ---
 const ThemeContext = createContext();
 
