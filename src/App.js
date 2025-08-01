@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo, createContext, useContext } from 'react';
-import { Analytics } from '@vercel/analytics/react';
+
 // --- CONTEXTO DE TEMA (Light/Dark Mode) ---
 const ThemeContext = createContext();
 
@@ -153,7 +153,7 @@ const LoginScreen = ({ onLogin, isLoading, error }) => (
     >
         <div className="absolute inset-0 bg-black bg-opacity-60"></div>
         <div className="relative z-10 p-8 bg-gray-900/70 backdrop-blur-sm border border-gray-700 rounded-xl shadow-2xl text-center w-full max-w-sm">
-            <img src="https://i.ibb.co/pGnycLc/ICONE-CBA.jpg" alt="Logo CBA" className="h-24 w-24 rounded-full shadow-lg mx-auto mb-4" />
+            <img src="https://lh3.googleusercontent.com/d/131DvcfgiRLLp9irVnVY8m9qNuM-0y7f8" alt="Logo CBA" className="h-24 w-24 rounded-full shadow-lg mx-auto mb-4" />
             <h1 className="text-3xl font-bold text-white mb-2">Portal do CBA</h1>
             <p className="text-gray-300 mb-6">Por favor, entre para continuar.</p>
             {error && <p className="bg-red-500/30 text-red-200 p-3 rounded-md mb-4">{error}</p>}
@@ -1653,7 +1653,7 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, ModalComponent, refreshKey 
     const [editingGame, setEditingGame] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [modalMessage, setModalMessage] = useState('');
-    const [infoModal, setInfoModal] = useState({ isOpen: false, title: '', message: '' });
+    const [infoModal, setInfoModal] = useState({ isOpen: false, title: '', content: null });
     const [confirmDelete, setConfirmDelete] = useState(null);
 
     const fetchGames = useCallback(async () => {
@@ -1685,47 +1685,72 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, ModalComponent, refreshKey 
     };
 
     const handleFormSubmit = async (e) => {
-      e.preventDefault();
-    setIsSubmitting(true);
-    setModalMessage('');
-    const formData = new FormData(e.target);
-    const payload = {
-      action: editingGame ? 'updateGame' : 'createGame',
-      id: editingGame ? editingGame.id : undefined,
-      data: formData.get('data'),
-      horario: formData.get('horario'),
-      local: formData.get('local'),
-    };
+        e.preventDefault();
+        setIsSubmitting(true);
+        setModalMessage('');
+        const formData = new FormData(e.target);
+        const payload = {
+            action: editingGame ? 'updateGame' : 'createGame',
+            id: editingGame ? editingGame.id : undefined,
+            data: formData.get('data'),
+            horario: formData.get('horario'),
+            local: formData.get('local'),
+        };
 
-    try {
-      const data = await fetchWithPost(scriptUrl, payload);
-      if (data.result === 'success') {
-        setIsModalOpen(false);
-        setEditingGame(null);
-        fetchGames();
+        try {
+            const data = await fetchWithPost(scriptUrl, payload);
+            if (data.result === 'success') {
+                setIsModalOpen(false);
+                setEditingGame(null);
+                fetchGames();
 
-        if (payload.action === 'createGame' && window.ReactNativeWebView) {
-          const eventDetails = {
-            title: `Jogo CBA - ${payload.local}`,
-            startDate: `${payload.data}T${payload.horario}:00`,
-            location: payload.local
-          };
+                if (payload.action === 'createGame') {
+                    const gameDate = new Date(payload.data + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
+                    const message = `Novo jogo do CBA marcado! \u{1F3C0}\n\n\u{1F4C5} Data: ${gameDate}\n\u{23F0} Horário: ${payload.horario}\n\u{1F4CD} Local: ${payload.local}\n\nConfirme sua presença no portal!`;
+                    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
 
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'PROMPT_SAVE_TO_CALENDAR',
-            payload: eventDetails
-          }));
+                    setInfoModal({
+                        isOpen: true,
+                        title: 'Jogo Criado com Sucesso!',
+                        content: (
+                            <div>
+                                <p className="mb-4">O novo jogo foi adicionado. Você pode compartilhar a convocação no WhatsApp.</p>
+                                <a
+                                    href={whatsappUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center justify-center w-full bg-green-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-600 transition-all shadow-md"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2" fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.894 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.886-.001 2.267.655 4.398 1.908 6.161l.217.324-1.251 4.565 4.654-1.225.308.214z"/></svg>
+                                    Compartilhar no WhatsApp
+                                </a>
+                            </div>
+                        )
+                    });
+                }
+
+                if (payload.action === 'createGame' && window.ReactNativeWebView) {
+                    const eventDetails = {
+                        title: `Jogo CBA - ${payload.local}`,
+                        startDate: `${payload.data}T${payload.horario}:00`,
+                        location: payload.local
+                    };
+
+                    window.ReactNativeWebView.postMessage(JSON.stringify({
+                        type: 'PROMPT_SAVE_TO_CALENDAR',
+                        payload: eventDetails
+                    }));
+                }
+
+            } else {
+                throw new Error(data.message || 'Ocorreu um erro desconhecido.');
+            }
+        } catch (error) {
+            setModalMessage(error.message);
+        } finally {
+            setIsSubmitting(false);
         }
-
-      } else {
-        throw new Error(data.message || 'Ocorreu um erro desconhecido.');
-      }
-    } catch (error) {
-      setModalMessage(error.message);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+    };
  
 
     async function handleAttendance(gameId, actionType) {
@@ -1744,7 +1769,7 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, ModalComponent, refreshKey 
             }
             fetchGames(); // Re-fetch to get the latest state
         } catch (err) {
-            setInfoModal({ isOpen: true, title: "Erro", message: err.message });
+            setInfoModal({ isOpen: true, title: "Erro", content: <p>{err.message}</p> });
         }
     }
     
@@ -1761,7 +1786,7 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, ModalComponent, refreshKey 
                 throw new Error(data.message || "Não foi possível apagar o jogo.");
             }
         } catch (err) {
-            setInfoModal({ isOpen: true, title: 'Erro ao Apagar', message: err.message });
+            setInfoModal({ isOpen: true, title: 'Erro ao Apagar', content: <p>{err.message}</p> });
         } finally {
             setIsLoading(false);
         }
@@ -1879,10 +1904,10 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, ModalComponent, refreshKey 
 
             <ModalComponent 
                 isOpen={infoModal.isOpen} 
-                onClose={() => setInfoModal({ isOpen: false, title: '', message: '' })} 
+                onClose={() => setInfoModal({ isOpen: false, title: '', content: null })} 
                 title={infoModal.title}
             >
-                <p>{infoModal.message}</p>
+                {infoModal.content}
             </ModalComponent>
         </div>
     );
@@ -2355,7 +2380,6 @@ export default function App() {
         <ThemeProvider>
             <div className="bg-gray-100 dark:bg-gray-900 min-h-screen transition-colors duration-300">
                 {renderContent()}
-                <Analytics />
             </div>
         </ThemeProvider>
     );
