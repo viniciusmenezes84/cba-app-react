@@ -1183,7 +1183,7 @@ const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin, scri
                         <div className="relative">
                             <input type="text" readOnly value={pixCode} className="w-full p-2 pr-10 text-xs bg-gray-100 dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md" />
                             <button onClick={handleCopyToClipboard} className="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500 hover:text-blue-600">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M7 9a2 2 0 012-2h6a2 2 0 012 2v6a2 2 0 01-2 2H9a2 2 0 01-2-2V9z" /><path d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2V5a2 2 0 00-2-2H4z" /></svg>
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M7 9a2 2 0 012-2h6a2 2 0 012 2v6a2 2 0 01-2-2H9a2 2 0 01-2-2V9z" /><path d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2V5a2 2 0 00-2-2H4z" /></svg>
                             </button>
                         </div>
                         {copySuccess && <p className="text-green-600 text-xs mt-1 text-center">{copySuccess}</p>}
@@ -1224,10 +1224,17 @@ const SorteioTab = ({ allPlayersData, scriptUrl, ModalComponent }) => {
     const [teams, setTeams] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
     const [modalInfo, setModalInfo] = useState({ isOpen: false, title: '', message: '' });
+    const [searchQuery, setSearchQuery] = useState('');
 
     const sortedPlayers = useMemo(() => 
         [...allPlayersData].sort((a, b) => a.name.localeCompare(b.name)),
     [allPlayersData]);
+
+    const filteredPlayers = useMemo(() => {
+        return sortedPlayers.filter(player =>
+            player.name.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+    }, [sortedPlayers, searchQuery]);
 
     const handlePlayerToggle = (playerName) => {
         setSelectedPlayers(prev =>
@@ -1303,8 +1310,22 @@ const SorteioTab = ({ allPlayersData, scriptUrl, ModalComponent }) => {
                 <section className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg">
                     <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-4">Seleção de Jogadores</h2>
                     <p className="text-gray-600 dark:text-gray-400 mb-6">Selecione os jogadores presentes para o sorteio de hoje. Os 10 primeiros selecionados participarão do sorteio.</p>
+                    
+                    <div className="mb-6 relative">
+                        <input
+                            type="text"
+                            placeholder="Buscar jogador..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full p-3 pl-10 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md"
+                        />
+                        <svg className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                    </div>
+
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                        {sortedPlayers.map(player => (
+                        {filteredPlayers.map(player => (
                             <button
                                 key={player.name}
                                 onClick={() => handlePlayerToggle(player.name)}
@@ -1751,7 +1772,7 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, ModalComponent, refreshKey 
             setIsSubmitting(false);
         }
     };
- 
+
 
     async function handleAttendance(gameId, actionType) {
         const payload = {
