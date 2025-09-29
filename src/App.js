@@ -1225,6 +1225,10 @@ const SorteioTab = ({ allPlayersData, scriptUrl, ModalComponent }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [modalInfo, setModalInfo] = useState({ isOpen: false, title: '', message: '' });
     const [searchQuery, setSearchQuery] = useState('');
+    // Novos estados para o sorteio avulso
+    const [numToDraw, setNumToDraw] = useState(1);
+    const [drawnPlayers, setDrawnPlayers] = useState([]);
+    const [drawMode, setDrawMode] = useState('selection'); // 'selection', 'teams', 'custom'
 
     const sortedPlayers = useMemo(() => 
         [...allPlayersData].sort((a, b) => a.name.localeCompare(b.name)),
@@ -1261,6 +1265,24 @@ const SorteioTab = ({ allPlayersData, scriptUrl, ModalComponent }) => {
         const teamRed = playersToDraw.slice(5, 10);
 
         setTeams({ teamBlack, teamRed });
+        setDrawMode('teams');
+    };
+    
+    // Nova função para o sorteio avulso
+    const handleCustomDraw = () => {
+        const num = Number(numToDraw);
+        if (isNaN(num) || num < 1 || num > 5) {
+            setModalInfo({ isOpen: true, title: 'Número Inválido', message: 'Por favor, escolha um número entre 1 e 5.' });
+            return;
+        }
+        if (selectedPlayers.length < num) {
+            setModalInfo({ isOpen: true, title: 'Jogadores Insuficientes', message: `É necessário selecionar pelo menos ${num} jogador(es) para este sorteio.` });
+            return;
+        }
+
+        const shuffled = [...selectedPlayers].sort(() => 0.5 - Math.random());
+        setDrawnPlayers(shuffled.slice(0, num));
+        setDrawMode('custom');
     };
 
     const handleSaveDraw = async () => {
@@ -1294,6 +1316,9 @@ const SorteioTab = ({ allPlayersData, scriptUrl, ModalComponent }) => {
     const handleReset = () => {
         setSelectedPlayers([]);
         setTeams(null);
+        setDrawnPlayers([]);
+        setDrawMode('selection');
+        setNumToDraw(1);
     };
 
     return (
@@ -1306,10 +1331,10 @@ const SorteioTab = ({ allPlayersData, scriptUrl, ModalComponent }) => {
                 <p>{modalInfo.message}</p>
             </ModalComponent>
 
-            {!teams && (
+            {drawMode === 'selection' && (
                 <section className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg">
                     <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-4">Seleção de Jogadores</h2>
-                    <p className="text-gray-600 dark:text-gray-400 mb-6">Selecione os jogadores presentes para o sorteio de hoje. Os 10 primeiros selecionados participarão do sorteio.</p>
+                    <p className="text-gray-600 dark:text-gray-400 mb-6">Selecione os jogadores presentes para o sorteio.</p>
                     
                     <div className="mb-6 relative">
                         <input
@@ -1339,20 +1364,55 @@ const SorteioTab = ({ allPlayersData, scriptUrl, ModalComponent }) => {
                             </button>
                         ))}
                     </div>
-                    <div className="mt-8 flex flex-col sm:flex-row justify-center items-center gap-4">
-                         <p className="font-semibold text-lg">{selectedPlayers.length} / {allPlayersData.length} selecionados</p>
-                        <button
-                            onClick={handleDrawTeams}
-                            disabled={selectedPlayers.length < 10}
-                            className="w-full sm:w-auto bg-green-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all shadow-lg"
-                        >
-                            Sortear Times
-                        </button>
+                    
+                    <div className="mt-8 border-t border-gray-200 dark:border-gray-700 pt-8">
+                         <div className="text-center">
+                             <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100 mb-2">Sorteio de Times (5x5)</h3>
+                            <p className="text-gray-600 dark:text-gray-400 mb-4">Sorteia 2 times de 5 jogadores entre os selecionados. Requer no mínimo 10 jogadores.</p>
+                             <div className="flex flex-col sm:flex-row justify-center items-center gap-4">
+                                <p className="font-semibold text-lg">{selectedPlayers.length} / {allPlayersData.length} selecionados</p>
+                                <button
+                                    onClick={handleDrawTeams}
+                                    disabled={selectedPlayers.length < 10}
+                                    className="w-full sm:w-auto bg-green-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all shadow-lg"
+                                >
+                                    Sortear Times 5x5
+                                </button>
+                             </div>
+                        </div>
+
+                        <div className="mt-10 border-t border-gray-200 dark:border-gray-700 pt-8 text-center">
+                            <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100 mb-2">Sorteio Avulso</h3>
+                            <p className="text-gray-600 dark:text-gray-400 mb-4">Sorteia um número específico de jogadores da lista de selecionados.</p>
+                            <div className="flex flex-col sm:flex-row justify-center items-center gap-4">
+                                <label htmlFor="num-to-draw" className="font-semibold">Sortear:</label>
+                                <select 
+                                    id="num-to-draw"
+                                    value={numToDraw}
+                                    onChange={(e) => setNumToDraw(Number(e.target.value))}
+                                    className="p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md shadow-sm"
+                                >
+                                    <option value="1">1</option>
+                                    <option value="2">2</option>
+                                    <option value="3">3</option>
+                                    <option value="4">4</option>
+                                    <option value="5">5</option>
+                                </select>
+                                <span className="font-semibold">jogador(es)</span>
+                                <button
+                                    onClick={handleCustomDraw}
+                                    disabled={selectedPlayers.length === 0}
+                                    className="w-full sm:w-auto bg-purple-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all shadow-lg"
+                                >
+                                    Sortear
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </section>
             )}
 
-            {teams && (
+            {drawMode === 'teams' && teams && (
                 <section className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg text-center animate-fade-in-up">
                     <h2 className="text-3xl font-bold text-gray-800 dark:text-gray-100 mb-6">Times Sorteados!</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -1389,6 +1449,27 @@ const SorteioTab = ({ allPlayersData, scriptUrl, ModalComponent }) => {
                             className="w-full sm:w-auto bg-gray-500 text-white font-bold py-3 px-6 rounded-lg hover:bg-gray-600 transition-all shadow-lg"
                         >
                             Sortear Novamente
+                        </button>
+                    </div>
+                </section>
+            )}
+
+            {drawMode === 'custom' && (
+                <section className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg text-center animate-fade-in-up">
+                    <h2 className="text-3xl font-bold text-gray-800 dark:text-gray-100 mb-6">Jogador(es) Sorteado(s)</h2>
+                    <div className="bg-gray-100 dark:bg-gray-800 p-6 rounded-lg max-w-md mx-auto">
+                        <ul className="space-y-3">
+                            {drawnPlayers.map(player => (
+                                <li key={player} className="text-gray-800 dark:text-white text-xl font-medium bg-gray-200 dark:bg-gray-700 p-3 rounded-md">{player}</li>
+                            ))}
+                        </ul>
+                    </div>
+                    <div className="mt-8">
+                        <button
+                            onClick={handleReset}
+                            className="w-full sm:w-auto bg-gray-500 text-white font-bold py-3 px-6 rounded-lg hover:bg-gray-600 transition-all shadow-lg"
+                        >
+                            Voltar e Sortear Novamente
                         </button>
                     </div>
                 </section>
@@ -2405,3 +2486,4 @@ export default function App() {
         </ThemeProvider>
     );
 } 
+
