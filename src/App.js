@@ -68,6 +68,43 @@ const fetchWithPost = async (baseUrl, params) => {
     }
 };
 
+// --- CUSTOM HOOK: useDataQuery (Simulando o TanStack Query) ---
+// Em um projeto real, você substituiria isso por: import { useQuery } from '@tanstack/react-query'
+const useDataQuery = (key, queryFn, dependencies = []) => {
+    const [data, setData] = useState(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    // Use useRef para manter a referência da função sem disparar o useEffect
+    const queryFnRef = useRef(queryFn);
+
+    useEffect(() => {
+        queryFnRef.current = queryFn;
+    }, [queryFn]);
+
+    const fetchData = useCallback(async () => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            // Usa a referência atual da função
+            const result = await queryFnRef.current();
+            setData(result);
+        } catch (err) {
+            setError(err.message || "Erro desconhecido ao buscar dados.");
+        } finally {
+            setIsLoading(false);
+        }
+    }, []); // Dependências vazias tornam essa função estável
+
+    // Efeito para buscar dados apenas quando as dependências explícitas mudam ou na montagem
+    useEffect(() => {
+        fetchData();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [fetchData, ...dependencies]);
+
+    return { data, isLoading, error, refetch: fetchData };
+};
+
 
 // --- COMPONENTES AUXILIARES DE UI ---
 const Loader = ({ message }) => (
@@ -259,7 +296,6 @@ const ResetPasswordModal = ({ isOpen, onClose, user, scriptUrl }) => {
     );
 };
 
-// --- NOVO COMPONENTE PARA O CARTÃO DE DESTAQUE ---
 const ProximoJogoCard = ({ game, currentUser, onAttendanceUpdate }) => {
     if (!game) {
         return (
@@ -309,23 +345,394 @@ const ProximoJogoCard = ({ game, currentUser, onAttendanceUpdate }) => {
 
 // --- COMPONENTES DAS ABAS ---
 
-const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent, nextGame, currentUser, onAttendanceUpdate }) => {
-    const [filter, setFilter] = useState('all');
+// --- NOVA ABA DE RELATÓRIOS ---
+const RelatoriosTab = ({ allPlayersData, dates, financeData, ModalComponent }) => {
     const [report, setReport] = useState(null);
     const [monthRange, setMonthRange] = useState({ start: '', end: '' });
-    const [modalPlayer, setModalPlayer] = useState(null);
-    const [selectedPerformancePlayer, setSelectedPerformancePlayer] = useState('');
+    const [selectedPlayer, setSelectedPlayer] = useState('todos');
+    
+    // NOVO: Estado para o Ano
+    const [selectedYear, setSelectedYear] = useState('2025');
+    
     const [modalInfo, setModalInfo] = useState({ isOpen: false, title: '', message: '' });
 
+    // ATUALIZADO: Filtra meses baseados no Ano Selecionado
     const availableMonths = useMemo(() => {
         const monthSet = new Set();
         if(dates) {
             dates.forEach(d => {
-                monthSet.add(d.substring(0, 7));
+                // Verifica se a data começa com o ano selecionado (ex: "2025-...")
+                if (d.startsWith(selectedYear)) {
+                    monthSet.add(d.substring(0, 7));
+                }
             });
         }
         return Array.from(monthSet).sort();
-    }, [dates]);
+    }, [dates, selectedYear]);
+
+    // Ordenar lista de jogadores alfabeticamente para o dropdown
+    const sortedPlayersList = useMemo(() => {
+        return [...allPlayersData].sort((a, b) => a.name.localeCompare(b.name));
+    }, [allPlayersData]);
+
+    useEffect(() => {
+        // Reinicia a seleção de meses quando o ano ou os meses disponíveis mudam
+        if (availableMonths.length > 0) {
+            setMonthRange({ start: availableMonths[0], end: availableMonths[availableMonths.length - 1] });
+        } else {
+            setMonthRange({ start: '', end: '' });
+        }
+    }, [availableMonths, selectedYear]);
+
+    const financeStats = useMemo(() => {
+        if (!financeData || !financeData.paymentStatus) return null;
+
+        let paid = 0;
+        let exempt = 0;
+        let overdue = 0;
+        let pending = 0;
+
+        const monthMap = {
+            "janeiro": 0, "fevereiro": 1, "março": 2, "abril": 3, "maio": 4, "junho": 5,
+            "julho": 6, "agosto": 7, "setembro": 8, "outubro": 9, "novembro": 10, "dezembro": 11
+        };
+        const now = new Date();
+        const currentMonthIndex = now.getMonth();
+        // Nota: A lógica financeira atual assume o ano corrente dos dados carregados. 
+        // Para suporte multi-anual completo no financeiro, o backend precisaria enviar o ano.
+
+        const playersToConsider = selectedPlayer === 'todos' 
+            ? financeData.paymentStatus 
+            : financeData.paymentStatus.filter(p => p.player === selectedPlayer);
+
+        playersToConsider.forEach(player => {
+            financeData.paymentHeaders.forEach(month => {
+                const status = String(player.statuses[month] || '').trim();
+                const monthIndex = monthMap[month.toLowerCase()];
+
+                if (status === '20') {
+                    paid++;
+                } else if (status.toLowerCase() === 'isento') {
+                    exempt++;
+                } else {
+                    if (monthIndex < currentMonthIndex) {
+                        overdue++;
+                    } else {
+                        pending++;
+                    }
+                }
+            });
+        });
+
+        return { paid, exempt, overdue, pending };
+    }, [financeData, selectedPlayer]);
+
+    const handleGenerateReport = () => {
+        if (!monthRange.start || !monthRange.end) {
+            setModalInfo({ isOpen: true, title: "Período Inválido", message: `Não há dados disponíveis para o período selecionado em ${selectedYear}.` });
+            return;
+        }
+
+        const [startYear, startMonth] = monthRange.start.split('-').map(Number);
+        const [endYear, endMonth] = monthRange.end.split('-').map(Number);
+
+        if (startYear > endYear || (startYear === endYear && startMonth > endMonth)) {
+            setModalInfo({ isOpen: true, title: "Período Inválido", message: "O mês de início não pode ser posterior ao mês de fim." });
+            return;
+        }
+
+        const periodDates = dates.filter(d => {
+            const date = new Date(d);
+            const startDate = new Date(startYear, startMonth - 1, 1);
+            const endDate = new Date(endYear, endMonth, 0); 
+            return date >= startDate && date <= endDate;
+        });
+
+        let reportData = allPlayersData.map(player => {
+            const presences = periodDates.reduce((count, date) => count + (player.attendance[date]?.includes('✅') ? 1 : 0), 0);
+            const percentage = periodDates.length > 0 ? (presences / periodDates.length) * 100 : 0;
+            return {
+                name: player.name,
+                presences,
+                totalGames: periodDates.length,
+                percentage
+            };
+        }).sort((a, b) => b.percentage - a.percentage);
+
+        if (selectedPlayer !== 'todos') {
+            reportData = reportData.filter(p => p.name === selectedPlayer);
+        }
+
+        const formatMonth = (monthStr) => {
+            const [year, month] = monthStr.split('-');
+            return new Date(year, month - 1).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+        }
+
+        setReport({
+            title: `Relatório de Performance (${formatMonth(monthRange.start)} a ${formatMonth(monthRange.end)})`,
+            period: `${formatMonth(monthRange.start)} - ${formatMonth(monthRange.end)}`,
+            data: reportData,
+            totalPeriodGames: periodDates.length,
+            isIndividual: selectedPlayer !== 'todos'
+        });
+    };
+
+    const handleShareWhatsapp = () => {
+        if (!report) return;
+        let text = `*${report.title}*\n`;
+        text += `Total de Jogos no Período: ${report.totalPeriodGames}\n\n`;
+        
+        report.data.forEach((p, index) => {
+            const position = report.isIndividual ? '' : `${index + 1}º `;
+            text += `${position}${p.name}: ${p.presences} presenças (${p.percentage.toFixed(0)}%)\n`;
+        });
+        
+        const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+        window.open(url, '_blank');
+    };
+
+    const reportChartConfig = useMemo(() => {
+        if (!report) return {};
+        const labels = report.data.slice(0, 10).map(p => p.name); 
+        const dataPoints = report.data.slice(0, 10).map(p => p.percentage);
+        
+        return {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Aproveitamento (%)',
+                    data: dataPoints,
+                    backgroundColor: dataPoints.map(val => val >= 50 ? '#22c55e' : '#ef4444'),
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: { x: { max: 100 } }
+            }
+        };
+    }, [report]);
+
+    const financialChartConfig = useMemo(() => {
+        if (!financeStats) return {};
+        
+        return {
+            type: 'doughnut',
+            data: {
+                labels: ['Pago', 'Isento', 'Atrasado', 'A Vencer'],
+                datasets: [{
+                    data: [financeStats.paid, financeStats.exempt, financeStats.overdue, financeStats.pending],
+                    backgroundColor: ['#22c55e', '#3b82f6', '#ef4444', '#eab308'],
+                    hoverOffset: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                    }
+                }
+            }
+        };
+    }, [financeStats]);
+
+    return (
+        <div className="space-y-8">
+            <section className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg">
+                <h2 className="text-2xl font-bold mb-4 text-gray-800 dark:text-gray-100 flex items-center">
+                    <span className="mr-2">📊</span> Gerador de Relatórios
+                </h2>
+                {/* Alterado grid-cols-4 para grid-cols-5 para acomodar o Ano */}
+                <div className="grid grid-cols-1 md:grid-cols-5 items-end gap-4">
+                    {/* NOVO CAMPO: SELETOR DE ANO */}
+                    <div>
+                        <label htmlFor="year-selector" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Ano:</label>
+                        <select 
+                            id="year-selector" 
+                            value={selectedYear} 
+                            onChange={e => setSelectedYear(e.target.value)} 
+                            className="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md shadow-sm font-bold"
+                        >
+                            <option value="2025">2025</option>
+                            <option value="2026">2026</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label htmlFor="month-selector-start" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mês de Início:</label>
+                        <select 
+                            id="month-selector-start" 
+                            value={monthRange.start} 
+                            onChange={e => setMonthRange({ ...monthRange, start: e.target.value })} 
+                            className="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md shadow-sm disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:text-gray-400"
+                            disabled={availableMonths.length === 0}
+                        >
+                            {availableMonths.length === 0 && <option>Sem dados</option>}
+                            {availableMonths.map(m => <option key={m} value={m}>{new Date(m + '-02').toLocaleString('pt-BR', {month: 'long'})}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label htmlFor="month-selector-end" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mês de Fim:</label>
+                        <select 
+                            id="month-selector-end" 
+                            value={monthRange.end} 
+                            onChange={e => setMonthRange({ ...monthRange, end: e.target.value })} 
+                            className="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md shadow-sm disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:text-gray-400"
+                            disabled={availableMonths.length === 0}
+                        >
+                            {availableMonths.length === 0 && <option>Sem dados</option>}
+                            {availableMonths.map(m => <option key={m} value={m}>{new Date(m + '-02').toLocaleString('pt-BR', {month: 'long'})}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <label htmlFor="player-selector" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Filtrar Jogador:</label>
+                        <select 
+                            id="player-selector" 
+                            value={selectedPlayer} 
+                            onChange={e => setSelectedPlayer(e.target.value)} 
+                            className="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md shadow-sm"
+                        >
+                            <option value="todos">Todos os Jogadores</option>
+                            {sortedPlayersList.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
+                        </select>
+                    </div>
+                    <div><button onClick={handleGenerateReport} className="w-full bg-indigo-600 text-white font-bold py-2 px-4 rounded-md hover:bg-indigo-700 transition-all shadow-md">Gerar Relatório</button></div>
+                </div>
+                
+                {report && (
+                    <div className="mt-8 animate-fade-in-up space-y-8">
+                        
+                        {/* CABEÇALHO DO RELATÓRIO */}
+                        <div className="flex flex-col sm:flex-row justify-between items-center border-b border-gray-200 dark:border-gray-700 pb-4">
+                            <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">{report.title}</h3>
+                            <div className="flex items-center mt-2 sm:mt-0">
+                                <button onClick={handleShareWhatsapp} className="flex items-center bg-green-600 text-white text-sm font-bold py-2 px-4 rounded-lg hover:bg-green-700 transition-colors shadow-sm">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" /></svg>
+                                    Compartilhar no WhatsApp
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            
+                            {/* COLUNA DA ESQUERDA: RELATÓRIO DE PRESENÇA */}
+                            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md border border-gray-100 dark:border-gray-700">
+                                <h4 className="text-lg font-bold mb-4 text-gray-800 dark:text-white flex items-center border-b pb-2 dark:border-gray-600">
+                                    <span className="mr-2">📋</span> Resumo de Presença
+                                </h4>
+                                
+                                {report.isIndividual ? (
+                                    <div className="text-center">
+                                        <h4 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">{report.data[0].name}</h4>
+                                        <div className="grid grid-cols-2 gap-4 mt-4 mb-4">
+                                            <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-md">
+                                                <p className="text-sm text-gray-500 dark:text-gray-400">Total de Jogos</p>
+                                                <p className="text-xl font-bold text-gray-800 dark:text-gray-100">{report.totalPeriodGames}</p>
+                                            </div>
+                                            <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-md">
+                                                <p className="text-sm text-gray-500 dark:text-gray-400">Presenças</p>
+                                                <p className="text-xl font-bold text-blue-600 dark:text-blue-400">{report.data[0].presences}</p>
+                                            </div>
+                                        </div>
+                                        <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-md">
+                                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Aproveitamento</p>
+                                            <div className="flex items-center justify-center gap-3">
+                                                <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-4 max-w-[150px]">
+                                                    <div className={`h-4 rounded-full ${report.data[0].percentage >= 50 ? 'bg-green-500' : 'bg-red-500'}`} style={{ width: `${report.data[0].percentage}%` }}></div>
+                                                </div>
+                                                <span className={`text-xl font-bold ${report.data[0].percentage >= 50 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>{report.data[0].percentage.toFixed(1)}%</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+                                        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                            <thead className="bg-gray-50 dark:bg-gray-700 sticky top-0">
+                                                <tr>
+                                                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Nome</th>
+                                                    <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Jogos</th>
+                                                    <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">%</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                                {report.data.map((player) => (
+                                                    <tr key={player.name} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                                        <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{player.name}</td>
+                                                        <td className="px-3 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300 text-center">{player.presences}/{report.totalPeriodGames}</td>
+                                                        <td className="px-3 py-2 whitespace-nowrap text-center">
+                                                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${player.percentage >= 50 ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'}`}>
+                                                                {player.percentage.toFixed(0)}%
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* COLUNA DA DIREITA: RELATÓRIO FINANCEIRO */}
+                            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md border border-gray-100 dark:border-gray-700 flex flex-col">
+                                <h4 className="text-lg font-bold mb-4 text-gray-800 dark:text-white flex items-center border-b pb-2 dark:border-gray-600">
+                                    <span className="mr-2">💰</span> Situação Financeira (Anual)
+                                </h4>
+                                
+                                {financeStats ? (
+                                    <div className="flex flex-col items-center justify-center flex-grow">
+                                        <div className="w-full max-w-xs h-64">
+                                            <ChartComponent chartConfig={financialChartConfig} />
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4 w-full mt-6">
+                                            <div className="text-center p-2 rounded bg-green-50 dark:bg-green-900/20">
+                                                <p className="text-xs text-gray-500 dark:text-gray-400 uppercase">Pagos</p>
+                                                <p className="text-lg font-bold text-green-600 dark:text-green-400">{financeStats.paid}</p>
+                                            </div>
+                                            <div className="text-center p-2 rounded bg-red-50 dark:bg-red-900/20">
+                                                <p className="text-xs text-gray-500 dark:text-gray-400 uppercase">Atrasados</p>
+                                                <p className="text-lg font-bold text-red-600 dark:text-red-400">{financeStats.overdue}</p>
+                                            </div>
+                                            <div className="text-center p-2 rounded bg-blue-50 dark:bg-blue-900/20">
+                                                <p className="text-xs text-gray-500 dark:text-gray-400 uppercase">Isentos</p>
+                                                <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{financeStats.exempt}</p>
+                                            </div>
+                                            <div className="text-center p-2 rounded bg-yellow-50 dark:bg-yellow-900/20">
+                                                <p className="text-xs text-gray-500 dark:text-gray-400 uppercase">A Vencer</p>
+                                                <p className="text-lg font-bold text-yellow-600 dark:text-yellow-400">{financeStats.pending}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <p className="text-center text-gray-500 py-10">Dados financeiros não disponíveis.</p>
+                                )}
+                            </div>
+                        </div>
+                        
+                        <div className="mt-6 text-right">
+                            <button onClick={() => setReport(null)} className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 text-sm underline">Limpar e Voltar</button>
+                        </div>
+                    </div>
+                )}
+            </section>
+            
+            <ModalComponent 
+                isOpen={modalInfo.isOpen} 
+                onClose={() => setModalInfo({ isOpen: false, title: '', message: '' })} 
+                title={modalInfo.title}
+            >
+                <p>{modalInfo.message}</p>
+            </ModalComponent>
+        </div>
+    );
+};
+
+const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent, nextGame, currentUser, onAttendanceUpdate }) => {
+    const [filter, setFilter] = useState('all');
+    const [modalPlayer, setModalPlayer] = useState(null);
+    const [selectedPerformancePlayer, setSelectedPerformancePlayer] = useState('');
 
     const performanceData = useMemo(() => {
         if (!allPlayersData || !dates) return [];
@@ -368,13 +775,10 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent, 
     }, [performanceData]);
 
     useEffect(() => {
-        if (availableMonths.length > 0) {
-            setMonthRange({ start: availableMonths[0], end: availableMonths[availableMonths.length - 1] });
-        }
         if(allPlayersData && allPlayersData.length > 0) {
             setSelectedPerformancePlayer(allPlayersData[0].name);
         }
-    }, [availableMonths, allPlayersData]);
+    }, [allPlayersData]);
 
     const getHallOfFameData = () => {
         if (!allPlayersData) return { onFire: null, mostPresent: null, leastPresent: [] };
@@ -446,46 +850,6 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent, 
     const sortedData = (allPlayersData && filter === 'faltas') ? [...allPlayersData].sort((a, b) => b.unjustifiedAbsences - a.unjustifiedAbsences) : (allPlayersData ? [...allPlayersData].sort((a, b) => b.average - a.average) : []);
     const filteredData = (filter === 'desempenho') ? performanceData : (allPlayersData ? sortedData.filter(filterFunctions[filter]) : []);
     const selectedPlayerData = performanceData.find(p => p.name === selectedPerformancePlayer);
-
-
-    const handleGenerateReport = () => {
-        if (!monthRange.start || !monthRange.end) {
-            setModalInfo({ isOpen: true, title: "Período Inválido", message: "Por favor, selecione um período de meses." });
-            return;
-        }
-
-        const [startYear, startMonth] = monthRange.start.split('-').map(Number);
-        const [endYear, endMonth] = monthRange.end.split('-').map(Number);
-
-        if (startYear > endYear || (startYear === endYear && startMonth > endMonth)) {
-            setModalInfo({ isOpen: true, title: "Período Inválido", message: "O mês de início não pode ser posterior ao mês de fim." });
-            return;
-        }
-
-        const periodDates = dates.filter(d => {
-            const date = new Date(d);
-            const startDate = new Date(startYear, startMonth - 1, 1);
-            const endDate = new Date(endYear, endMonth, 0); 
-            return date >= startDate && date <= endDate;
-        });
-
-        const reportData = allPlayersData
-            .map(player => ({
-                name: player.name,
-                presences: periodDates.reduce((count, date) => count + (player.attendance[date]?.includes('✅') ? 1 : 0), 0)
-            }))
-            .sort((a, b) => b.presences - a.presences);
-
-        const formatMonth = (monthStr) => {
-            const [year, month] = monthStr.split('-');
-            return new Date(year, month - 1).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
-        }
-
-        setReport({
-            title: `Relatório de Presença (${formatMonth(monthRange.start)} a ${formatMonth(monthRange.end)})`,
-            data: reportData
-        });
-    };
 
     if (isLoading) return <Loader message="A carregar dados da planilha de presença..." />;
     if (error) return <p className="text-center text-red-500 py-8">{error}</p>;
@@ -655,36 +1019,6 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent, 
                 </div>
             </section>
 
-            <section className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg">
-                <h2 className="text-2xl font-bold mb-4 text-gray-800 dark:text-gray-100">Extrair Relatório por Período</h2>
-                <div className="grid grid-cols-1 md:grid-cols-3 items-end gap-4">
-                    <div>
-                        <label htmlFor="month-selector-start" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mês de Início:</label>
-                        <select id="month-selector-start" value={monthRange.start} onChange={e => setMonthRange({ ...monthRange, start: e.target.value })} className="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md shadow-sm">
-                            {availableMonths.map(m => <option key={m} value={m}>{new Date(m + '-02').toLocaleString('pt-BR', {month: 'long', year: 'numeric'})}</option>)}
-                        </select>
-                    </div>
-                    <div>
-                        <label htmlFor="month-selector-end" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Mês de Fim:</label>
-                        <select id="month-selector-end" value={monthRange.end} onChange={e => setMonthRange({ ...monthRange, end: e.target.value })} className="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md shadow-sm">
-                            {availableMonths.map(m => <option key={m} value={m}>{new Date(m + '-02').toLocaleString('pt-BR', {month: 'long', year: 'numeric'})}</option>)}
-                        </select>
-                    </div>
-                    <div><button onClick={handleGenerateReport} className="w-full bg-indigo-600 text-white font-bold py-2 px-4 rounded-md hover:bg-indigo-700">Gerar Relatório</button></div>
-                </div>
-                {report && (
-                    <div className="mt-6">
-                        <h3 className="text-xl font-semibold mb-2 dark:text-gray-100">{report.title}</h3>
-                        <ul className="list-disc list-inside mt-2 text-gray-700 dark:text-gray-300 space-y-1">
-                            {report.data.map(p => <li key={p.name}><strong>{p.name}:</strong> {p.presences} presença(s)</li>)}
-                        </ul>
-                        <div className="mt-4 text-right">
-                            <button onClick={() => setReport(null)} className="bg-gray-500 text-white font-bold py-2 px-4 rounded-md hover:bg-gray-600">Limpar Relatório</button>
-                        </div>
-                    </div>
-                )}
-            </section>
-
             <ModalComponent isOpen={!!modalPlayer} onClose={() => setModalPlayer(null)} title={`Detalhes de ${modalPlayer?.name}`}>
                 {modalPlayer && (
                     <div className="text-left space-y-4">
@@ -762,14 +1096,6 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent, 
                         </div>
                     </div>
                 )}
-            </ModalComponent>
-            
-            <ModalComponent 
-                isOpen={modalInfo.isOpen} 
-                onClose={() => setModalInfo({ isOpen: false, title: '', message: '' })} 
-                title={modalInfo.title}
-            >
-                <p>{modalInfo.message}</p>
             </ModalComponent>
         </div>
     );
@@ -1008,10 +1334,8 @@ const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin, scri
         if (!financeData || !financeData.paymentStatus || financeData.paymentStatus.length === 0) return;
 
         if (isAdmin) {
-            // Set default to the first player for admins
             setSelectedPlayer(financeData.paymentStatus[0].player);
         } else {
-            // Find and set the current user for non-admins
             const userRecord = financeData.paymentStatus.find(p => p.player.toLowerCase() === currentUser.name.toLowerCase());
             if (userRecord) {
                 setSelectedPlayer(userRecord.player);
@@ -1031,7 +1355,6 @@ const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin, scri
             setCopySuccess('Copiado!');
             setTimeout(() => setCopySuccess(''), 2000);
         } catch (err) {
-            console.error('Fallback: Oops, unable to copy', err);
             setCopySuccess('Falha ao copiar');
              setTimeout(() => setCopySuccess(''), 2000);
         }
@@ -1062,9 +1385,7 @@ const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin, scri
         
         const now = new Date();
         const currentMonth = now.getMonth();
-        const currentYear = now.getFullYear();
         
-        // Assuming the data is always for the current year. This can be enhanced with a year selector.
         const monthIndex = monthMap[monthName.toLowerCase()];
 
         if (monthIndex < currentMonth) {
@@ -1075,7 +1396,7 @@ const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin, scri
     };
 
     const getStatusPill = (statusInfo) => {
-        let colorClass = 'bg-gray-200 text-gray-800 dark:bg-gray-600 dark:text-gray-300'; // default/info
+        let colorClass = 'bg-gray-200 text-gray-800 dark:bg-gray-600 dark:text-gray-300';
         if (statusInfo.type === 'pago') colorClass = 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300';
         if (statusInfo.type === 'pendente') colorClass = 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800/50 dark:text-yellow-300';
         if (statusInfo.type === 'atrasado') colorClass = 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300';
@@ -1225,10 +1546,9 @@ const SorteioTab = ({ allPlayersData, scriptUrl, ModalComponent }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [modalInfo, setModalInfo] = useState({ isOpen: false, title: '', message: '' });
     const [searchQuery, setSearchQuery] = useState('');
-    // Novos estados para o sorteio avulso
     const [numToDraw, setNumToDraw] = useState(1);
     const [drawnPlayers, setDrawnPlayers] = useState([]);
-    const [drawMode, setDrawMode] = useState('selection'); // 'selection', 'teams', 'custom'
+    const [drawMode, setDrawMode] = useState('selection'); 
 
     const sortedPlayers = useMemo(() => 
         [...allPlayersData].sort((a, b) => a.name.localeCompare(b.name)),
@@ -1268,7 +1588,6 @@ const SorteioTab = ({ allPlayersData, scriptUrl, ModalComponent }) => {
         setDrawMode('teams');
     };
     
-    // Nova função para o sorteio avulso
     const handleCustomDraw = () => {
         const num = Number(numToDraw);
         if (isNaN(num) || num < 1 || num > 5) {
@@ -1480,9 +1799,23 @@ const SorteioTab = ({ allPlayersData, scriptUrl, ModalComponent }) => {
 
 
 const EventosTab = ({ scriptUrl, currentUser, isAdmin, ModalComponent, refreshKey }) => {
-    const [events, setEvents] = useState([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState(null);
+    // USANDO O NOVO HOOK - Código muito mais limpo
+    const { data: eventsData, isLoading, error: queryError, refetch } = useDataQuery(
+        ['events', refreshKey], 
+        () => fetchWithPost(scriptUrl, { action: 'getEvents' }),
+        [refreshKey]
+    );
+
+    const events = useMemo(() => {
+        if (!eventsData?.data) return [];
+        return eventsData.data.map(event => ({
+            ...event,
+            value: parseFloat(event.value) || 0,
+            attendees: event.attendees ? event.attendees.split(',').map(name => name.trim()) : []
+        }));
+    }, [eventsData]);
+
+    // Estados locais apenas para modais e interações
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingEvent, setEditingEvent] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -1494,32 +1827,6 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, ModalComponent, refreshKe
         if (typeof value !== 'number') return 'R$ 0,00';
         return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     };
-    
-    const fetchEvents = useCallback(async () => {
-        setIsLoading(true);
-        setError(null);
-        try {
-            const data = await fetchWithPost(scriptUrl, { action: 'getEvents' });
-            if (data.result === 'success') {
-                const formattedEvents = data.data.map(event => ({
-                    ...event,
-                    value: parseFloat(event.value) || 0,
-                    attendees: event.attendees ? event.attendees.split(',').map(name => name.trim()) : []
-                }));
-                setEvents(formattedEvents);
-            } else {
-                throw new Error(data.message || 'Falha ao buscar eventos.');
-            }
-        } catch (err) {
-            setError(err.message);
-        } finally {
-            setIsLoading(false);
-        }
-    }, [scriptUrl]);
-
-    useEffect(() => {
-        fetchEvents();
-    }, [fetchEvents, refreshKey]);
 
     const handleOpenModal = (event = null) => {
         setEditingEvent(event);
@@ -1548,7 +1855,7 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, ModalComponent, refreshKe
       if (data.result === 'success') {
         setIsModalOpen(false);
         setEditingEvent(null);
-        fetchEvents(); // Refresh
+        refetch(); // Atualiza a lista usando o hook
 
         if (payload.action === 'createEvent' && window.ReactNativeWebView) {
           const eventDetails = {
@@ -1574,8 +1881,7 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, ModalComponent, refreshKe
   };
 
     async function handleAttendance(eventId, actionType) {
-        setEvents(prevEvents => prevEvents.map(e => e.id === eventId ? { ...e, isConfirming: true } : e));
-
+        // Optimistic UI update (opcional, mantendo simples por enquanto)
         const payload = {
             action: 'handleAttendanceUpdate',
             itemId: eventId,
@@ -1586,37 +1892,33 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, ModalComponent, refreshKe
         try {
              const data = await fetchWithPost(scriptUrl, payload);
             if (data.result === 'success') {
-                fetchEvents();
+                refetch();
             } else {
                  throw new Error(data.message || `Não foi possível atualizar a presença.`);
             }
         } catch (error) {
             setInfoModal({ isOpen: true, title: 'Erro', message: error.message });
-            setEvents(prevEvents => prevEvents.map(e => e.id === eventId ? { ...e, isConfirming: false } : e));
         }
     }
 
      const handleDeleteEvent = async (event) => {
         if (!event) return;
-        setConfirmDelete(null); // Close confirmation modal
-        setIsLoading(true);
+        setConfirmDelete(null); 
         try {
             const payload = { action: 'deleteEvent', id: event.id };
             const data = await fetchWithPost(scriptUrl, payload);
             if (data.result === 'success') {
-                fetchEvents();
+                refetch();
             } else {
                 throw new Error(data.message || "Não foi possível apagar o evento.");
             }
         } catch (err) {
             setInfoModal({ isOpen: true, title: 'Erro ao Apagar', message: err.message });
-        } finally {
-            setIsLoading(false);
         }
     };
 
-    if (isLoading && events.length === 0) return <Loader message="A carregar eventos..." />;
-    if (error) return <p className="text-center text-red-500 py-8">{error}</p>;
+    if (isLoading) return <Loader message="A carregar eventos..." />;
+    if (queryError) return <p className="text-center text-red-500 py-8">{queryError}</p>;
 
     return (
         <div className="space-y-8">
@@ -1629,7 +1931,7 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, ModalComponent, refreshKe
                 )}
             </div>
 
-            {events.length === 0 && !isLoading ? (
+            {events.length === 0 ? (
                 <p className="text-center text-gray-500 py-8">Nenhum evento agendado no momento.</p>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -1679,16 +1981,16 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, ModalComponent, refreshKe
                                     {isConfirmed ? (
                                         <button
                                             onClick={() => handleAttendance(event.id, 'withdraw')}
-                                            disabled={isDeadlinePassed || event.isConfirming}
+                                            disabled={isDeadlinePassed}
                                             className={`w-full font-bold py-2 px-4 rounded-lg transition-all ${isDeadlinePassed ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-red-500 text-white hover:bg-red-600'}`}>
-                                            {event.isConfirming ? 'A processar...' : 'Desistir'}
+                                            Desistir
                                         </button>
                                     ) : (
                                         <button
                                             onClick={() => handleAttendance(event.id, 'confirm')}
-                                            disabled={isDeadlinePassed || event.isConfirming}
+                                            disabled={isDeadlinePassed}
                                             className={`w-full font-bold py-2 px-4 rounded-lg transition-all ${!isDeadlinePassed ? 'bg-green-500 text-white hover:bg-green-600' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}>
-                                            {event.isConfirming ? 'A processar...' : 'Confirmar Presença'}
+                                            Confirmar Presença
                                         </button>
                                     )}
                                 </div>
@@ -1746,39 +2048,25 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, ModalComponent, refreshKe
     );
 };
 
-// --- NOVA ABA DE JOGOS ---
+// --- NOVA ABA DE JOGOS COM O NOVO HOOK ---
 const JogosTab = ({ currentUser, isAdmin, scriptUrl, ModalComponent, refreshKey }) => {
-    const [games, setGames] = useState([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState(null);
+    const { data: gamesData, isLoading, error: queryError, refetch } = useDataQuery(
+        ['games', refreshKey], 
+        () => fetchWithPost(scriptUrl, { action: 'getGames' }),
+        [refreshKey]
+    );
+
+    const games = useMemo(() => {
+        if (!gamesData?.data) return [];
+        return gamesData.data.sort((a, b) => new Date(b.data) - new Date(a.data));
+    }, [gamesData]);
+
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingGame, setEditingGame] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [modalMessage, setModalMessage] = useState('');
     const [infoModal, setInfoModal] = useState({ isOpen: false, title: '', content: null });
     const [confirmDelete, setConfirmDelete] = useState(null);
-
-    const fetchGames = useCallback(async () => {
-        setIsLoading(true);
-        setError(null);
-        try {
-            const data = await fetchWithPost(scriptUrl, { action: 'getGames' });
-            if (data.result === 'success') {
-                const sortedGames = data.data.sort((a, b) => new Date(b.data) - new Date(a.data));
-                setGames(sortedGames);
-            } else {
-                throw new Error(data.message || 'Falha ao buscar jogos.');
-            }
-        } catch (err) {
-            setError(err.message);
-        } finally {
-            setIsLoading(false);
-        }
-    }, [scriptUrl]);
-
-    useEffect(() => {
-        fetchGames();
-    }, [fetchGames, refreshKey]);
 
     const handleOpenModal = (game = null) => {
         setEditingGame(game);
@@ -1804,7 +2092,7 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, ModalComponent, refreshKey 
             if (data.result === 'success') {
                 setIsModalOpen(false);
                 setEditingGame(null);
-                fetchGames();
+                refetch();
 
                 if (payload.action === 'createGame') {
                     const gameDate = new Date(payload.data + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
@@ -1869,7 +2157,7 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, ModalComponent, refreshKey 
             if (data.result !== 'success') {
                 throw new Error(data.message || 'Erro ao atualizar presença.');
             }
-            fetchGames(); // Re-fetch to get the latest state
+            refetch(); // Re-fetch to get the latest state
         } catch (err) {
             setInfoModal({ isOpen: true, title: "Erro", content: <p>{err.message}</p> });
         }
@@ -1877,25 +2165,22 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, ModalComponent, refreshKey 
     
     const handleDeleteGame = async (game) => {
         if (!game) return;
-        setConfirmDelete(null); // Close confirmation modal
-        setIsLoading(true);
+        setConfirmDelete(null); 
         try {
             const payload = { action: 'deleteGame', id: game.id };
             const data = await fetchWithPost(scriptUrl, payload);
             if (data.result === 'success') {
-                fetchGames();
+                refetch();
             } else {
                 throw new Error(data.message || "Não foi possível apagar o jogo.");
             }
         } catch (err) {
             setInfoModal({ isOpen: true, title: 'Erro ao Apagar', content: <p>{err.message}</p> });
-        } finally {
-            setIsLoading(false);
-        }
+        } 
     };
 
     if (isLoading) return <Loader message="A carregar jogos..." />;
-    if (error) return <p className="text-center text-red-500 py-8">{error}</p>;
+    if (queryError) return <p className="text-center text-red-500 py-8">{queryError}</p>;
 
     return (
         <div className="space-y-8">
@@ -2016,37 +2301,23 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, ModalComponent, refreshKey 
 };
 
 // ==================================================================
-// --- COMPONENTE DE NOTIFICAÇÕES ATUALIZADO PARA DEEP LINKING ---
+// --- COMPONENTE DE NOTIFICAÇÕES (COM HOOK) ---
 // ==================================================================
 const NotificacoesTab = ({ scriptUrl }) => {
-    const [notifications, setNotifications] = useState([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState(null);
+    // USANDO O NOVO HOOK
+    const { data: notifData, isLoading, error, refetch } = useDataQuery(
+        ['notifications'], 
+        () => fetchWithPost(scriptUrl, { action: 'getNotifications' })
+    );
+
+    const notifications = useMemo(() => {
+        if (!notifData?.data) return [];
+        return notifData.data.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    }, [notifData]);
+
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitStatus, setSubmitStatus] = useState({ message: '', type: '' });
-    const [targetTab, setTargetTab] = useState('presenca'); // Estado para a aba de destino
-
-    const fetchNotifications = useCallback(async () => {
-        setIsLoading(true);
-        setError(null);
-        try {
-            const data = await fetchWithPost(scriptUrl, { action: 'getNotifications' });
-            if (data.result === 'success') {
-                const sortedNotifications = data.data.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-                setNotifications(sortedNotifications);
-            } else {
-                throw new Error(data.message || 'Falha ao buscar notificações.');
-            }
-        } catch (err) {
-            setError(err.message);
-        } finally {
-            setIsLoading(false);
-        }
-    }, [scriptUrl]);
-
-    useEffect(() => {
-        fetchNotifications();
-    }, [fetchNotifications]);
+    const [targetTab, setTargetTab] = useState('presenca'); 
 
     const handleFormSubmit = async (e) => {
         e.preventDefault();
@@ -2058,7 +2329,7 @@ const NotificacoesTab = ({ scriptUrl }) => {
             action: 'sendPushNotificationToAll',
             title: formData.get('title'),
             message: formData.get('message'),
-            targetTab: targetTab, // Envia a aba de destino para o servidor
+            targetTab: targetTab, 
         };
 
         try {
@@ -2066,7 +2337,7 @@ const NotificacoesTab = ({ scriptUrl }) => {
             if (data.result === 'success') {
                 setSubmitStatus({ message: data.message || 'Notificação enviada com sucesso!', type: 'success' });
                 e.target.reset();
-                fetchNotifications();
+                refetch();
             } else {
                 throw new Error(data.message || 'Ocorreu um erro desconhecido.');
             }
@@ -2086,7 +2357,6 @@ const NotificacoesTab = ({ scriptUrl }) => {
                     <input name="title" type="text" placeholder="Título da Notificação" className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md" required />
                     <textarea name="message" placeholder="Mensagem da Notificação" className="w-full p-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md" rows="4" required></textarea>
                     
-                    {/* NOVO MENU PARA ESCOLHER A ABA DE DESTINO */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Abrir na aba:</label>
                         <select 
@@ -2145,8 +2415,15 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
     const [activeTab, setActiveTab] = useState('presenca');
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isResetPasswordModalOpen, setIsResetPasswordModalOpen] = useState(false);
+    
+    // USANDO O NOVO HOOK para a carga inicial
+    // Agora o "Estado do Servidor" está gerenciado aqui de forma mais limpa
+    const { data: initialData, isLoading, error, refetch } = useDataQuery(
+        ['initialData'],
+        () => fetchWithPost(SCRIPT_URL, { action: 'getInitialAppData' })
+    );
 
-    const [appData, setAppData] = useState({ isLoading: true, data: null, error: null });
+    const appData = initialData?.data;
     
     const [lastKnownTimestamp, setLastKnownTimestamp] = useState(null);
     const [notifications, setNotifications] = useState({});
@@ -2154,7 +2431,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
     
     const isAdmin = user && user.role && user.role.toUpperCase() === 'ADMIN';
     const TABS = useMemo(() => {
-        const baseTabs = ['presenca', 'jogos', 'estatuto', 'financas', 'sorteio', 'eventos'];
+        const baseTabs = ['presenca', 'jogos', 'estatuto', 'financas', 'sorteio', 'eventos', 'relatorios'];
         if (isAdmin) {
             return [...baseTabs, 'notificacoes'];
         }
@@ -2177,27 +2454,13 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
         };
     }, [TABS]);
 
-    const fetchInitialAppData = useCallback(async () => {
-        setAppData(prev => ({ ...prev, isLoading: true }));
-        try {
-            const data = await fetchWithPost(SCRIPT_URL, { action: 'getInitialAppData' });
-            if (data.result === 'success') {
-                setAppData({ isLoading: false, data: data.data, error: null });
-            } else {
-                throw new Error(data.message || 'Falha ao buscar dados do aplicativo.');
-            }
-        } catch (error) {
-            setAppData({ isLoading: false, data: null, error: `Erro ao carregar dados: ${error.message}` });
-        }
-    }, [SCRIPT_URL]);
-
     const handleRefresh = useCallback(() => {
         setIsRefreshing(true);
         fetchWithPost(SCRIPT_URL, { action: 'clearCache' })
-            .then(() => fetchInitialAppData())
+            .then(() => refetch()) // Usa o refetch do Hook!
             .finally(() => setIsRefreshing(false));
         setRefreshKey(prev => prev + 1);
-    }, [fetchInitialAppData, SCRIPT_URL]);
+    }, [refetch, SCRIPT_URL]);
 
     const handleResetPasswordClose = (shouldLogout) => {
         setIsResetPasswordModalOpen(false);
@@ -2213,19 +2476,15 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
                     const data = await fetchWithPost(SCRIPT_URL, { action: 'getLastUpdate' });
                     if (data && data.result === 'success' && typeof data.timestamp === 'string') {
                         setLastKnownTimestamp(data.timestamp || new Date().toISOString());
-                        fetchInitialAppData(); 
-                    } else {
-                       console.error("Resposta inesperada do servidor ao obter timestamp:", data);
-                       throw new Error(data?.message || 'Falha ao obter timestamp inicial. A resposta do servidor não foi válida.');
-                    }
+                        // O hook useDataQuery já roda automaticamente na montagem
+                    } 
                 } catch (error) {
-                    console.error("Falha na carga inicial:", error);
-                    setAppData({ isLoading: false, data: null, error: `Erro na carga inicial: ${error.message}` });
+                    console.error("Falha na verificação de timestamp:", error);
                 }
             };
             getInitialTimestampAndData();
         }
-    }, [librariesLoaded, SCRIPT_URL, fetchInitialAppData]);
+    }, [librariesLoaded, SCRIPT_URL]);
 
     useEffect(() => {
         if (!librariesLoaded || !lastKnownTimestamp) return;
@@ -2282,18 +2541,21 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
     };
 
     const renderTabContent = () => {
-        const attendanceData = appData.data?.dashboard;
-        const financeData = appData.data?.finance;
-        const pixCode = appData.data?.pixCode;
-        const nextGame = appData.data?.nextGame;
+        if (isLoading && !appData) return <Loader message="Carregando dados..." />;
+        if (error) return <p className="text-center text-red-500 py-8">{error}</p>;
+
+        const attendanceData = appData?.dashboard;
+        const financeData = appData?.finance;
+        const pixCode = appData?.pixCode;
+        const nextGame = appData?.nextGame;
 
         switch (activeTab) {
             case 'presenca':
                 return <PresencaTab 
                             allPlayersData={attendanceData?.players || []} 
                             dates={attendanceData?.dates || []} 
-                            isLoading={appData.isLoading} 
-                            error={appData.error} 
+                            isLoading={isLoading} 
+                            error={error} 
                             ModalComponent={Modal}
                             nextGame={nextGame}
                             currentUser={user}
@@ -2304,11 +2566,18 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
             case 'estatuto':
                 return <EstatutoTab />;
             case 'financas':
-                return <FinancasTab financeData={financeData} isLoading={appData.isLoading} error={appData.error} currentUser={user} isAdmin={isAdmin} scriptUrl={SCRIPT_URL} pixCode={pixCode} />;
+                return <FinancasTab financeData={financeData} isLoading={isLoading} error={error} currentUser={user} isAdmin={isAdmin} scriptUrl={SCRIPT_URL} pixCode={pixCode} />;
             case 'sorteio':
                  return <SorteioTab allPlayersData={attendanceData?.players || []} scriptUrl={SCRIPT_URL} ModalComponent={Modal} />;
             case 'eventos':
                 return <EventosTab scriptUrl={SCRIPT_URL} currentUser={user} isAdmin={isAdmin} ModalComponent={Modal} refreshKey={refreshKey} />;
+            case 'relatorios':
+                return <RelatoriosTab 
+                            allPlayersData={attendanceData?.players || []} 
+                            dates={attendanceData?.dates || []} 
+                            financeData={financeData}
+                            ModalComponent={Modal} 
+                        />;
             case 'notificacoes':
                 return <NotificacoesTab scriptUrl={SCRIPT_URL} />;
             default:
@@ -2323,6 +2592,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
         financas: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>,
         sorteio: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.121 15.536c-1.171 1.952-3.07 1.952-4.242 0-1.172-1.953-1.172-5.119 0-7.072 1.171-1.952 3.07-1.952 4.242 0 1.172 1.953 1.172 5.119 0 7.072z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 21a9 9 0 100-18 9 9 0 000 18z" /></svg>,
         eventos: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
+        relatorios: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>,
         notificacoes: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>,
     };
 
@@ -2485,5 +2755,4 @@ export default function App() {
             </div>
         </ThemeProvider>
     );
-} 
-
+}
