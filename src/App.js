@@ -189,7 +189,8 @@ const LoginScreen = ({ onLogin, isLoading, error }) => (
         style={{ backgroundImage: "url('https://images.unsplash.com/photo-1546519638-68e109498ffc?q=80&w=2070&auto=format&fit=crop')" }}
     >
         <div className="absolute inset-0 bg-black bg-opacity-60"></div>
-        <div className="relative z-10 p-8 bg-gray-900/70 backdrop-blur-sm border border-gray-700 rounded-xl shadow-2xl text-center w-full max-sm:max-w-sm">
+        {/* Alterado de max-sm:max-w-sm para max-w-sm para garantir o tamanho adequado em todas as telas */}
+        <div className="relative z-10 p-8 bg-gray-900/70 backdrop-blur-sm border border-gray-700 rounded-xl shadow-2xl text-center w-full max-w-sm">
             <img src="https://lh3.googleusercontent.com/d/131DvcfgiRLLp9irVnVY8m9qNuM-0y7f8" alt="Logo CBA" className="h-24 w-24 rounded-full shadow-lg mx-auto mb-4" />
             <h1 className="text-3xl font-bold text-white mb-2">Portal do CBA</h1>
             <p className="text-gray-300 mb-6">Por favor, entre para continuar.</p>
