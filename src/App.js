@@ -1101,7 +1101,7 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent, 
                 </div>
             </section>
 
-            <ModalComponent isOpen={!!modalPlayer} onClose={() => setModalPlayer(null)} title={`Detalhes de ${modalPlayer?.name}`}>
+            <ModalComponent isOpen={!!modalPlayer} onClose={() => setModalPlayer(null)} title={`Detalhes de ${modalPlayer?.name} (${selectedYear})`}>
                 {modalPlayer && (
                     <div className="text-left space-y-4">
                         <div className="flex justify-center mb-4">
@@ -1148,9 +1148,17 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent, 
                         </div>
 
                         <div>
-                            <h4 className="font-bold text-gray-800 dark:text-gray-200 mb-2">Histórico de Presença</h4>
+                            <h4 className="font-bold text-gray-800 dark:text-gray-200 mb-2">Histórico de Presença ({selectedYear})</h4>
                             <div className="mb-2 p-2 bg-gray-100 dark:bg-gray-700/50 rounded-md text-center text-gray-800 dark:text-gray-200">
-                                <strong>{modalPlayer?.presences}</strong> Presenças | <strong>{modalPlayer?.totalGames - modalPlayer?.presences}</strong> Ausências
+                                {(() => {
+                                    const yearPresences = filteredDatesByYear.reduce((count, date) => count + (modalPlayer?.attendance[date]?.includes('✅') ? 1 : 0), 0);
+                                    const yearTotal = filteredDatesByYear.length;
+                                    return (
+                                        <>
+                                            <strong>{yearPresences}</strong> Presenças | <strong>{yearTotal - yearPresences}</strong> Ausências
+                                        </>
+                                    );
+                                })()}
                             </div>
                             <div className="flex flex-wrap gap-1">
                                 {(() => {
@@ -1158,9 +1166,11 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent, 
                                         ? new Date(modalPlayer.dataEntrada + 'T00:00:00') 
                                         : null;
 
-                                    const visibleDates = playerEntryDate
-                                        ? dates.filter(dateStr => new Date(dateStr + 'T00:00:00') >= playerEntryDate)
-                                        : dates;
+                                    // Filtramos as datas do ano selecionado, respeitando a data de entrada do jogador
+                                    const visibleDates = filteredDatesByYear.filter(dateStr => {
+                                        if (!playerEntryDate) return true;
+                                        return new Date(dateStr + 'T00:00:00') >= playerEntryDate;
+                                    });
 
                                     return visibleDates.map(date => {
                                         const status = modalPlayer?.attendance[date]?.trim() || '❌';
