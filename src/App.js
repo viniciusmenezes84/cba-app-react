@@ -189,7 +189,7 @@ const LoginScreen = ({ onLogin, isLoading, error }) => (
         style={{ backgroundImage: "url('https://images.unsplash.com/photo-1546519638-68e109498ffc?q=80&w=2070&auto=format&fit=crop')" }}
     >
         <div className="absolute inset-0 bg-black bg-opacity-60"></div>
-        <div className="relative z-10 p-8 bg-gray-900/70 backdrop-blur-sm border border-gray-700 rounded-xl shadow-2xl text-center w-full max-w-sm">
+        <div className="relative z-10 p-8 bg-gray-900/70 backdrop-blur-sm border border-gray-700 rounded-xl shadow-2xl text-center w-full max-sm:max-w-sm">
             <img src="https://lh3.googleusercontent.com/d/131DvcfgiRLLp9irVnVY8m9qNuM-0y7f8" alt="Logo CBA" className="h-24 w-24 rounded-full shadow-lg mx-auto mb-4" />
             <h1 className="text-3xl font-bold text-white mb-2">Portal do CBA</h1>
             <p className="text-gray-300 mb-6">Por favor, entre para continuar.</p>
@@ -288,7 +288,7 @@ const ResetPasswordModal = ({ isOpen, onClose, user, scriptUrl }) => {
                         {message.text}
                     </p>
                 )}
-                <button type="submit" disabled={isSubmitting} className="w-full bg-blue-600 text-white font-bold py-3 rounded-md hover:bg-blue-700 disabled:bg-blue-400">
+                <button type="submit" disabled={isSubmitting} className="w-full bg-blue-600 text-white font-bold py-3 rounded-md hover:bg-blue-700 disabled:bg-blue-400 transition-colors">
                     {isSubmitting ? 'A alterar...' : 'Alterar Senha'}
                 </button>
             </form>
@@ -734,12 +734,34 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent, 
     const [modalPlayer, setModalPlayer] = useState(null);
     const [selectedPerformancePlayer, setSelectedPerformancePlayer] = useState('');
 
+    // --- LOGICA DE ANO PARA A ABA PRESENÇA ---
+    const availableYears = useMemo(() => {
+        if (!dates || dates.length === 0) return [new Date().getFullYear().toString()];
+        const years = [...new Set(dates.map(d => d.substring(0, 4)))];
+        return years.sort((a, b) => b - a);
+    }, [dates]);
+
+    const [selectedYear, setSelectedYear] = useState(availableYears[0]);
+
+    // Filtra as datas baseadas no ano selecionado para os cálculos globais da aba
+    const filteredDatesByYear = useMemo(() => {
+        if (!dates) return [];
+        return dates.filter(d => d.startsWith(selectedYear));
+    }, [dates, selectedYear]);
+
     const performanceData = useMemo(() => {
         if (!allPlayersData || !dates) return [];
-        const sixtyDaysAgo = new Date();
-        sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+        
+        // Se o ano for o atual, mantemos a lógica de 60 dias para o status de meta.
+        // Se for um ano passado, calculamos sobre o ano todo filtrado.
+        const isCurrentYear = selectedYear === new Date().getFullYear().toString();
+        let relevantDates = filteredDatesByYear;
 
-        const relevantDates = dates.filter(d => new Date(d) >= sixtyDaysAgo);
+        if (isCurrentYear) {
+            const sixtyDaysAgo = new Date();
+            sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+            relevantDates = dates.filter(d => new Date(d) >= sixtyDaysAgo && d.startsWith(selectedYear));
+        }
 
         if (relevantDates.length === 0) return [];
 
@@ -759,7 +781,7 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent, 
                 presencesInPeriod,
             };
         }).sort((a, b) => b.performancePercentage - a.performancePercentage);
-    }, [allPlayersData, dates]);
+    }, [allPlayersData, dates, filteredDatesByYear, selectedYear]);
     
     const teamPerformance = useMemo(() => {
         if (!performanceData || performanceData.length === 0) {
@@ -786,24 +808,37 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent, 
 
         if (eligiblePlayers.length === 0) return { onFire: null, mostPresent: null, leastPresent: [] };
 
-        const sortedByAverage = [...eligiblePlayers].sort((a, b) => b.average - a.average || a.name.localeCompare(b.name));
-        const sortedByTotalPresence = [...eligiblePlayers].sort((a, b) => b.presences - a.presences || a.name.localeCompare(b.name));
-        const leastPresentSorted = [...eligiblePlayers].sort((a, b) => a.average - b.average || a.name.localeCompare(b.name));
+        // Ajustamos os dados do Hall of Fame para considerar apenas o ano selecionado
+        const processedEligible = eligiblePlayers.map(p => {
+            const yearPresences = filteredDatesByYear.reduce((count, date) => count + (p.attendance[date]?.includes('✅') ? 1 : 0), 0);
+            const yearAverage = filteredDatesByYear.length > 0 ? (yearPresences / filteredDatesByYear.length) * 100 : 0;
+            return { ...p, yearPresences, yearAverage };
+        });
+
+        const sortedByAverage = [...processedEligible].sort((a, b) => b.yearAverage - a.yearAverage || a.name.localeCompare(b.name));
+        const sortedByTotalPresence = [...processedEligible].sort((a, b) => b.yearPresences - a.yearPresences || a.name.localeCompare(b.name));
+        const leastPresentSorted = [...processedEligible].sort((a, b) => a.yearAverage - b.yearAverage || a.name.localeCompare(b.name));
         
-        return { onFire: sortedByAverage[0], mostPresent: sortedByTotalPresence[0], leastPresent: leastPresentSorted.slice(0, 3) };
+        return { 
+            onFire: sortedByAverage[0], 
+            mostPresent: sortedByTotalPresence[0], 
+            leastPresent: leastPresentSorted.slice(0, 3),
+            onFireAvg: sortedByAverage[0]?.yearAverage,
+            mostPresentCount: sortedByTotalPresence[0]?.yearPresences
+        };
     };
 
     const hallOfFame = getHallOfFameData();
     
     const attendanceChartConfig = useMemo(() => {
-        if (!allPlayersData || !dates) return {};
+        if (!allPlayersData || !filteredDatesByYear) return {};
         return { 
             type: 'line', 
             data: { 
-                labels: dates.map(d => new Date(d).toLocaleDateString('pt-BR')), 
+                labels: filteredDatesByYear.map(d => new Date(d).toLocaleDateString('pt-BR')), 
                 datasets: [{ 
                     label: 'Jogadores Presentes', 
-                    data: dates.map(date => allPlayersData.reduce((count, player) => count + (player.attendance[date]?.includes('✅') ? 1 : 0), 0)), 
+                    data: filteredDatesByYear.map(date => allPlayersData.reduce((count, player) => count + (player.attendance[date]?.includes('✅') ? 1 : 0), 0)), 
                     fill: false, 
                     borderColor: 'rgb(75, 192, 192)', 
                     tension: 0.1 
@@ -815,19 +850,25 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent, 
                 } 
             } 
         }
-    }, [dates, allPlayersData]);
+    }, [filteredDatesByYear, allPlayersData]);
 
     const averageBarChartConfig = useMemo(() => {
         if (!allPlayersData) return {};
-        const sortedPlayers = [...allPlayersData].sort((a, b) => b.average - a.average);
+        
+        const playersWithYearAvg = allPlayersData.map(p => {
+            const yearPresences = filteredDatesByYear.reduce((count, date) => count + (p.attendance[date]?.includes('✅') ? 1 : 0), 0);
+            const yearAverage = filteredDatesByYear.length > 0 ? (yearPresences / filteredDatesByYear.length) * 100 : 0;
+            return { name: p.name, average: yearAverage };
+        }).sort((a, b) => b.average - a.average);
+
         return { 
             type: 'bar', 
             data: { 
-                labels: sortedPlayers.map(p => p.name), 
+                labels: playersWithYearAvg.map(p => p.name), 
                 datasets: [{ 
-                    label: 'Média de Presença (%)', 
-                    data: sortedPlayers.map(p => p.average), 
-                    backgroundColor: sortedPlayers.map(p => p.average >= 75 ? '#22c55e' : p.average >= 50 ? '#3b82f6' : '#f59e0b') 
+                    label: `Média de Presença ${selectedYear} (%)`, 
+                    data: playersWithYearAvg.map(p => p.average), 
+                    backgroundColor: playersWithYearAvg.map(p => p.average >= 75 ? '#22c55e' : p.average >= 50 ? '#3b82f6' : '#f59e0b') 
                 }] 
             }, 
             options: { 
@@ -836,7 +877,7 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent, 
                 plugins: { legend: { display: false } } 
             } 
         };
-    }, [allPlayersData]);
+    }, [allPlayersData, filteredDatesByYear, selectedYear]);
 
     const filterButtons = [
         { key: 'desempenho', label: 'Desempenho', emoji: '📈' },
@@ -846,9 +887,33 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent, 
         { key: 'bad', label: 'Abaixo', emoji: '👎' },
         { key: 'faltas', label: 'Faltosos', emoji: '⚠️' }
     ];
-    const filterFunctions = { 'all': () => true, 'good': p => p.average >= 75, 'regular': p => p.average >= 50 && p.average < 75, 'bad': p => p.average < 50, 'faltas': p => p.unjustifiedAbsences > 0, 'desempenho': () => true };
-    const sortedData = (allPlayersData && filter === 'faltas') ? [...allPlayersData].sort((a, b) => b.unjustifiedAbsences - a.unjustifiedAbsences) : (allPlayersData ? [...allPlayersData].sort((a, b) => b.average - a.average) : []);
-    const filteredData = (filter === 'desempenho') ? performanceData : (allPlayersData ? sortedData.filter(filterFunctions[filter]) : []);
+
+    // Funções de filtro adaptadas para o ano selecionado
+    const getProcessedPlayers = () => {
+        return allPlayersData.map(p => {
+            const yearPresences = filteredDatesByYear.reduce((count, date) => count + (p.attendance[date]?.includes('✅') ? 1 : 0), 0);
+            const yearAverage = filteredDatesByYear.length > 0 ? (yearPresences / filteredDatesByYear.length) * 100 : 0;
+            const yearUnjustified = filteredDatesByYear.filter(date => p.attendance[date]?.toUpperCase() === 'NÃO JUSTIFICOU').length;
+            const yearUnjustifiedDates = filteredDatesByYear.filter(date => p.attendance[date]?.toUpperCase() === 'NÃO JUSTIFICOU');
+            return { ...p, average: yearAverage.toFixed(1), unjustifiedAbsences: yearUnjustified, unjustifiedAbsenceDates: yearUnjustifiedDates };
+        });
+    };
+
+    const filterFunctions = { 
+        'all': () => true, 
+        'good': p => p.average >= 75, 
+        'regular': p => p.average >= 50 && p.average < 75, 
+        'bad': p => p.average < 50, 
+        'faltas': p => p.unjustifiedAbsences > 0, 
+        'desempenho': () => true 
+    };
+
+    const processedData = getProcessedPlayers();
+    const sortedData = (filter === 'faltas') 
+        ? [...processedData].sort((a, b) => b.unjustifiedAbsences - a.unjustifiedAbsences) 
+        : [...processedData].sort((a, b) => b.average - a.average);
+    
+    const filteredData = (filter === 'desempenho') ? performanceData : sortedData.filter(filterFunctions[filter]);
     const selectedPlayerData = performanceData.find(p => p.name === selectedPerformancePlayer);
 
     if (isLoading) return <Loader message="A carregar dados da planilha de presença..." />;
@@ -860,24 +925,24 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent, 
             <ProximoJogoCard game={nextGame} currentUser={currentUser} onAttendanceUpdate={onAttendanceUpdate} />
 
             <section className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg">
-                <h2 className="text-2xl font-bold mb-4 text-center text-gray-800 dark:text-gray-100">🏆 Quadro de Honra 🏆</h2>
+                <h2 className="text-2xl font-bold mb-4 text-center text-gray-800 dark:text-gray-100">🏆 Quadro de Honra ({selectedYear}) 🏆</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                     <div className="text-center p-4 bg-orange-100 dark:bg-orange-900/30 rounded-lg">
                         <h3 className="text-lg font-semibold text-orange-600 dark:text-orange-400 mb-2">On Fire 🔥</h3>
                         <p className="text-2xl font-bold dark:text-gray-100">{hallOfFame.onFire?.name}</p>
-                        <p className="text-xl text-orange-700 dark:text-orange-500 font-semibold">{hallOfFame.onFire?.average}%</p>
+                        <p className="text-xl text-orange-700 dark:text-orange-500 font-semibold">{hallOfFame.onFireAvg?.toFixed(1)}%</p>
                     </div>
                     <div className="text-center p-4 bg-cyan-100 dark:bg-cyan-900/30 rounded-lg">
                         <h3 className="text-lg font-semibold text-cyan-600 dark:text-cyan-400 mb-2">Mais Presente</h3>
                         <p className="text-2xl font-bold dark:text-gray-100">{hallOfFame.mostPresent?.name}</p>
-                        <p className="text-xl text-cyan-700 dark:text-cyan-500 font-semibold">{hallOfFame.mostPresent?.presences} jogos</p>
+                        <p className="text-xl text-cyan-700 dark:text-cyan-500 font-semibold">{hallOfFame.mostPresentCount} jogos</p>
                     </div>
                     <div className="p-4 bg-red-100 dark:bg-red-900/30 rounded-lg lg:col-span-1 sm:col-span-2">
                         <h3 className="text-lg font-semibold text-red-600 dark:text-red-400 mb-2 text-center">Menos Presentes 📉</h3>
                         <ul className="text-left space-y-1 text-sm text-gray-800 dark:text-gray-300">
                             {hallOfFame.leastPresent.map(player => (
                                 <li key={player.name} className="flex justify-between">
-                                    <span>{player.name}</span> <span className="font-semibold">{player.average}%</span>
+                                    <span>{player.name}</span> <span className="font-semibold">{player.yearAverage?.toFixed(1)}%</span>
                                 </li>
                             ))}
                         </ul>
@@ -887,22 +952,39 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent, 
 
             <section className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <div className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg">
-                    <h2 className="text-2xl font-bold mb-6 text-gray-800 dark:text-gray-100">Tendência de Presença por Jogo</h2>
+                    <h2 className="text-2xl font-bold mb-6 text-gray-800 dark:text-gray-100">Tendência de Presença ({selectedYear})</h2>
                     <ChartComponent chartConfig={attendanceChartConfig} />
                 </div>
                 <div className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg">
-                    <h2 className="text-2xl font-bold mb-6 text-gray-800 dark:text-gray-100">Comparativo de Médias (%)</h2>
+                    <h2 className="text-2xl font-bold mb-6 text-gray-800 dark:text-gray-100">Comparativo de Médias ({selectedYear})</h2>
                     <ChartComponent chartConfig={averageBarChartConfig} />
                 </div>
             </section>
 
+            {/* CARD: ANÁLISE GERAL DE PRESENÇA - COM SELETOR DE ANO */}
             <section className="bg-white dark:bg-gray-800/80 dark:backdrop-blur-sm p-6 rounded-xl shadow-lg">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
                     <div>
                         <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100">Análise Geral de Presença</h2>
                         <p className="text-sm text-gray-500 dark:text-gray-400">Clique no nome de um jogador para ver os detalhes.</p>
                     </div>
-                    <div className="flex flex-wrap gap-2 mt-4 sm:mt-0">
+
+                    {/* SELETOR DE ANO INTEGRADO */}
+                    <div className="flex items-center gap-3">
+                        <label htmlFor="year-filter-presenca" className="text-sm font-bold text-gray-700 dark:text-gray-300">Ano:</label>
+                        <select 
+                            id="year-filter-presenca"
+                            value={selectedYear}
+                            onChange={(e) => setSelectedYear(e.target.value)}
+                            className="p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-md shadow-sm font-bold focus:ring-blue-500"
+                        >
+                            {availableYears.map(year => (
+                                <option key={year} value={year}>{year}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
                         {filterButtons.map(({ key, label, emoji }) => (
                             <button
                                 key={key}
@@ -920,7 +1002,7 @@ const PresencaTab = ({ allPlayersData, dates, isLoading, error, ModalComponent, 
                 </div>
                 <div className="space-y-5">
                     {filteredData.length === 0 ?
-                        <p className="text-center text-gray-500 dark:text-gray-400">Nenhum jogador corresponde a este filtro.</p> :
+                        <p className="text-center text-gray-500 dark:text-gray-400">Nenhum jogador corresponde a este filtro para o ano de {selectedYear}.</p> :
                         
                         filter === 'desempenho' ? (
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
@@ -2378,7 +2460,7 @@ const NotificacoesTab = ({ scriptUrl }) => {
                             {submitStatus.message}
                         </p>
                     )}
-                    <button type="submit" disabled={isSubmitting} className="w-full bg-blue-600 text-white font-bold py-3 rounded-md hover:bg-blue-700 disabled:bg-blue-400">
+                    <button type="submit" disabled={isSubmitting} className="w-full bg-blue-600 text-white font-bold py-3 rounded-md hover:bg-blue-700 disabled:bg-blue-400 transition-colors">
                         {isSubmitting ? 'A enviar...' : 'Enviar Notificação'}
                     </button>
                 </form>
