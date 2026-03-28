@@ -185,6 +185,59 @@ const LoginScreen = ({ onLogin, isLoading, error }) => (
     </div>
 );
 
+const PendingScreen = () => (
+    <div className="flex items-center justify-center min-h-screen bg-slate-100 dark:bg-slate-900">
+        <div className="p-8 bg-white dark:bg-slate-800 rounded-3xl shadow-2xl text-center max-w-md">
+            <h2 className="text-3xl font-black text-amber-500 mb-4">Acesso Pendente</h2>
+            <p className="text-slate-600 dark:text-slate-300">O seu pedido de acesso foi enviado. Por favor, aguarde a aprovação de um administrador.</p>
+        </div>
+    </div>
+);
+
+const ResetPasswordModal = ({ isOpen, onClose, user, scriptUrl }) => {
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [message, setMessage] = useState({ type: '', text: '' });
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setMessage({ type: '', text: '' });
+        if (newPassword !== confirmPassword) { setMessage({ type: 'error', text: 'As senhas não coincidem.' }); return; }
+        if (!/^(?=.*[A-Z])(?=.*[0-9])/.test(newPassword)) { setMessage({ type: 'error', text: 'A senha deve conter pelo menos uma letra maiúscula e um número.' }); return; }
+
+        setIsSubmitting(true);
+        try {
+            const data = await fetchWithPost(scriptUrl, { action: 'resetPassword', email: user.email, newPassword });
+            if (data.result === 'success') {
+                setMessage({ type: 'success', text: 'Senha alterada com sucesso! A sair...' });
+                setTimeout(() => onClose(true), 2000);
+            } else throw new Error(data.message || 'Erro desconhecido.');
+        } catch (error) { setMessage({ type: 'error', text: error.message }); } 
+        finally { setIsSubmitting(false); }
+    };
+
+    return (
+        <Modal isOpen={isOpen} onClose={() => onClose(false)} title="Resetar Senha">
+            <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Nova Senha</label>
+                    <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full p-3 border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" required />
+                    <p className="text-xs text-slate-500 mt-1">Deve conter letras maiúsculas e números.</p>
+                </div>
+                <div>
+                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Confirmar Senha</label>
+                    <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="w-full p-3 border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" required />
+                </div>
+                {message.text && <p className={`p-3 rounded-xl font-bold text-sm ${message.type === 'error' ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>{message.text}</p>}
+                <button type="submit" disabled={isSubmitting} className="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-lg">
+                    {isSubmitting ? 'A alterar...' : 'Alterar Senha'}
+                </button>
+            </form>
+        </Modal>
+    );
+};
+
 // --- COMPONENTES ESPECÍFICOS ---
 const ProximoJogoCard = ({ game, currentUser, onAttendanceUpdate }) => {
     if (!game) {
@@ -619,16 +672,16 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
                         
                         {reportData.map((p, idx) => (
                             <div key={p.name} className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors border-b border-slate-100 dark:border-slate-700/30">
-                                <div className="flex items-center gap-3 min-w-0">
-                                    <span className="text-slate-400 w-5 text-right text-xs font-bold">{idx + 1}º</span>
-                                    <span className="font-bold text-slate-800 dark:text-slate-100 truncate w-32 sm:w-40">{p.name}</span>
+                                <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 mr-2">
+                                    <span className="text-slate-400 w-4 sm:w-5 text-right text-[10px] sm:text-xs font-bold shrink-0">{idx + 1}º</span>
+                                    <span className="font-bold text-slate-800 dark:text-slate-100 truncate">{p.name}</span>
                                 </div>
-                                <div className="flex items-center gap-4 shrink-0">
-                                    <span className="text-xs font-medium text-slate-500 w-10 text-right">{p.presences}/{p.totalGames}</span>
-                                    <span className="w-12 text-center">
-                                        {p.faults > 0 ? <span className="bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-400 px-1.5 py-0.5 rounded text-[10px] font-bold" title="Faltas não justificadas">{p.faults} F</span> : <span className="text-slate-300 dark:text-slate-600">-</span>}
+                                <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+                                    <span className="text-[10px] sm:text-xs font-medium text-slate-500 w-8 sm:w-10 text-right">{p.presences}/{p.totalGames}</span>
+                                    <span className="w-8 sm:w-12 text-center">
+                                        {p.faults > 0 ? <span className="bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-400 px-1 sm:px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] font-bold" title="Faltas não justificadas">{p.faults} F</span> : <span className="text-slate-300 dark:text-slate-600">-</span>}
                                     </span>
-                                    <span className={`w-12 text-right font-black text-sm ${p.percentage >= 50 ? 'text-indigo-600 dark:text-indigo-400' : 'text-rose-500 dark:text-rose-400'}`}>
+                                    <span className={`w-10 sm:w-12 text-right font-black text-xs sm:text-sm ${p.percentage >= 50 ? 'text-indigo-600 dark:text-indigo-400' : 'text-rose-500 dark:text-rose-400'}`}>
                                         {p.percentage.toFixed(0)}%
                                     </span>
                                 </div>
@@ -679,7 +732,7 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
             {/* RELATÓRIO OCULTO PARA EXPORTAÇÃO EM PDF (ESTILO CORPORATIVO) */}
             {/* ========================================================= */}
             <div className="absolute opacity-0 pointer-events-none -z-50 left-[-9999px] top-[-9999px]">
-                <div id="pdf-corporate-report" style={{ width: '750px', backgroundColor: '#ffffff', boxSizing: 'border-box' }} className="p-8 mx-auto text-slate-800">
+                <div id="pdf-corporate-report" style={{ width: '794px', backgroundColor: '#ffffff', boxSizing: 'border-box' }} className="p-10 text-slate-800">
                     
                     {/* Cabeçalho do PDF */}
                     <div className="flex justify-between items-end border-b-4 border-slate-900 pb-6 mb-8">
@@ -1863,6 +1916,7 @@ const NotificacoesTab = ({ scriptUrl }) => {
 const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
     const [activeTab, setActiveTab] = useState('presenca');
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     
     // O hook gerencia o estado e o cache dos dados base
     const { data: initialData, isLoading, refetch } = useDataQuery(['initialData'], () => fetchWithPost(SCRIPT_URL, { action: 'getInitialAppData' }));
@@ -1962,8 +2016,16 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
     return (
         <div className="flex h-screen w-full bg-slate-50 dark:bg-slate-900 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-50/50 via-slate-50 to-slate-100 dark:from-indigo-900/20 dark:via-slate-900 dark:to-slate-900 transition-colors duration-500 text-slate-800 dark:text-slate-200 overflow-hidden">
             
+            {/* Overlay para Mobile quando Sidebar está aberta */}
+            {isSidebarOpen && (
+                <div 
+                    className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-40 md:hidden transition-opacity"
+                    onClick={() => setIsSidebarOpen(false)}
+                />
+            )}
+
             {/* SIDEBAR VERTICAL */}
-            <nav className="w-[72px] md:w-24 shrink-0 h-full flex flex-col items-center py-6 bg-white/70 dark:bg-slate-800/50 backdrop-blur-xl border-r border-slate-200/50 dark:border-slate-700/50 z-50 shadow-lg overflow-y-auto hide-scrollbar gap-3 md:gap-4">
+            <nav className={`fixed inset-y-0 left-0 z-50 md:relative transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-300 w-[72px] md:w-24 shrink-0 h-full flex flex-col items-center py-6 bg-white/90 dark:bg-slate-800/90 backdrop-blur-2xl border-r border-slate-200/50 dark:border-slate-700/50 shadow-2xl md:shadow-lg overflow-y-auto hide-scrollbar gap-3 md:gap-4`}>
                 <div className="mb-6">
                      <img src="https://lh3.googleusercontent.com/d/131DvcfgiRLLp9irVnVY8m9qNuM-0y7f8" alt="Logo" className="w-12 h-12 rounded-full shadow-md border-2 border-indigo-100 dark:border-indigo-900/50" />
                 </div>
@@ -1974,7 +2036,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
                     return (
                         <button 
                             key={tab} 
-                            onClick={() => setActiveTab(tab)} 
+                            onClick={() => { setActiveTab(tab); setIsSidebarOpen(false); }} 
                             className={`group relative flex items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-2xl transition-all duration-300 ${isActive ? `${config.activeBg} scale-110` : `${config.color} hover:bg-slate-200/50 dark:hover:bg-slate-700/50 hover:scale-105`}`}
                             title={tab.charAt(0).toUpperCase() + tab.slice(1)}
                         >
@@ -1985,10 +2047,13 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
             </nav>
 
             {/* ÁREA DE CONTEÚDO PRINCIPAL */}
-            <div className="flex-1 flex flex-col h-full overflow-hidden relative">
+            <div className="flex-1 flex flex-col h-full overflow-hidden relative w-full">
                 {/* Cabeçalho */}
-                <header className="shrink-0 p-4 md:px-8 md:py-5 flex justify-between items-center bg-white/40 dark:bg-slate-800/30 backdrop-blur-md border-b border-slate-200/50 dark:border-slate-700/50 z-40">
-                    <div className="flex items-center gap-4">
+                <header className="shrink-0 p-4 md:px-8 md:py-5 flex justify-between items-center bg-white/40 dark:bg-slate-800/30 backdrop-blur-md border-b border-slate-200/50 dark:border-slate-700/50 z-30">
+                    <div className="flex items-center gap-3 sm:gap-4">
+                        <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2 -ml-2 text-slate-600 dark:text-slate-300 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+                            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
+                        </button>
                         <img src={user.fotoUrl || 'https://placehold.co/100'} alt="Avatar" className="h-10 w-10 md:h-12 md:w-12 rounded-full object-cover shadow-sm ring-2 ring-white dark:ring-slate-700" crossOrigin="anonymous" />
                         <div className="hidden sm:block">
                             <h1 className="text-xl md:text-2xl font-black tracking-tight text-slate-800 dark:text-white leading-none">Portal CBA</h1>
@@ -2003,7 +2068,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
                     </div>
                 </header>
 
-                {/* Abas */}
+                {/* Abas / Conteúdo */}
                 <main className="flex-1 overflow-y-auto p-4 md:p-8">
                     <div className="max-w-7xl mx-auto pb-20">
                         {renderContent()}
