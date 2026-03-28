@@ -185,59 +185,6 @@ const LoginScreen = ({ onLogin, isLoading, error }) => (
     </div>
 );
 
-const PendingScreen = () => (
-    <div className="flex items-center justify-center min-h-screen bg-slate-100 dark:bg-slate-900">
-        <div className="p-8 bg-white dark:bg-slate-800 rounded-3xl shadow-2xl text-center max-w-md">
-            <h2 className="text-3xl font-black text-amber-500 mb-4">Acesso Pendente</h2>
-            <p className="text-slate-600 dark:text-slate-300">O seu pedido de acesso foi enviado. Por favor, aguarde a aprovação de um administrador.</p>
-        </div>
-    </div>
-);
-
-const ResetPasswordModal = ({ isOpen, onClose, user, scriptUrl }) => {
-    const [newPassword, setNewPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [message, setMessage] = useState({ type: '', text: '' });
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setMessage({ type: '', text: '' });
-        if (newPassword !== confirmPassword) { setMessage({ type: 'error', text: 'As senhas não coincidem.' }); return; }
-        if (!/^(?=.*[A-Z])(?=.*[0-9])/.test(newPassword)) { setMessage({ type: 'error', text: 'A senha deve conter pelo menos uma letra maiúscula e um número.' }); return; }
-
-        setIsSubmitting(true);
-        try {
-            const data = await fetchWithPost(scriptUrl, { action: 'resetPassword', email: user.email, newPassword });
-            if (data.result === 'success') {
-                setMessage({ type: 'success', text: 'Senha alterada com sucesso! A sair...' });
-                setTimeout(() => onClose(true), 2000);
-            } else throw new Error(data.message || 'Erro desconhecido.');
-        } catch (error) { setMessage({ type: 'error', text: error.message }); } 
-        finally { setIsSubmitting(false); }
-    };
-
-    return (
-        <Modal isOpen={isOpen} onClose={() => onClose(false)} title="Resetar Senha">
-            <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Nova Senha</label>
-                    <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full p-3 border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" required />
-                    <p className="text-xs text-slate-500 mt-1">Deve conter letras maiúsculas e números.</p>
-                </div>
-                <div>
-                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Confirmar Senha</label>
-                    <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="w-full p-3 border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" required />
-                </div>
-                {message.text && <p className={`p-3 rounded-xl font-bold text-sm ${message.type === 'error' ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>{message.text}</p>}
-                <button type="submit" disabled={isSubmitting} className="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-lg">
-                    {isSubmitting ? 'A alterar...' : 'Alterar Senha'}
-                </button>
-            </form>
-        </Modal>
-    );
-};
-
 // --- COMPONENTES ESPECÍFICOS ---
 const ProximoJogoCard = ({ game, currentUser, onAttendanceUpdate }) => {
     if (!game) {
@@ -316,6 +263,7 @@ const PresencaTab = ({ allPlayersData, dates, financeData, isLoading, error, nex
 
     const playersWithStats = useMemo(() => {
         if (!allPlayersData || !playedDatesByYear.length) return [];
+        
         return allPlayersData.map(p => {
             let validGames = 0;
             let presences = 0;
@@ -326,12 +274,13 @@ const PresencaTab = ({ allPlayersData, dates, financeData, isLoading, error, nex
                     if (status.includes('✅')) presences++;
                 }
             });
+
             const percentage = validGames > 0 ? (presences / validGames) * 100 : 0;
             return { ...p, percentage, presences, validGames };
         });
     }, [allPlayersData, playedDatesByYear]);
 
-    // Destaque do Ano: Quem tem MAIS presenças vence.
+    // Destaque do Ano: Quem tem MAIS presenças absolutas vence.
     const topPresencePlayer = [...playersWithStats]
         .filter(p => p.validGames > 0 && p.isEligibleForHoF !== false && String(p.isEligibleForHoF).toUpperCase() !== 'FALSE')
         .sort((a,b) => {
@@ -340,6 +289,7 @@ const PresencaTab = ({ allPlayersData, dates, financeData, isLoading, error, nex
             return 0;
         })[0];
 
+    // Maior Média Ano: Maior %, com desempate por nº de presenças
     const topPercentagePlayer = [...playersWithStats]
         .filter(p => p.validGames > 0 && p.isEligibleForHoF !== false && String(p.isEligibleForHoF).toUpperCase() !== 'FALSE')
         .sort((a,b) => b.percentage - a.percentage || b.presences - a.presences)[0];
@@ -396,7 +346,7 @@ const PresencaTab = ({ allPlayersData, dates, financeData, isLoading, error, nex
                 datasets: [{
                     label: 'Total de Presenças',
                     data: monthlyData,
-                    backgroundColor: '#6366f1',
+                    backgroundColor: '#818cf8',
                     borderRadius: 4
                 }]
             },
@@ -415,6 +365,8 @@ const PresencaTab = ({ allPlayersData, dates, financeData, isLoading, error, nex
             <ProximoJogoCard game={nextGame} currentUser={currentUser} onAttendanceUpdate={onAttendanceUpdate} />
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                
+                {/* Destaque do Ano Card */}
                 <GlassCard className="col-span-1 md:col-span-2 bg-gradient-to-br from-orange-500 to-rose-600 !text-white border-none flex items-center justify-between overflow-hidden relative">
                     <div className="absolute -right-10 opacity-20 text-[150px]">🏆</div>
                     <div className="relative z-10">
@@ -557,10 +509,10 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
         setTimeout(() => {
             const element = document.getElementById('pdf-corporate-report');
             const opt = {
-                margin:       [0.2, 0, 0.2, 0], // reduzimos as margens do PDF pois já temos padding no CSS
+                margin:       [0.4, 0, 0.4, 0], 
                 filename:     `Relatorio_CBA_${selectedYear}_${selectedPlayer === 'todos' ? 'Geral' : selectedPlayer.replace(/\s+/g, '_')}.pdf`,
                 image:        { type: 'jpeg', quality: 1 },
-                html2canvas:  { scale: 2, useCORS: true, width: 794 }, // Força largura A4 (96dpi) para não cortar direita
+                html2canvas:  { scale: 2, useCORS: true, width: 794 }, 
                 jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' },
                 pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
             };
@@ -606,7 +558,7 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
         <div className="space-y-8 animate-fade-in-up">
             <GlassCard className="flex flex-col xl:flex-row justify-between items-center gap-4">
                 <div className="flex items-center w-full xl:w-auto">
-                    <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-2xl mr-4"><svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg></div>
+                    <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-2xl mr-4"><svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012-2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg></div>
                     <div><h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Central de Relatórios</h2><p className="text-sm text-slate-500">Dados operacionais e performance</p></div>
                 </div>
                 
@@ -686,6 +638,7 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
                 </GlassCard>
             ) : singlePlayer && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    {/* PLAYER CARD */}
                     <GlassCard className="col-span-1 flex flex-col items-center text-center relative overflow-hidden group">
                         <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-indigo-500/20 to-transparent"></div>
                         <div className="relative z-10 pt-6">
@@ -698,6 +651,7 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
                             </div>
                         </div>
                     </GlassCard>
+
                     <div className="col-span-1 md:col-span-2 space-y-8">
                         <GlassCard className="flex items-center gap-8">
                             <div className="w-32 h-32 shrink-0 relative">
@@ -725,7 +679,7 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
             {/* RELATÓRIO OCULTO PARA EXPORTAÇÃO EM PDF (ESTILO CORPORATIVO) */}
             {/* ========================================================= */}
             <div className="absolute opacity-0 pointer-events-none -z-50 left-[-9999px] top-[-9999px]">
-                <div id="pdf-corporate-report" style={{ width: '794px', backgroundColor: '#ffffff', boxSizing: 'border-box' }} className="p-10 text-slate-800">
+                <div id="pdf-corporate-report" style={{ width: '750px', backgroundColor: '#ffffff', boxSizing: 'border-box' }} className="p-8 mx-auto text-slate-800">
                     
                     {/* Cabeçalho do PDF */}
                     <div className="flex justify-between items-end border-b-4 border-slate-900 pb-6 mb-8">
@@ -1962,49 +1916,98 @@ const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
         }
     };
 
-    const TAB_ICONS = {
-        presenca: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>,
-        jogos: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 shrink-0" viewBox="0 0 20 20" fill="currentColor"><path d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a1 1 0 011-1h14a1 1 0 110 2H3a1 1 0 01-1-1z" /></svg>,
-        estatuto: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>,
-        financas: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>,
-        sorteio: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.121 15.536c-1.171 1.952-3.07 1.952-4.242 0-1.172-1.953-1.172-5.119 0-7.072 1.171-1.952 3.07-1.952 4.242 0 1.172 1.953 1.172 5.119 0 7.072z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 21a9 9 0 100-18 9 9 0 000 18z" /></svg>,
-        eventos: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
-        relatorios: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>,
-        notificacoes: <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>,
+    const TAB_CONFIG = {
+        presenca: {
+            icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 md:h-7 md:w-7 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>,
+            color: 'text-emerald-500 dark:text-emerald-400',
+            activeBg: 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
+        },
+        jogos: {
+            icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 md:h-7 md:w-7 shrink-0" viewBox="0 0 20 20" fill="currentColor"><path d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a1 1 0 011-1h14a1 1 0 110 2H3a1 1 0 01-1-1z" /></svg>,
+            color: 'text-orange-500 dark:text-orange-400',
+            activeBg: 'bg-orange-500 text-white shadow-lg shadow-orange-500/30'
+        },
+        estatuto: {
+            icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 md:h-7 md:w-7 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>,
+            color: 'text-teal-500 dark:text-teal-400',
+            activeBg: 'bg-teal-500 text-white shadow-lg shadow-teal-500/30'
+        },
+        financas: {
+            icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 md:h-7 md:w-7 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>,
+            color: 'text-rose-500 dark:text-rose-400',
+            activeBg: 'bg-rose-500 text-white shadow-lg shadow-rose-500/30'
+        },
+        sorteio: {
+            icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 md:h-7 md:w-7 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>,
+            color: 'text-amber-500 dark:text-amber-400',
+            activeBg: 'bg-amber-500 text-white shadow-lg shadow-amber-500/30'
+        },
+        eventos: {
+            icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 md:h-7 md:w-7 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
+            color: 'text-purple-500 dark:text-purple-400',
+            activeBg: 'bg-purple-500 text-white shadow-lg shadow-purple-500/30'
+        },
+        relatorios: {
+            icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 md:h-7 md:w-7 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>,
+            color: 'text-blue-500 dark:text-blue-400',
+            activeBg: 'bg-blue-600 text-white shadow-lg shadow-blue-500/30'
+        },
+        notificacoes: {
+            icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 md:h-7 md:w-7 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>,
+            color: 'text-pink-500 dark:text-pink-400',
+            activeBg: 'bg-pink-500 text-white shadow-lg shadow-pink-500/30'
+        },
     };
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-900 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-50/50 via-slate-50 to-slate-100 dark:from-indigo-900/20 dark:via-slate-900 dark:to-slate-900 transition-colors duration-500 text-slate-800 dark:text-slate-200">
-            <div className="container mx-auto p-4 md:p-8 max-w-7xl">
-                {/* Header Profile */}
-                <header className="mb-8 flex flex-col sm:flex-row justify-between items-center bg-white/70 dark:bg-slate-800/50 backdrop-blur-xl p-4 md:p-6 rounded-3xl shadow-sm border border-slate-200/50 dark:border-slate-700/50">
-                    <div className="flex items-center gap-5">
-                        <img src={user.fotoUrl || 'https://placehold.co/100'} alt="Avatar" className="h-16 w-16 rounded-full object-cover shadow-md ring-4 ring-white dark:ring-slate-700" />
-                        <div>
-                            <h1 className="text-2xl font-black tracking-tight text-slate-800 dark:text-white">Portal CBA</h1>
-                            <p className="text-indigo-600 dark:text-indigo-400 font-bold text-sm uppercase tracking-widest">{user.name}</p>
+        <div className="flex h-screen w-full bg-slate-50 dark:bg-slate-900 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-50/50 via-slate-50 to-slate-100 dark:from-indigo-900/20 dark:via-slate-900 dark:to-slate-900 transition-colors duration-500 text-slate-800 dark:text-slate-200 overflow-hidden">
+            
+            {/* SIDEBAR VERTICAL */}
+            <nav className="w-[72px] md:w-24 shrink-0 h-full flex flex-col items-center py-6 bg-white/70 dark:bg-slate-800/50 backdrop-blur-xl border-r border-slate-200/50 dark:border-slate-700/50 z-50 shadow-lg overflow-y-auto hide-scrollbar gap-3 md:gap-4">
+                <div className="mb-6">
+                     <img src="https://lh3.googleusercontent.com/d/131DvcfgiRLLp9irVnVY8m9qNuM-0y7f8" alt="Logo" className="w-12 h-12 rounded-full shadow-md border-2 border-indigo-100 dark:border-indigo-900/50" />
+                </div>
+                
+                {TABS.map(tab => {
+                    const config = TAB_CONFIG[tab];
+                    const isActive = activeTab === tab;
+                    return (
+                        <button 
+                            key={tab} 
+                            onClick={() => setActiveTab(tab)} 
+                            className={`group relative flex items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-2xl transition-all duration-300 ${isActive ? `${config.activeBg} scale-110` : `${config.color} hover:bg-slate-200/50 dark:hover:bg-slate-700/50 hover:scale-105`}`}
+                            title={tab.charAt(0).toUpperCase() + tab.slice(1)}
+                        >
+                            {config.icon}
+                        </button>
+                    );
+                })}
+            </nav>
+
+            {/* ÁREA DE CONTEÚDO PRINCIPAL */}
+            <div className="flex-1 flex flex-col h-full overflow-hidden relative">
+                {/* Cabeçalho */}
+                <header className="shrink-0 p-4 md:px-8 md:py-5 flex justify-between items-center bg-white/40 dark:bg-slate-800/30 backdrop-blur-md border-b border-slate-200/50 dark:border-slate-700/50 z-40">
+                    <div className="flex items-center gap-4">
+                        <img src={user.fotoUrl || 'https://placehold.co/100'} alt="Avatar" className="h-10 w-10 md:h-12 md:w-12 rounded-full object-cover shadow-sm ring-2 ring-white dark:ring-slate-700" crossOrigin="anonymous" />
+                        <div className="hidden sm:block">
+                            <h1 className="text-xl md:text-2xl font-black tracking-tight text-slate-800 dark:text-white leading-none">Portal CBA</h1>
+                            <p className="text-indigo-600 dark:text-indigo-400 font-bold text-[10px] md:text-xs uppercase tracking-widest">{user.name}</p>
                         </div>
                     </div>
-                    <div className="flex gap-3 mt-4 sm:mt-0">
-                        <button onClick={handleRefresh} className="p-3 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl shadow-sm hover:shadow-md transition">
+                    <div className="flex gap-2 md:gap-3">
+                        <button onClick={handleRefresh} className="p-2 md:p-2.5 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl shadow-sm hover:shadow-md transition">
                             <svg className={`w-5 h-5 ${isRefreshing ? 'animate-spin text-indigo-500' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h5M20 20v-5h-5M4 4a14.95 14.95 0 0117.47 9.47M20 20a14.95 14.95 0 01-17.47-9.47" /></svg>
                         </button>
-                        <button onClick={onLogout} className="px-5 py-2.5 bg-slate-100 dark:bg-slate-800 text-rose-500 font-bold rounded-xl hover:bg-rose-50 dark:hover:bg-rose-900/20 transition shadow-sm border border-slate-200 dark:border-slate-700">Sair</button>
+                        <button onClick={onLogout} className="px-3 md:px-5 py-2 md:py-2.5 bg-slate-100 dark:bg-slate-800 text-rose-500 font-bold text-sm md:text-base rounded-xl hover:bg-rose-50 dark:hover:bg-rose-900/20 transition shadow-sm border border-slate-200 dark:border-slate-700">Sair</button>
                     </div>
                 </header>
 
-                {/* Tab Navigation */}
-                <nav className="flex overflow-x-auto hide-scrollbar space-x-2 mb-8 pb-2">
-                    {TABS.map(tab => (
-                        <button key={tab} onClick={() => setActiveTab(tab)} className={`shrink-0 flex items-center justify-center px-6 py-3 font-bold rounded-2xl transition-all duration-300 capitalize text-sm ${activeTab === tab ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30 scale-105' : 'bg-white/60 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 hover:bg-white dark:hover:bg-slate-800'}`}>
-                            {TAB_ICONS[tab]} {tab}
-                        </button>
-                    ))}
-                </nav>
-
-                {/* Main Content Area */}
-                <main className="animate-fade-in-up">
-                    {renderContent()}
+                {/* Abas */}
+                <main className="flex-1 overflow-y-auto p-4 md:p-8">
+                    <div className="max-w-7xl mx-auto pb-20">
+                        {renderContent()}
+                    </div>
                 </main>
             </div>
         </div>
