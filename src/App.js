@@ -671,7 +671,7 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
                         </div>
                         
                         {reportData.map((p, idx) => (
-                            <div key={p.name} className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors border-b border-slate-100 dark:border-slate-700/30">
+                            <div key={p.name} onClick={() => setSelectedPlayer(p.name)} className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors border-b border-slate-100 dark:border-slate-700/30 cursor-pointer">
                                 <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 mr-2">
                                     <span className="text-slate-400 w-4 sm:w-5 text-right text-[10px] sm:text-xs font-bold shrink-0">{idx + 1}º</span>
                                     <span className="font-bold text-slate-800 dark:text-slate-100 truncate">{p.name}</span>
@@ -690,40 +690,46 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
                     </div>
                 </GlassCard>
             ) : singlePlayer && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                    {/* PLAYER CARD */}
-                    <GlassCard className="col-span-1 flex flex-col items-center text-center relative overflow-hidden group">
-                        <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-indigo-500/20 to-transparent"></div>
-                        <div className="relative z-10 pt-6">
-                            {singlePlayer.fotoUrl ? <img src={singlePlayer.fotoUrl} alt={singlePlayer.name} className="w-40 h-40 rounded-3xl object-cover border-4 border-white dark:border-slate-700 shadow-2xl group-hover:scale-105 transition-transform duration-500" crossOrigin="anonymous" onError={(e) => { e.target.onerror = null; e.target.src='https://placehold.co/160/4f46e5/ffffff?text=' + singlePlayer.name.charAt(0); }} /> : <div className="w-40 h-40 rounded-3xl bg-indigo-600 text-white flex items-center justify-center text-6xl font-bold shadow-2xl border-4 border-white dark:border-slate-700">{singlePlayer.name.charAt(0)}</div>}
-                            <h2 className="text-3xl font-black mt-6 text-slate-800 dark:text-white uppercase tracking-tight">{singlePlayer.name}</h2>
-                            <p className="text-indigo-600 dark:text-indigo-400 font-bold tracking-widest uppercase text-sm mt-1">{singlePlayer.posicao || 'JOGADOR'} • #{singlePlayer.numero || '--'}</p>
-                            <div className="grid grid-cols-2 gap-4 w-full mt-8 border-t border-slate-200 dark:border-slate-700/50 pt-6">
-                                <div><p className="text-3xl font-black text-slate-800 dark:text-white">{singlePlayer.ppj || 0}</p><p className="text-xs text-slate-500 font-bold uppercase tracking-wider">PTS / Jogo</p></div>
-                                <div><p className="text-3xl font-black text-slate-800 dark:text-white">{singlePlayer.rpj || 0}</p><p className="text-xs text-slate-500 font-bold uppercase tracking-wider">REB / Jogo</p></div>
+                <div className="animate-fade-in-up">
+                    <button onClick={() => setSelectedPlayer('todos')} className="mb-6 flex items-center gap-2 text-sm font-bold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 transition-colors w-fit px-4 py-2 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                        Voltar ao Ranking Geral
+                    </button>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                        {/* PLAYER CARD */}
+                        <GlassCard className="col-span-1 flex flex-col items-center text-center relative overflow-hidden group">
+                            <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-indigo-500/20 to-transparent"></div>
+                            <div className="relative z-10 pt-6">
+                                {singlePlayer.fotoUrl ? <img src={singlePlayer.fotoUrl} alt={singlePlayer.name} className="w-40 h-40 rounded-3xl object-cover border-4 border-white dark:border-slate-700 shadow-2xl group-hover:scale-105 transition-transform duration-500" crossOrigin="anonymous" onError={(e) => { e.target.onerror = null; e.target.src='https://placehold.co/160/4f46e5/ffffff?text=' + singlePlayer.name.charAt(0); }} /> : <div className="w-40 h-40 rounded-3xl bg-indigo-600 text-white flex items-center justify-center text-6xl font-bold shadow-2xl border-4 border-white dark:border-slate-700">{singlePlayer.name.charAt(0)}</div>}
+                                <h2 className="text-3xl font-black mt-6 text-slate-800 dark:text-white uppercase tracking-tight">{singlePlayer.name}</h2>
+                                <p className="text-indigo-600 dark:text-indigo-400 font-bold tracking-widest uppercase text-sm mt-1">{singlePlayer.posicao || 'JOGADOR'} • #{singlePlayer.numero || '--'}</p>
+                                <div className="grid grid-cols-2 gap-4 w-full mt-8 border-t border-slate-200 dark:border-slate-700/50 pt-6">
+                                    <div><p className="text-3xl font-black text-slate-800 dark:text-white">{singlePlayer.ppj || 0}</p><p className="text-xs text-slate-500 font-bold uppercase tracking-wider">PTS / Jogo</p></div>
+                                    <div><p className="text-3xl font-black text-slate-800 dark:text-white">{singlePlayer.rpj || 0}</p><p className="text-xs text-slate-500 font-bold uppercase tracking-wider">REB / Jogo</p></div>
+                                </div>
                             </div>
-                        </div>
-                    </GlassCard>
+                        </GlassCard>
 
-                    <div className="col-span-1 md:col-span-2 space-y-8">
-                        <GlassCard className="flex items-center gap-8">
-                            <div className="w-32 h-32 shrink-0 relative">
-                                <ChartComponent chartConfig={singlePlayerChart} />
-                                <div className="absolute inset-0 flex items-center justify-center flex-col mt-1"><span className="text-2xl font-black">{singlePlayer.percentage.toFixed(0)}%</span></div>
-                            </div>
-                            <div className="flex-grow space-y-4">
-                                <div><h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Assiduidade em {selectedYear}</h3><p className="text-2xl font-bold text-slate-800 dark:text-white">{singlePlayer.presences} presenças em {singlePlayer.totalGames} jogos</p></div>
-                                {singlePlayer.faults > 0 && <div className="bg-red-500/10 border border-red-500/20 p-3 rounded-xl inline-block"><span className="font-bold text-red-600 dark:text-red-400">⚠️ {singlePlayer.faults} faltas não justificadas</span></div>}
-                            </div>
-                        </GlassCard>
-                        <GlassCard>
-                            <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4 border-b border-slate-200 dark:border-slate-700 pb-3">Ficha Técnica</h3>
-                            <div className="grid grid-cols-2 gap-y-6">
-                                <div><p className="text-sm text-slate-500">Altura</p><p className="text-lg font-semibold">{singlePlayer.altura || '--'} m</p></div>
-                                <div><p className="text-sm text-slate-500">Membro Desde</p><p className="text-lg font-semibold">{singlePlayer.dataEntrada ? new Date(singlePlayer.dataEntrada).getFullYear() : '--'}</p></div>
-                                <div className="col-span-2"><p className="text-sm text-slate-500">Especialidade / Estilo de Jogo</p><p className="text-lg font-semibold">{singlePlayer.especialidade || 'Não informada'}</p></div>
-                            </div>
-                        </GlassCard>
+                        <div className="col-span-1 md:col-span-2 space-y-8">
+                            <GlassCard className="flex items-center gap-8">
+                                <div className="w-32 h-32 shrink-0 relative">
+                                    <ChartComponent chartConfig={singlePlayerChart} />
+                                    <div className="absolute inset-0 flex items-center justify-center flex-col mt-1"><span className="text-2xl font-black">{singlePlayer.percentage.toFixed(0)}%</span></div>
+                                </div>
+                                <div className="flex-grow space-y-4">
+                                    <div><h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Assiduidade em {selectedYear}</h3><p className="text-2xl font-bold text-slate-800 dark:text-white">{singlePlayer.presences} presenças em {singlePlayer.totalGames} jogos</p></div>
+                                    {singlePlayer.faults > 0 && <div className="bg-red-500/10 border border-red-500/20 p-3 rounded-xl inline-block"><span className="font-bold text-red-600 dark:text-red-400">⚠️ {singlePlayer.faults} faltas não justificadas</span></div>}
+                                </div>
+                            </GlassCard>
+                            <GlassCard>
+                                <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4 border-b border-slate-200 dark:border-slate-700 pb-3">Ficha Técnica</h3>
+                                <div className="grid grid-cols-2 gap-y-6">
+                                    <div><p className="text-sm text-slate-500">Altura</p><p className="text-lg font-semibold">{singlePlayer.altura || '--'} m</p></div>
+                                    <div><p className="text-sm text-slate-500">Membro Desde</p><p className="text-lg font-semibold">{singlePlayer.dataEntrada ? new Date(singlePlayer.dataEntrada).getFullYear() : '--'}</p></div>
+                                    <div className="col-span-2"><p className="text-sm text-slate-500">Especialidade / Estilo de Jogo</p><p className="text-lg font-semibold">{singlePlayer.especialidade || 'Não informada'}</p></div>
+                                </div>
+                            </GlassCard>
+                        </div>
                     </div>
                 </div>
             )}
