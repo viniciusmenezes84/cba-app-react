@@ -738,7 +738,7 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
             {/* RELATÓRIO OCULTO PARA EXPORTAÇÃO EM PDF (ESTILO CORPORATIVO) */}
             {/* ========================================================= */}
             <div className="absolute opacity-0 pointer-events-none -z-50 left-[-9999px] top-[-9999px]">
-                <div id="pdf-corporate-report" style={{ width: '794px', backgroundColor: '#ffffff', boxSizing: 'border-box' }} className="p-10 text-slate-800">
+                <div id="pdf-corporate-report" style={{ width: '794px', backgroundColor: '#ffffff', boxSizing: 'border-box' }} className="p-10 mx-auto text-slate-800">
                     
                     {/* Cabeçalho do PDF */}
                     <div className="flex justify-between items-end border-b-4 border-slate-900 pb-6 mb-8">
@@ -1007,8 +1007,8 @@ const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin, scri
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <GlassCard className="lg:col-span-2">
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
-                        <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Linha do Tempo Anual</h2>
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                        <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Situação Anual</h2>
                         {isAdmin && (
                             <select value={selectedPlayer} onChange={(e) => setSelectedPlayer(e.target.value)} className="p-3 bg-slate-100 dark:bg-slate-700 rounded-xl font-bold border-none outline-none focus:ring-2 focus:ring-indigo-500">
                                 {financeData.paymentStatus?.map(p => <option key={p.player} value={p.player}>{p.player}</option>)}
@@ -1019,7 +1019,7 @@ const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin, scri
                     {playerData ? (
                         <div>
                             {playerDebt > 0 && (
-                                <div className="mb-8 p-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl flex items-center justify-between">
+                                <div className="mb-6 p-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl flex items-center justify-between">
                                     <div>
                                         <h4 className="text-rose-600 dark:text-rose-400 font-bold text-lg">Atenção! Há pendências.</h4>
                                         <p className="text-sm text-rose-500/80">Regularize sua situação para não perder benefícios.</p>
@@ -1028,23 +1028,28 @@ const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin, scri
                                 </div>
                             )}
                             
-                            <div className="relative border-l-4 border-slate-200 dark:border-slate-700 ml-4 py-2 space-y-8">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 md:gap-4 mt-2">
                                 {financeData.paymentHeaders?.map((month, index) => {
                                     const status = getEnhancedStatus(month, playerData.statuses[month]);
-                                    const colors = {
-                                        pago: 'bg-emerald-500 ring-emerald-500/30',
-                                        atraso: 'bg-rose-500 ring-rose-500/30',
-                                        pendente: 'bg-slate-300 dark:bg-slate-600 ring-transparent',
-                                        isento: 'bg-blue-500 ring-blue-500/30'
+                                    const styles = {
+                                        pago: 'bg-emerald-50 border-emerald-200 dark:bg-emerald-900/20 dark:border-emerald-800/50 text-emerald-700 dark:text-emerald-400',
+                                        atraso: 'bg-rose-50 border-rose-200 dark:bg-rose-900/20 dark:border-rose-800/50 text-rose-700 dark:text-rose-400',
+                                        pendente: 'bg-slate-50 border-slate-200 dark:bg-slate-800/40 dark:border-slate-700/50 text-slate-600 dark:text-slate-400',
+                                        isento: 'bg-indigo-50 border-indigo-200 dark:bg-indigo-900/20 dark:border-indigo-800/50 text-indigo-700 dark:text-indigo-400'
                                     };
+                                    const icons = {
+                                        pago: <svg className="w-5 h-5 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" /></svg>,
+                                        atraso: <svg className="w-5 h-5 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+                                        pendente: <svg className="w-5 h-5 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+                                        isento: <svg className="w-5 h-5 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                    };
+                                    
                                     return (
-                                        <div key={month} className="relative flex items-center group">
-                                            <div className={`absolute -left-[14px] w-6 h-6 rounded-full ring-4 border-2 border-white dark:border-slate-800 ${colors[status.code]} transition-transform group-hover:scale-125`}></div>
-                                            <div className="ml-8 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl w-full border border-slate-100 dark:border-slate-700/50 flex justify-between items-center shadow-sm hover:shadow-md transition">
-                                                <span className="font-bold text-lg capitalize text-slate-700 dark:text-slate-200">{month}</span>
-                                                <span className={`px-4 py-1.5 rounded-full text-sm font-bold ${status.code === 'pago' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30' : status.code === 'atraso' ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30' : status.code === 'isento' ? 'bg-blue-100 text-blue-700' : 'bg-slate-200 text-slate-600 dark:bg-slate-700'}`}>
-                                                    {status.text}
-                                                </span>
+                                        <div key={month} className={`flex flex-col p-4 rounded-2xl border transition-transform hover:scale-105 shadow-sm ${styles[status.code]}`}>
+                                            <span className="text-[10px] font-bold uppercase tracking-widest opacity-70 mb-2">{month}</span>
+                                            <div className="flex items-center justify-between mt-auto">
+                                                <span className="font-black text-sm md:text-base leading-tight">{status.text}</span>
+                                                {icons[status.code]}
                                             </div>
                                         </div>
                                     );
