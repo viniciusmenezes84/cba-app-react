@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo, createContext, useContext } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, createContext, useContext } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Activity, CalendarDays, BookOpen, DollarSign, Users, PartyPopper, BarChart, BellRing, 
@@ -53,7 +53,7 @@ const api = {
 };
 
 // --- CUSTOM HOOK PARA CACHE E DESEMPENHO ---
-function useDataQuery(key, queryFn, dependencies = []) {
+function useDataQuery(queryFn, dependencies = []) {
     const [data, setData] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -239,7 +239,7 @@ const ProximoJogoCard = ({ game, currentUser, onAttendanceUpdate }) => {
 // ==========================================
 
 // 1. ABA PRESENÇA
-const PresencaTab = ({ allPlayersData, dates, financeData, isLoading, error, nextGame, currentUser, onAttendanceUpdate, onNavigate }) => {
+const PresencaTab = ({ allPlayersData, dates, financeData, isLoading, error, nextGame, currentUser, onAttendanceUpdate }) => {
     const availableYears = useMemo(() => {
         if (!dates || dates.length === 0) return [new Date().getFullYear().toString()];
         return [...new Set(dates.map(d => d.substring(0, 4)))].sort((a, b) => b - a);
@@ -544,7 +544,6 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
         }]
     };
 
-    // Exportação do PDF Corporativo
     const handleExportPDF = async () => {
         setIsGeneratingPDF(true);
 
@@ -618,11 +617,6 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
         window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
     };
 
-    const globalTotalGames = playedDates.length;
-    const globalAveragePercentage = reportData.length > 0 
-        ? reportData.reduce((acc, curr) => acc + curr.percentage, 0) / reportData.length 
-        : 0;
-
     return (
         <div className="space-y-8">
             <GlassCard className="flex flex-col xl:flex-row justify-between items-center gap-4">
@@ -652,7 +646,6 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
                 </div>
             </GlassCard>
 
-            {/* VISÃO GERAL (TELA) */}
             {selectedPlayer === 'todos' ? (
                 <GlassCard className="p-6">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 border-b border-slate-200 dark:border-slate-700 pb-4">
@@ -830,54 +823,11 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
                             </div>
                         </>
                     ) : singlePlayer && (
-                        <>
-                            <div className="flex gap-8 mb-10">
-                                <div className="shrink-0">
-                                    {singlePlayer.fotoUrl ? (
-                                        <img src={singlePlayer.fotoUrl} className="w-48 h-48 rounded-2xl object-cover shadow-lg border border-slate-200" crossOrigin="anonymous" alt="Player"/>
-                                    ) : (
-                                        <div className="w-48 h-48 rounded-2xl bg-slate-100 flex items-center justify-center text-7xl font-black text-slate-300 border border-slate-200">{singlePlayer.name.charAt(0)}</div>
-                                    )}
-                                </div>
-                                <div className="flex flex-col justify-center">
-                                    <h2 className="text-4xl font-black text-slate-900 uppercase tracking-tight">{singlePlayer.name}</h2>
-                                    <p className="text-xl text-slate-500 font-bold tracking-widest uppercase mt-2">{singlePlayer.posicao || 'JOGADOR'} • #{singlePlayer.numero || '--'}</p>
-                                    <div className="flex gap-8 mt-6">
-                                        <div><p className="text-3xl font-black text-indigo-600">{singlePlayer.ppj || 0}</p><p className="text-xs text-slate-500 font-bold uppercase tracking-wider">PTS / Jogo</p></div>
-                                        <div><p className="text-3xl font-black text-indigo-600">{singlePlayer.rpj || 0}</p><p className="text-xs text-slate-500 font-bold uppercase tracking-wider">REB / Jogo</p></div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-8 break-inside-avoid">
-                                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6">
-                                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider border-b border-slate-200 pb-2 mb-4">Métricas de Frequência</h3>
-                                    <div className="mb-4">
-                                        <p className="text-3xl font-black text-slate-800">{singlePlayer.percentage.toFixed(0)}%</p>
-                                        <p className="text-sm font-medium text-slate-500">Aproveitamento Anual</p>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <div className="flex justify-between font-medium"><span className="text-slate-500">Jogos Computados:</span><span className="font-bold">{singlePlayer.totalGames}</span></div>
-                                        <div className="flex justify-between font-medium"><span className="text-slate-500">Presenças Reais:</span><span className="font-bold text-emerald-600">{singlePlayer.presences}</span></div>
-                                        <div className="flex justify-between font-medium"><span className="text-slate-500">Faltas (N/ Justif.):</span><span className="font-bold text-red-600">{singlePlayer.faults}</span></div>
-                                    </div>
-                                </div>
-
-                                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6">
-                                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider border-b border-slate-200 pb-2 mb-4">Informações de Registo</h3>
-                                    <div className="space-y-4">
-                                        <div className="flex justify-between font-medium"><span className="text-slate-500">Membro Desde:</span><span className="font-bold">{singlePlayer.dataEntrada ? new Date(singlePlayer.dataEntrada).toLocaleDateString('pt-BR') : '--'}</span></div>
-                                        <div className="flex justify-between font-medium"><span className="text-slate-500">Altura Oficial:</span><span className="font-bold">{singlePlayer.altura || '--'} m</span></div>
-                                        <div><span className="text-slate-500 block mb-1 font-medium">Estilo / Especialidade:</span><span className="font-bold bg-white px-3 py-1 border border-slate-200 rounded-lg inline-block">{singlePlayer.especialidade || 'Não informada'}</span></div>
-                                    </div>
-                                </div>
-                            </div>
-                        </>
+                        <div className="flex gap-8">
+                            {singlePlayer.fotoUrl && <img src={singlePlayer.fotoUrl} className="w-48 h-48 rounded-2xl object-cover border border-slate-200" crossOrigin="anonymous" alt="Player"/>}
+                            <div><h2 className="text-4xl font-black uppercase">{singlePlayer.name}</h2><p className="text-xl text-slate-500">{singlePlayer.percentage.toFixed(0)}% de Assiduidade</p></div>
+                        </div>
                     )}
-
-                    <div className="mt-16 text-center text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] border-t border-slate-200 pt-6">
-                        Documento Oficial Gerado Eletronicamente - CBA Basquete dos Aposentados
-                    </div>
                 </div>
             </div>
         </div>
@@ -1038,7 +988,7 @@ const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin, scri
 
 // 4. ABA JOGOS
 const JogosTab = ({ currentUser, isAdmin, scriptUrl, refreshKey }) => {
-    const { data: gamesData, isLoading, refetch } = useDataQuery(['games', refreshKey], () => api.post(scriptUrl, { action: 'getGames' }), [refreshKey]);
+    const { data: gamesData, isLoading, refetch } = useDataQuery(() => api.post(scriptUrl, { action: 'getGames' }), [refreshKey, scriptUrl]);
     const games = [...(gamesData?.data || [])].sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
     
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -1148,7 +1098,7 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, refreshKey }) => {
 
 // 5. ABA EVENTOS
 const EventosTab = ({ scriptUrl, currentUser, isAdmin, refreshKey }) => {
-    const { data: eventsData, isLoading, refetch } = useDataQuery(['events', refreshKey], () => api.post(scriptUrl, { action: 'getEvents' }), [refreshKey]);
+    const { data: eventsData, isLoading, refetch } = useDataQuery(() => api.post(scriptUrl, { action: 'getEvents' }), [refreshKey, scriptUrl]);
     const events = (eventsData?.data || []).map(e => ({ ...e, attendees: typeof e.attendees === 'string' ? e.attendees.split(',').filter(Boolean) : [] }));
     
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -1591,7 +1541,7 @@ const EstatutoTab = () => {
 
 // 8. ABA NOTIFICAÇÕES (COM HISTÓRICO RESTAURADO)
 const NotificacoesTab = ({ scriptUrl }) => {
-    const { data: notifData, isLoading, error, refetch } = useDataQuery(['notifications'], () => api.post(scriptUrl, { action: 'getNotifications' }));
+    const { data: notifData, isLoading, error, refetch } = useDataQuery(() => api.post(scriptUrl, { action: 'getNotifications' }), [scriptUrl]);
 
     const notifications = useMemo(() => {
         if (!notifData?.data) return [];
@@ -1702,7 +1652,7 @@ const NotificacoesTab = ({ scriptUrl }) => {
 const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
     const [activeTab, setActiveTab] = useState('presenca');
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-    const { data: initialData, isLoading, refetch } = useDataQuery(['initialData'], () => api.post(SCRIPT_URL, { action: 'getInitialAppData' }));
+    const { data: initialData, isLoading, refetch } = useDataQuery(() => api.post(SCRIPT_URL, { action: 'getInitialAppData' }));
     
     const isAdmin = user?.role?.toUpperCase() === 'ADMIN';
     const TABS = useMemo(() => isAdmin ? ['presenca', 'relatorios', 'financas', 'jogos', 'eventos', 'sorteio', 'estatuto', 'notificacoes'] : ['presenca', 'relatorios', 'financas', 'jogos', 'eventos', 'sorteio', 'estatuto'], [isAdmin]);
@@ -1740,7 +1690,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
         return (
             <AnimatePresence mode="wait">
                 <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
-                    {activeTab === 'presenca' && <PresencaTab {...props} onAttendanceUpdate={refetch} onNavigate={setActiveTab} />}
+                    {activeTab === 'presenca' && <PresencaTab {...props} onAttendanceUpdate={refetch} />}
                     {activeTab === 'relatorios' && <RelatoriosTab {...props} />}
                     {activeTab === 'financas' && <FinancasTab {...props} />}
                     {activeTab === 'jogos' && <JogosTab {...props} />}
