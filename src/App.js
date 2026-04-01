@@ -1,7 +1,20 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo, createContext, useContext } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+    Activity, CalendarDays, BookOpen, DollarSign, Users, PartyPopper, BarChart, BellRing, 
+    X, Menu, Copy, LogOut, RefreshCw, Trophy, Flame, MapPin, ChevronDown, CheckCircle, AlertCircle, Share2, ArrowLeft, Trash, Edit
+} from 'lucide-react';
+import {
+  Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, 
+  BarElement, ArcElement, Title, Tooltip, Legend, Filler
+} from 'chart.js';
+import { Bar, Doughnut, Line } from 'react-chartjs-2';
 
-// --- CONTEXTO DE TEMA (Light/Dark Mode) ---
-const ThemeContext = createContext();
+// Registo dos componentes do Chart.js
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
+
+// --- CONTEXTO DE TEMA ---
+const ThemeContext = createContext({ theme: 'dark', toggleTheme: () => {} });
 
 const ThemeProvider = ({ children }) => {
     const theme = 'dark';
@@ -10,235 +23,171 @@ const ThemeProvider = ({ children }) => {
         root.classList.remove('light');
         root.classList.add('dark');
     }, []);
-    return (
-        <ThemeContext.Provider value={{ theme, toggleTheme: () => {} }}>
-            {children}
-        </ThemeContext.Provider>
-    );
+    return <ThemeContext.Provider value={{ theme, toggleTheme: () => {} }}>{children}</ThemeContext.Provider>;
 };
 
 const useTheme = () => useContext(ThemeContext);
 
-// --- FUNÇÕES AUXILIARES DE COMUNICAÇÃO COM O SERVIDOR ---
-const fetchWithGet = async (baseUrl, params) => {
-    try {
-        const url = new URL(baseUrl);
-        const allParams = { ...params, cacheBust: new Date().getTime() };
-        Object.keys(allParams).forEach(key => url.searchParams.append(key, allParams[key]));
-        
-        const res = await fetch(url, { method: 'GET', mode: 'cors', cache: 'no-cache' });
-        if (!res.ok) throw new Error(`Erro de HTTP: ${res.status}`);
-        return res.json();
-    } catch (error) {
-        console.error('Fetch GET error:', error);
-        throw error;
-    }
-};
-
-const fetchWithPost = async (baseUrl, params) => {
-    try {
-        const res = await fetch(baseUrl, {
-            method: 'POST', mode: 'cors', redirect: 'follow',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify(params),
-        });
-
-        if (!res.ok) {
-             const errorText = await res.text().catch(() => 'Erro desconhecido.');
-            if (errorText.trim().toLowerCase().startsWith('<!doctype html')) {
-                 throw new Error(`Erro de Servidor (${res.status}). Verifique a implantação do script.`);
+// --- UTILITÁRIOS DE API CENTRALIZADOS ---
+const api = {
+    post: async (baseUrl, params) => {
+        try {
+            const res = await fetch(baseUrl, {
+                method: 'POST', mode: 'cors', redirect: 'follow',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify(params),
+            });
+            if (!res.ok) {
+                const errorText = await res.text().catch(() => 'Erro desconhecido.');
+                if (errorText.trim().toLowerCase().startsWith('<!doctype html')) {
+                    throw new Error(`Erro de Servidor (${res.status}). Verifique a implantação do script.`);
+                }
+                throw new Error(`Erro de HTTP: ${res.status}. Resposta: ${errorText}`);
             }
-            throw new Error(`Erro de HTTP: ${res.status}. Resposta: ${errorText}`);
+            return res.json();
+        } catch (error) {
+            console.error('Fetch POST error:', error.message);
+            throw error;
         }
-        return res.json();
-    } catch (error) {
-        console.error('Fetch POST error:', error.message);
-        throw error;
     }
 };
 
 // --- CUSTOM HOOK PARA CACHE E DESEMPENHO ---
-const useDataQuery = (key, queryFn, dependencies = []) => {
+function useDataQuery(key, queryFn, dependencies = []) {
     const [data, setData] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
-    const queryFnRef = useRef(queryFn);
-
-    useEffect(() => { queryFnRef.current = queryFn; }, [queryFn]);
 
     const fetchData = useCallback(async () => {
         setIsLoading(true);
         setError(null);
         try {
-            const result = await queryFnRef.current();
+            const result = await queryFn();
             setData(result);
         } catch (err) {
             setError(err.message || "Erro desconhecido ao buscar dados.");
         } finally {
             setIsLoading(false);
         }
-    }, []);
+    }, dependencies); // eslint-disable-line react-hooks/exhaustive-deps
 
-    useEffect(() => {
-        fetchData();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [fetchData, ...dependencies]);
-
+    useEffect(() => { fetchData(); }, [fetchData]);
     return { data, isLoading, error, refetch: fetchData };
+}
+
+// --- UTILITÁRIO MODERNO DE CLIPBOARD ---
+const copyToClipboard = async (text) => {
+    try {
+        if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(text);
+            return true;
+        } else {
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            textArea.style.position = "fixed";
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            const successful = document.execCommand('copy');
+            document.body.removeChild(textArea);
+            return successful;
+        }
+    } catch (err) {
+        console.error('Erro ao copiar', err);
+        return false;
+    }
 };
 
-// --- COMPONENTES UI (GLASSMORPHISM) ---
-const GlassCard = ({ children, className = '', animate = true, onClick }) => {
-    const clickableClass = onClick ? 'cursor-pointer transition-transform hover:scale-[1.02]' : '';
+// --- COMPONENTES UI OTIMIZADOS COM FRAMER MOTION ---
+const GlassCard = ({ children, className = '', onClick }) => {
     return (
-        <div onClick={onClick} className={`bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl border border-white/50 dark:border-slate-700/50 shadow-xl rounded-3xl p-6 ${animate ? 'animate-fade-in-up' : ''} ${clickableClass} ${className}`}>
+        <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.4, ease: "easeOut" }}
+            onClick={onClick} 
+            className={`bg-white/80 dark:bg-slate-800/60 backdrop-blur-xl border border-white/50 dark:border-slate-700/50 shadow-xl rounded-3xl p-6 ${onClick ? 'cursor-pointer hover:scale-[1.02] transition-transform' : ''} ${className}`}
+        >
             {children}
-        </div>
+        </motion.div>
     );
 };
 
 const Loader = ({ message }) => (
-    <div className="flex flex-col justify-center items-center py-20 text-center text-slate-500 dark:text-slate-400">
-        <div className="w-14 h-14 border-4 border-slate-200 dark:border-slate-700 border-t-indigo-600 rounded-full animate-spin shadow-lg"></div>
-        {message && <p className="mt-6 text-lg font-medium animate-pulse">{message}</p>}
-    </div>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col justify-center items-center py-20 text-center text-slate-500 dark:text-slate-400">
+        <RefreshCw className="w-12 h-12 text-indigo-500 animate-spin mb-4" />
+        {message && <p className="text-lg font-medium animate-pulse">{message}</p>}
+    </motion.div>
 );
 
 const Modal = ({ isOpen, onClose, title, children }) => {
-    if (!isOpen) return null;
     return (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex justify-center items-center z-50 p-4 transition-opacity animate-fade-in">
-            <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-700 p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto transform transition-all scale-100 animate-fade-in-up">
-                <div className="flex justify-between items-center pb-4 border-b border-slate-200 dark:border-slate-700">
-                    <h2 className="text-2xl font-extrabold text-slate-800 dark:text-slate-100">{title}</h2>
-                    <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors bg-slate-100 dark:bg-slate-700 p-2 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
-                    </button>
+        <AnimatePresence>
+            {isOpen && (
+                <div className="fixed inset-0 z-[100] flex justify-center items-center p-4">
+                    <motion.div 
+                        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm"
+                        onClick={onClose}
+                    />
+                    <motion.div 
+                        initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                        className="relative bg-white dark:bg-slate-800 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-700 p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto z-10"
+                    >
+                        <div className="flex justify-between items-center pb-4 border-b border-slate-200 dark:border-slate-700 mb-5">
+                            <h2 className="text-2xl font-extrabold text-slate-800 dark:text-slate-100">{title}</h2>
+                            <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 bg-slate-100 dark:bg-slate-700 p-2 rounded-full transition-colors">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        {children}
+                    </motion.div>
                 </div>
-                <div className="mt-5">{children}</div>
-            </div>
-        </div>
+            )}
+        </AnimatePresence>
     );
 };
 
 const AccordionItem = ({ title, children, isOpen, onClick }) => {
-    const contentRef = useRef(null);
     return (
-        <div className="border border-slate-200 dark:border-slate-700/50 rounded-2xl overflow-hidden mb-4 transition-all duration-300 bg-white/50 dark:bg-slate-800/30">
-            <button
-                className="flex justify-between items-center w-full p-5 font-semibold text-lg text-left text-slate-700 dark:text-slate-200 hover:bg-slate-100/50 dark:hover:bg-slate-700/50 transition-colors"
-                onClick={onClick}
-            >
+        <div className="border border-slate-200 dark:border-slate-700/50 rounded-2xl overflow-hidden mb-4 bg-white/50 dark:bg-slate-800/30">
+            <button className="flex justify-between items-center w-full p-5 font-semibold text-lg text-left text-slate-700 dark:text-slate-200 hover:bg-slate-100/50 dark:hover:bg-slate-700/50 transition-colors" onClick={onClick}>
                 <span>{title}</span>
-                <svg className={`w-6 h-6 shrink-0 transform transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
-                </svg>
+                <motion.div animate={{ rotate: isOpen ? 180 : 0 }} transition={{ duration: 0.3 }}><ChevronDown className="w-5 h-5" /></motion.div>
             </button>
-            <div ref={contentRef} style={{ maxHeight: isOpen ? `${contentRef.current?.scrollHeight}px` : '0' }} className="overflow-hidden transition-all duration-500 ease-in-out">
-                <div className="p-6 prose dark:prose-invert max-w-none border-t border-slate-200 dark:border-slate-700/50 text-slate-600 dark:text-slate-300">{children}</div>
-            </div>
+            <AnimatePresence>
+                {isOpen && (
+                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.3 }} className="overflow-hidden">
+                        <div className="p-6 prose dark:prose-invert max-w-none border-t border-slate-200 dark:border-slate-700/50 text-slate-600 dark:text-slate-300">{children}</div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 };
 
-const ChartComponent = ({ chartConfig }) => {
-    const chartRef = useRef(null);
-    const chartInstance = useRef(null);
-    const { theme } = useTheme();
-
-    useEffect(() => {
-        if (chartInstance.current) chartInstance.current.destroy();
-        if (chartRef.current && chartConfig && window.Chart) {
-            const ctx = chartRef.current.getContext('2d');
-            const isDark = theme === 'dark';
-            
-            const updatedConfig = JSON.parse(JSON.stringify(chartConfig)); 
-            if(updatedConfig.options?.scales?.y?.ticks) updatedConfig.options.scales.y.ticks.color = isDark ? '#94a3b8' : '#64748b';
-            if(updatedConfig.options?.scales?.x?.ticks) updatedConfig.options.scales.x.ticks.color = isDark ? '#94a3b8' : '#64748b';
-            if(updatedConfig.options?.plugins?.legend?.labels) updatedConfig.options.plugins.legend.labels.color = isDark ? '#e2e8f0' : '#475569';
-
-            chartInstance.current = new window.Chart(ctx, updatedConfig);
-        }
-        return () => { if (chartInstance.current) chartInstance.current.destroy(); };
-    }, [chartConfig, theme]);
-
-    return <canvas ref={chartRef}></canvas>;
-};
-
-// --- AUTENTICAÇÃO E ACESSO ---
+// --- AUTENTICAÇÃO ---
 const LoginScreen = ({ onLogin, isLoading, error }) => (
     <div className="min-h-screen bg-cover bg-center flex items-center justify-center p-4 relative" style={{ backgroundImage: "url('https://images.unsplash.com/photo-1546519638-68e109498ffc?q=80&w=2070&auto=format&fit=crop')" }}>
         <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm"></div>
-        <div className="relative z-10 p-10 bg-slate-900/40 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl text-center w-full max-w-md animate-fade-in-up">
+        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.5 }} className="relative z-10 p-10 bg-slate-900/40 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl text-center w-full max-w-md">
             <img src="https://lh3.googleusercontent.com/d/131DvcfgiRLLp9irVnVY8m9qNuM-0y7f8" alt="Logo CBA" className="h-28 w-28 rounded-full shadow-2xl mx-auto mb-6 ring-4 ring-white/20" />
             <h1 className="text-4xl font-extrabold text-white mb-2 tracking-tight">Portal do CBA</h1>
             <p className="text-slate-300 mb-8 font-medium">Basquete dos Aposentados</p>
-            {error && <p className="bg-red-500/20 border border-red-500/50 text-red-200 p-3 rounded-xl mb-6 text-sm">{error}</p>}
+            {error && <p className="bg-red-500/20 border border-red-500/50 text-red-200 p-3 rounded-xl mb-6 text-sm flex items-center justify-center gap-2"><AlertCircle className="w-4 h-4"/>{error}</p>}
             <form onSubmit={onLogin} className="space-y-5">
-                <input name="email" type="email" placeholder="Email" className="w-full p-4 bg-slate-800/50 border border-slate-600 text-white rounded-xl placeholder-slate-400 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none" required />
-                <input name="password" type="password" placeholder="Senha" className="w-full p-4 bg-slate-800/50 border border-slate-600 text-white rounded-xl placeholder-slate-400 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all outline-none" required />
-                <button type="submit" disabled={isLoading} className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-indigo-500/30 disabled:opacity-70 transition-all transform hover:scale-[1.02] active:scale-95">
+                <input name="email" type="email" placeholder="Email" className="w-full p-4 bg-slate-800/50 border border-slate-600 text-white rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" required />
+                <input name="password" type="password" placeholder="Senha" className="w-full p-4 bg-slate-800/50 border border-slate-600 text-white rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" required />
+                <button type="submit" disabled={isLoading} className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-indigo-500/30 disabled:opacity-70 transition-transform active:scale-95">
                     {isLoading ? 'Autenticando...' : 'Entrar na Área Restrita'}
                 </button>
             </form>
-        </div>
+        </motion.div>
     </div>
 );
 
-const PendingScreen = () => (
-    <div className="flex items-center justify-center min-h-screen bg-slate-100 dark:bg-slate-900">
-        <div className="p-8 bg-white dark:bg-slate-800 rounded-3xl shadow-2xl text-center max-w-md">
-            <h2 className="text-3xl font-black text-amber-500 mb-4">Acesso Pendente</h2>
-            <p className="text-slate-600 dark:text-slate-300">O seu pedido de acesso foi enviado. Por favor, aguarde a aprovação de um administrador.</p>
-        </div>
-    </div>
-);
-
-const ResetPasswordModal = ({ isOpen, onClose, user, scriptUrl }) => {
-    const [newPassword, setNewPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [message, setMessage] = useState({ type: '', text: '' });
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setMessage({ type: '', text: '' });
-        if (newPassword !== confirmPassword) { setMessage({ type: 'error', text: 'As senhas não coincidem.' }); return; }
-        if (!/^(?=.*[A-Z])(?=.*[0-9])/.test(newPassword)) { setMessage({ type: 'error', text: 'A senha deve conter pelo menos uma letra maiúscula e um número.' }); return; }
-
-        setIsSubmitting(true);
-        try {
-            const data = await fetchWithPost(scriptUrl, { action: 'resetPassword', email: user.email, newPassword });
-            if (data.result === 'success') {
-                setMessage({ type: 'success', text: 'Senha alterada com sucesso! A sair...' });
-                setTimeout(() => onClose(true), 2000);
-            } else throw new Error(data.message || 'Erro desconhecido.');
-        } catch (error) { setMessage({ type: 'error', text: error.message }); } 
-        finally { setIsSubmitting(false); }
-    };
-
-    return (
-        <Modal isOpen={isOpen} onClose={() => onClose(false)} title="Resetar Senha">
-            <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Nova Senha</label>
-                    <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full p-3 border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" required />
-                    <p className="text-xs text-slate-500 mt-1">Deve conter letras maiúsculas e números.</p>
-                </div>
-                <div>
-                    <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Confirmar Senha</label>
-                    <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="w-full p-3 border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" required />
-                </div>
-                {message.text && <p className={`p-3 rounded-xl font-bold text-sm ${message.type === 'error' ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>{message.text}</p>}
-                <button type="submit" disabled={isSubmitting} className="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-lg">
-                    {isSubmitting ? 'A alterar...' : 'Alterar Senha'}
-                </button>
-            </form>
-        </Modal>
-    );
-};
-
-// --- COMPONENTES ESPECÍFICOS ---
+// --- COMPONENTES ESPECÍFICOS DAS ABAS ---
 const ProximoJogoCard = ({ game, currentUser, onAttendanceUpdate }) => {
     if (!game) {
         return (
@@ -253,33 +202,30 @@ const ProximoJogoCard = ({ game, currentUser, onAttendanceUpdate }) => {
 
     return (
         <GlassCard className="relative overflow-hidden bg-gradient-to-br from-white/80 to-slate-50/80 dark:from-slate-800/90 dark:to-slate-800/60 border-l-4 border-l-indigo-500">
-            <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
-                <svg className="w-24 h-24" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/></svg>
-            </div>
-            <h2 className="text-xl text-indigo-600 dark:text-indigo-400 font-black uppercase tracking-wider mb-4">Próximo Jogo</h2>
+            <h2 className="text-xl text-indigo-600 dark:text-indigo-400 font-black uppercase tracking-wider mb-4 flex items-center gap-2"><Trophy className="w-5 h-5"/> Próximo Jogo</h2>
             <div className="flex flex-col md:flex-row justify-between items-center gap-6">
                 <div className="space-y-3 w-full md:w-auto relative z-10">
-                    <div className="flex items-center text-slate-800 dark:text-slate-100">
-                        <span className="text-2xl mr-3">📅</span>
+                    <div className="flex items-center text-slate-800 dark:text-slate-100 gap-3">
+                        <CalendarDays className="w-6 h-6 text-slate-500" />
                         <span className="text-xl font-bold">{gameDate.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })} às {game.horario}</span>
                     </div>
-                    <div className="flex items-center text-slate-600 dark:text-slate-300">
-                        <span className="text-2xl mr-3">📍</span>
+                    <div className="flex items-center text-slate-600 dark:text-slate-300 gap-3">
+                        <MapPin className="w-6 h-6 text-slate-500" />
                         <span className="text-lg font-medium">{game.local}</span>
                     </div>
-                    <div className="flex items-center text-slate-600 dark:text-slate-300">
-                        <span className="text-2xl mr-3">🔥</span>
+                    <div className="flex items-center text-slate-600 dark:text-slate-300 gap-3">
+                        <Flame className="w-6 h-6 text-orange-500" />
                         <span className="text-lg font-medium"><strong className="text-indigo-600 dark:text-indigo-400">{game.confirmados.length}</strong> Confirmados</span>
                     </div>
                 </div>
                 <div className="w-full md:w-64 shrink-0 z-10">
                     {isConfirmed ? (
-                        <button onClick={() => onAttendanceUpdate(game.id, 'withdraw')} className="w-full font-bold py-4 px-6 rounded-2xl transition-all bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/30 hover:bg-red-500 hover:text-white shadow-lg">
-                            Desistir (❌)
+                        <button onClick={() => onAttendanceUpdate(game.id, 'withdraw')} className="w-full font-bold py-4 px-6 rounded-2xl transition-all bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/30 hover:bg-red-500 hover:text-white shadow-lg flex items-center justify-center gap-2">
+                            <X className="w-5 h-5"/> Desistir
                         </button>
                     ) : (
-                        <button onClick={() => onAttendanceUpdate(game.id, 'confirm')} className="w-full font-bold py-4 px-6 rounded-2xl transition-all bg-indigo-600 text-white hover:bg-indigo-500 hover:scale-105 shadow-xl shadow-indigo-500/30">
-                            Estou Dentro! (✅)
+                        <button onClick={() => onAttendanceUpdate(game.id, 'confirm')} className="w-full font-bold py-4 px-6 rounded-2xl transition-all bg-indigo-600 text-white hover:bg-indigo-500 hover:scale-105 shadow-xl shadow-indigo-500/30 flex items-center justify-center gap-2">
+                            <CheckCircle className="w-5 h-5"/> Estou Dentro!
                         </button>
                     )}
                 </div>
@@ -289,37 +235,34 @@ const ProximoJogoCard = ({ game, currentUser, onAttendanceUpdate }) => {
 };
 
 // ==========================================
-// --- DEFINIÇÃO DAS ABAS DA APLICAÇÃO ---
+// --- ABAS DA APLICAÇÃO ---
 // ==========================================
 
-// 1. ABA PRESENÇA (DASHBOARD PRINCIPAL)
+// 1. ABA PRESENÇA
 const PresencaTab = ({ allPlayersData, dates, financeData, isLoading, error, nextGame, currentUser, onAttendanceUpdate, onNavigate }) => {
     const availableYears = useMemo(() => {
         if (!dates || dates.length === 0) return [new Date().getFullYear().toString()];
-        const uniqueDates = [...new Set(dates)];
-        return [...new Set(uniqueDates.map(d => d.substring(0, 4)))].sort((a, b) => b - a);
+        return [...new Set(dates.map(d => d.substring(0, 4)))].sort((a, b) => b - a);
     }, [dates]);
 
     const [selectedYear, setSelectedYear] = useState(availableYears[0]);
     
-    const filteredDatesByYear = useMemo(() => {
-        const uniqueDates = [...new Set(dates || [])];
-        return uniqueDates.filter(d => d.startsWith(selectedYear));
-    }, [dates, selectedYear]);
-
-    // Filtrar apenas datas que realmente ocorreram
+    useEffect(() => {
+        if (availableYears.length > 0 && !availableYears.includes(selectedYear)) {
+            setSelectedYear(availableYears[0]);
+        }
+    }, [availableYears, selectedYear]);
+    
     const playedDatesByYear = useMemo(() => {
-        return filteredDatesByYear.filter(date =>
-            allPlayersData.some(p => p.attendance[date]?.includes('✅'))
-        );
-    }, [filteredDatesByYear, allPlayersData]);
+        const uniqueDates = [...new Set(dates || [])];
+        const filtered = uniqueDates.filter(d => d.startsWith(selectedYear));
+        return filtered.filter(date => allPlayersData.some(p => p.attendance[date]?.includes('✅')));
+    }, [dates, selectedYear, allPlayersData]);
 
     const playersWithStats = useMemo(() => {
         if (!allPlayersData || !playedDatesByYear.length) return [];
-        
         return allPlayersData.map(p => {
-            let validGames = 0;
-            let presences = 0;
+            let validGames = 0; let presences = 0;
             playedDatesByYear.forEach(d => {
                 const status = p.attendance[d]?.trim() || '';
                 if (status !== '' && status !== 'N/A') {
@@ -327,29 +270,21 @@ const PresencaTab = ({ allPlayersData, dates, financeData, isLoading, error, nex
                     if (status.includes('✅')) presences++;
                 }
             });
-
             const percentage = validGames > 0 ? (presences / validGames) * 100 : 0;
             return { ...p, percentage, presences, validGames };
         });
     }, [allPlayersData, playedDatesByYear]);
 
-    // Destaque do Ano: Quem tem MAIS presenças absolutas vence.
     const topPresencePlayer = [...playersWithStats]
-        .filter(p => p.validGames > 0 && p.isEligibleForHoF !== false && String(p.isEligibleForHoF).toUpperCase() !== 'FALSE')
-        .sort((a,b) => {
-            if (b.presences !== a.presences) return b.presences - a.presences;
-            if (b.percentage !== a.percentage) return b.percentage - a.percentage;
-            return 0;
-        })[0];
+        .filter(p => p.validGames > 0 && String(p.isEligibleForHoF).toUpperCase() !== 'FALSE')
+        .sort((a,b) => (b.presences - a.presences) || (b.percentage - a.percentage))[0];
 
-    // Maior Média Ano: Maior %, com desempate por nº de presenças
     const topPercentagePlayer = [...playersWithStats]
-        .filter(p => p.validGames > 0 && p.isEligibleForHoF !== false && String(p.isEligibleForHoF).toUpperCase() !== 'FALSE')
-        .sort((a,b) => b.percentage - a.percentage || b.presences - a.presences)[0];
+        .filter(p => p.validGames > 0 && String(p.isEligibleForHoF).toUpperCase() !== 'FALSE')
+        .sort((a,b) => (b.percentage - a.percentage) || (b.presences - a.presences))[0];
 
     const totalAtletas = allPlayersData.length;
-    let totalValidPlayerGames = 0;
-    let totalGlobalPresences = 0;
+    let totalValidPlayerGames = 0; let totalGlobalPresences = 0;
 
     playedDatesByYear.forEach(date => {
         allPlayersData.forEach(p => {
@@ -364,7 +299,6 @@ const PresencaTab = ({ allPlayersData, dates, financeData, isLoading, error, nex
     const globalAverage = totalValidPlayerGames > 0 ? (totalGlobalPresences / totalValidPlayerGames) * 100 : 0;
     const jogosRealizados = playedDatesByYear.length;
 
-    // Status Financeiro Pessoal
     const myFinanceRecord = financeData?.paymentStatus?.find(p => p.player.toLowerCase() === currentUser.name.toLowerCase());
     let myDebt = 0;
     if (myFinanceRecord && financeData?.paymentHeaders) {
@@ -372,56 +306,102 @@ const PresencaTab = ({ allPlayersData, dates, financeData, isLoading, error, nex
         const currentMonth = new Date().getMonth();
         financeData.paymentHeaders.forEach(m => {
             const statusStr = String(myFinanceRecord.statuses[m] || '').trim().toLowerCase();
-            const mIndex = monthMap[m.toLowerCase()];
-            if (statusStr !== 'isento' && statusStr !== '20' && mIndex < currentMonth) {
+            if (statusStr !== 'isento' && statusStr !== '20' && monthMap[m.toLowerCase()] < currentMonth) {
                 myDebt += 20;
             }
         });
     }
 
-    // Gráfico Agrupado por Mês
-    const chartData = useMemo(() => {
-        const monthlyData = new Array(12).fill(0);
-        const monthsMap = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+    const monthlyData = new Array(12).fill(0);
+    const monthsMap = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+    playedDatesByYear.forEach(dateStr => {
+        const monthIndex = parseInt(dateStr.substring(5, 7), 10) - 1;
+        if (monthIndex >= 0 && monthIndex < 12) {
+            monthlyData[monthIndex] += allPlayersData.reduce((c, p) => c + (p.attendance[dateStr]?.includes('✅') ? 1 : 0), 0);
+        }
+    });
 
-        playedDatesByYear.forEach(dateStr => {
-            const monthIndex = parseInt(dateStr.substring(5, 7), 10) - 1;
-            if (monthIndex >= 0 && monthIndex < 12) {
-                const gamePresences = allPlayersData.reduce((c, p) => c + (p.attendance[dateStr]?.includes('✅') ? 1 : 0), 0);
-                monthlyData[monthIndex] += gamePresences;
-            }
+    const { theme } = useTheme();
+    const isDark = theme === 'dark';
+    
+    const chartOptions = { 
+        responsive: true, 
+        maintainAspectRatio: false, 
+        plugins: { legend: { display: false } }, 
+        scales: { 
+            y: { beginAtZero: true, ticks: { color: isDark ? '#94a3b8' : '#64748b' } },
+            x: { ticks: { color: isDark ? '#94a3b8' : '#64748b' } }
+        } 
+    };
+    
+    const chartDataObj = { 
+        labels: monthsMap, 
+        datasets: [{ 
+            label: 'Total de Presenças', 
+            data: monthlyData, 
+            backgroundColor: '#818cf8', 
+            borderRadius: 6 
+        }] 
+    };
+
+    // --- NOVO GRÁFICO: Comparativo Anual (Linhas) ---
+    const yearlyComparisonData = useMemo(() => {
+        const colors = ['#6366f1', '#f59e0b', '#10b981', '#ec4899', '#8b5cf6'];
+        const datasets = [];
+
+        availableYears.forEach((year, index) => {
+            const yearMonthlyData = new Array(12).fill(0);
+            const yearDates = [...new Set(dates || [])].filter(d => d.startsWith(year));
+            const playedYearDates = yearDates.filter(date => allPlayersData.some(p => p.attendance[date]?.includes('✅')));
+
+            playedYearDates.forEach(dateStr => {
+                const monthIndex = parseInt(dateStr.substring(5, 7), 10) - 1;
+                if (monthIndex >= 0 && monthIndex < 12) {
+                    yearMonthlyData[monthIndex] += allPlayersData.reduce((c, p) => c + (p.attendance[dateStr]?.includes('✅') ? 1 : 0), 0);
+                }
+            });
+
+            datasets.push({
+                label: year,
+                data: yearMonthlyData,
+                borderColor: colors[index % colors.length],
+                backgroundColor: colors[index % colors.length] + '80',
+                tension: 0.4,
+                borderWidth: 3,
+                pointBackgroundColor: colors[index % colors.length],
+                pointRadius: 4,
+                pointHoverRadius: 6
+            });
         });
 
-        return {
-            type: 'bar',
-            data: {
-                labels: monthsMap,
-                datasets: [{
-                    label: 'Total de Presenças',
-                    data: monthlyData,
-                    backgroundColor: '#818cf8',
-                    borderRadius: 4
-                }]
-            },
-            options: { 
-                scales: { y: { beginAtZero: true } }, 
-                plugins: { legend: { display: false } } 
-            }
-        };
-    }, [playedDatesByYear, allPlayersData]);
+        return { labels: monthsMap, datasets };
+    }, [dates, allPlayersData, availableYears]);
+
+    const lineChartOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { display: true, position: 'top', labels: { color: isDark ? '#e2e8f0' : '#475569', font: { weight: 'bold' } } },
+            tooltip: { mode: 'index', intersect: false }
+        },
+        interaction: { mode: 'nearest', axis: 'x', intersect: false },
+        scales: {
+            y: { beginAtZero: true, ticks: { color: isDark ? '#94a3b8' : '#64748b' } },
+            x: { ticks: { color: isDark ? '#94a3b8' : '#64748b' } }
+        }
+    };
+
 
     if (isLoading) return <Loader message="Sincronizando quadra..." />;
     if (error) return <p className="text-red-500">{error}</p>;
 
     return (
-        <div className="space-y-6 animate-fade-in-up">
+        <div className="space-y-6">
             <ProximoJogoCard game={nextGame} currentUser={currentUser} onAttendanceUpdate={onAttendanceUpdate} />
-
+            
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                
-                {/* Destaque do Ano Card */}
-                <GlassCard className="col-span-1 md:col-span-2 bg-gradient-to-br from-orange-500 to-rose-600 !text-white border-none flex items-center justify-between overflow-hidden relative">
-                    <div className="absolute -right-10 opacity-20 text-[150px]">🏆</div>
+                <GlassCard className="col-span-1 md:col-span-2 bg-gradient-to-br from-orange-500 to-rose-600 !text-white border-none relative overflow-hidden">
+                    <div className="absolute -right-6 top-4 opacity-20"><Trophy className="w-40 h-40" /></div>
                     <div className="relative z-10">
                         <h3 className="text-orange-200 font-bold uppercase tracking-wider text-xs mb-1">Destaque do Ano</h3>
                         <p className="text-3xl font-black mb-1">{topPresencePlayer?.name || '--'}</p>
@@ -429,28 +409,22 @@ const PresencaTab = ({ allPlayersData, dates, financeData, isLoading, error, nex
                     </div>
                 </GlassCard>
 
-                <GlassCard className="col-span-1 md:col-span-1 flex flex-col justify-center items-center text-center">
+                <GlassCard className="col-span-1 flex flex-col justify-center items-center text-center">
                     <h3 className="text-slate-500 font-bold uppercase tracking-wider text-xs mb-2">Maior Média Ano</h3>
                     <p className="text-2xl font-black text-slate-800 dark:text-white">{topPercentagePlayer?.name || '--'}</p>
                     <span className="mt-2 px-4 py-1 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 font-black rounded-full">
-                        {topPercentagePlayer?.percentage?.toFixed(0)}%
+                        {topPercentagePlayer?.percentage?.toFixed(0) || 0}%
                     </span>
                 </GlassCard>
 
-                <GlassCard className="col-span-1 md:col-span-1 flex flex-col justify-center items-center text-center bg-indigo-50 dark:bg-indigo-900/20">
+                <GlassCard className="col-span-1 flex flex-col justify-center items-center text-center bg-indigo-50 dark:bg-indigo-900/20">
                     <h3 className="text-indigo-500 font-bold uppercase tracking-wider text-xs mb-2">Jogos Realizados</h3>
                     <p className="text-5xl font-black text-indigo-600 dark:text-indigo-400">{jogosRealizados}</p>
                     <p className="text-sm font-medium text-slate-500 mt-1">Em {selectedYear}</p>
                 </GlassCard>
 
-                <GlassCard 
-                    className={`col-span-1 md:col-span-2 flex flex-col sm:flex-row items-start sm:items-center justify-between overflow-hidden relative ${myDebt > 0 ? 'bg-gradient-to-br from-rose-500 to-red-600 !text-white border-none' : 'bg-gradient-to-br from-emerald-500 to-teal-600 !text-white border-none'}`} 
-                    onClick={() => {
-                        if (onNavigate) onNavigate('financas');
-                        else if (window.navigateToTab) window.navigateToTab('financas');
-                    }}
-                >
-                    <div className="absolute -right-4 opacity-20 text-[100px] pointer-events-none">{myDebt > 0 ? '⚠️' : '✅'}</div>
+                <GlassCard className={`col-span-1 md:col-span-2 flex flex-col sm:flex-row items-start sm:items-center justify-between relative ${myDebt > 0 ? 'bg-gradient-to-br from-rose-500 to-red-600 !text-white border-none' : 'bg-gradient-to-br from-emerald-500 to-teal-600 !text-white border-none'}`} onClick={() => window.navigateToTab && window.navigateToTab('financas')}>
+                    <div className="absolute -right-4 opacity-20 pointer-events-none"><DollarSign className="w-32 h-32"/></div>
                     <div className="relative z-10 flex-grow pr-4">
                         <h3 className="font-bold uppercase tracking-wider text-xs mb-1 opacity-80">Meu Status Financeiro</h3>
                         <p className="text-2xl font-black mb-1">{myDebt > 0 ? 'Mensalidade Atrasada' : 'Tudo em Dia!'}</p>
@@ -461,13 +435,13 @@ const PresencaTab = ({ allPlayersData, dates, financeData, isLoading, error, nex
                     </div>
                 </GlassCard>
 
-                <GlassCard className="col-span-1 flex flex-col justify-center items-center text-center bg-slate-50 dark:bg-slate-800/30 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors">
+                <GlassCard className="col-span-1 flex flex-col justify-center items-center text-center hover:bg-slate-100 dark:hover:bg-slate-800/50">
                     <h3 className="text-slate-500 font-bold uppercase tracking-wider text-xs mb-2">Atletas Ativos</h3>
                     <p className="text-4xl font-black text-slate-800 dark:text-white">{totalAtletas}</p>
                     <p className="text-sm font-medium text-slate-500 mt-1">Registados no Elenco</p>
                 </GlassCard>
 
-                <GlassCard className="col-span-1 flex flex-col justify-center items-center text-center bg-slate-50 dark:bg-slate-800/30 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors">
+                <GlassCard className="col-span-1 flex flex-col justify-center items-center text-center hover:bg-slate-100 dark:hover:bg-slate-800/50">
                     <h3 className="text-slate-500 font-bold uppercase tracking-wider text-xs mb-2">Quórum Médio</h3>
                     <p className="text-4xl font-black text-slate-800 dark:text-white">{globalAverage.toFixed(0)}%</p>
                     <p className="text-sm font-medium text-slate-500 mt-1">Presença da Equipa</p>
@@ -475,24 +449,36 @@ const PresencaTab = ({ allPlayersData, dates, financeData, isLoading, error, nex
 
                 <GlassCard className="col-span-1 md:col-span-4">
                     <div className="flex justify-between items-center mb-6">
-                        <h3 className="text-lg font-bold text-slate-800 dark:text-white">Tendência de Quórum (Mensal)</h3>
-                        <select value={selectedYear} onChange={e => setSelectedYear(e.target.value)} className="p-2 bg-slate-100 dark:bg-slate-700 rounded-xl outline-none font-bold text-sm">
+                        <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2"><BarChart className="w-5 h-5"/> Tendência de Quórum (Mensal)</h3>
+                        <select value={selectedYear} onChange={e => setSelectedYear(e.target.value)} className="p-2 bg-slate-100 dark:bg-slate-700 rounded-xl outline-none font-bold text-sm text-slate-800 dark:text-white border-none focus:ring-2 focus:ring-indigo-500">
                             {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
                         </select>
                     </div>
-                    <div className="h-64">
-                        <ChartComponent chartConfig={chartData} />
+                    <div className="h-64 w-full">
+                        <Bar data={chartDataObj} options={chartOptions} />
                     </div>
                 </GlassCard>
+
+                {/* NOVO GRÁFICO COMPARATIVO ANUAL */}
+                <GlassCard className="col-span-1 md:col-span-4">
+                    <div className="flex justify-between items-center mb-6">
+                        <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                            <Activity className="w-5 h-5"/> Comparativo Anual de Presenças
+                        </h3>
+                    </div>
+                    <div className="h-72 w-full">
+                        <Line data={yearlyComparisonData} options={lineChartOptions} />
+                    </div>
+                </GlassCard>
+
             </div>
         </div>
     );
 };
 
-// 2. ABA RELATÓRIOS E EXPORTAÇÃO PDF
+// 2. ABA RELATÓRIOS
 const RelatoriosTab = ({ allPlayersData, dates }) => {
     const [selectedPlayer, setSelectedPlayer] = useState('todos');
-    const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
     const [sortConfig, setSortConfig] = useState({ key: 'percentage', direction: 'desc' });
     const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
@@ -502,6 +488,13 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
         const years = [...new Set(uniqueDates.map(d => d.substring(0, 4)))];
         return years.sort((a, b) => b - a);
     }, [dates]);
+
+    const [selectedYear, setSelectedYear] = useState(availableYears[0]);
+    useEffect(() => {
+        if (availableYears.length > 0 && !availableYears.includes(selectedYear)) {
+            setSelectedYear(availableYears[0]);
+        }
+    }, [availableYears, selectedYear]);
 
     const filteredDates = useMemo(() => {
         const uniqueDates = [...new Set(dates || [])];
@@ -516,10 +509,7 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
 
     const reportData = useMemo(() => {
         let data = allPlayersData.map(player => {
-            let validGames = 0;
-            let presences = 0;
-            let faults = 0;
-
+            let validGames = 0, presences = 0, faults = 0;
             playedDates.forEach(date => {
                 const status = player.attendance[date]?.trim() || '';
                 if (status !== '' && status !== 'N/A') {
@@ -528,7 +518,6 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
                     if (status.toUpperCase() === 'NÃO JUSTIFICOU') faults++;
                 }
             });
-
             const percentage = validGames > 0 ? (presences / validGames) * 100 : 0;
             return { ...player, presences, faults, totalGames: validGames, percentage };
         });
@@ -539,40 +528,69 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
             if (sortConfig.key === 'percentage') return b.presences - a.presences;
             return 0;
         });
-
         return data;
     }, [allPlayersData, playedDates, sortConfig]);
 
     const requestSort = (key) => setSortConfig({ key, direction: sortConfig.key === key && sortConfig.direction === 'desc' ? 'asc' : 'desc' });
 
     const singlePlayer = useMemo(() => reportData.find(p => p.name === selectedPlayer), [reportData, selectedPlayer]);
-    const singlePlayerChart = useMemo(() => (!singlePlayer ? null : {
-        type: 'doughnut', data: { labels: ['Presença', 'Ausência'], datasets: [{ data: [singlePlayer.presences, singlePlayer.totalGames - singlePlayer.presences], backgroundColor: ['#4f46e5', '#334155'], borderWidth: 0, cutout: '75%' }] },
-        options: { responsive: true, plugins: { legend: { display: false } } }
-    }), [singlePlayer]);
+    
+    const doughnutData = {
+        labels: ['Presença', 'Ausência'],
+        datasets: [{ 
+            data: [singlePlayer?.presences || 0, (singlePlayer?.totalGames || 0) - (singlePlayer?.presences || 0)], 
+            backgroundColor: ['#4f46e5', '#334155'], 
+            borderWidth: 0 
+        }]
+    };
 
     // Exportação do PDF Corporativo
     const handleExportPDF = async () => {
-        if (!window.html2pdf) {
-            alert('A biblioteca de PDF ainda não foi carregada. Aguarde um instante.');
-            return;
-        }
         setIsGeneratingPDF(true);
+
+        if (!window.html2pdf) {
+            try {
+                await new Promise((resolve, reject) => {
+                    const script = document.createElement('script');
+                    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+                    script.onload = resolve;
+                    script.onerror = reject;
+                    document.head.appendChild(script);
+                });
+            } catch (err) {
+                alert('Erro ao carregar a biblioteca de PDF. Verifique a sua conexão.');
+                setIsGeneratingPDF(false);
+                return;
+            }
+        }
 
         setTimeout(() => {
             const element = document.getElementById('pdf-corporate-report');
+            if (!element) {
+                setIsGeneratingPDF(false);
+                return;
+            }
+
             const opt = {
-                margin:       [0.4, 0, 0.4, 0], 
+                margin:       [0.4, 0.4, 0.4, 0.4], 
                 filename:     `Relatorio_CBA_${selectedYear}_${selectedPlayer === 'todos' ? 'Geral' : selectedPlayer.replace(/\s+/g, '_')}.pdf`,
-                image:        { type: 'jpeg', quality: 1 },
-                html2canvas:  { scale: 2, useCORS: true, width: 794 }, 
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2, useCORS: true }, 
                 jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' },
                 pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
             };
 
-            window.html2pdf().set(opt).from(element).save().then(() => {
+            try {
+                window.html2pdf().set(opt).from(element).save().then(() => {
+                    setIsGeneratingPDF(false);
+                }).catch((err) => {
+                    console.error('Erro PDF:', err);
+                    setIsGeneratingPDF(false);
+                });
+            } catch (err) {
+                console.error('Erro Fatal PDF:', err);
                 setIsGeneratingPDF(false);
-            });
+            }
         }, 500); 
     };
 
@@ -597,25 +615,22 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
         }
 
         text += `\nVeja os detalhes completos no Portal do CBA!`;
-        const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
-        window.open(url, '_blank');
+        window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
     };
 
-    // Dados Globais para o PDF
     const globalTotalGames = playedDates.length;
     const globalAveragePercentage = reportData.length > 0 
         ? reportData.reduce((acc, curr) => acc + curr.percentage, 0) / reportData.length 
         : 0;
 
     return (
-        <div className="space-y-8 animate-fade-in-up">
+        <div className="space-y-8">
             <GlassCard className="flex flex-col xl:flex-row justify-between items-center gap-4">
                 <div className="flex items-center w-full xl:w-auto">
-                    <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-2xl mr-4"><svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012-2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg></div>
+                    <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-2xl mr-4"><BarChart className="w-8 h-8" /></div>
                     <div><h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Central de Relatórios</h2><p className="text-sm text-slate-500">Dados operacionais e performance</p></div>
                 </div>
                 
-                {/* Seletores & Botões de Exportação */}
                 <div className="flex flex-col md:flex-row gap-3 w-full xl:w-auto">
                     <div className="flex gap-3">
                         <select value={selectedYear} onChange={e => setSelectedYear(e.target.value)} className="p-3 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl font-bold outline-none flex-1 md:w-32">{availableYears.map(y => <option key={y} value={y}>{y}</option>)}</select>
@@ -625,16 +640,12 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
                         </select>
                     </div>
                     <div className="flex gap-2 mt-2 md:mt-0">
-                        <button onClick={handleShareWhatsApp} className="flex-1 md:flex-none p-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md" title="Enviar resumo por WhatsApp">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.894 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.886-.001 2.267.655 4.398 1.908 6.161l.217.324-1.251 4.565 4.654-1.225.308.214z"/></svg>
+                        <button onClick={handleShareWhatsApp} className="flex-1 md:flex-none p-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md" title="Enviar resumo por WhatsApp">
+                            <Share2 className="h-5 w-5" />
                             <span className="hidden sm:block">Partilhar</span>
                         </button>
                         <button onClick={handleExportPDF} disabled={isGeneratingPDF} className="flex-1 md:flex-none p-3 bg-rose-500 hover:bg-rose-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md disabled:opacity-50" title="Gerar PDF corporativo">
-                            {isGeneratingPDF ? (
-                                <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
-                            ) : (
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                            )}
+                            {isGeneratingPDF ? <RefreshCw className="animate-spin h-5 w-5 text-white" /> : <BookOpen className="h-5 w-5 text-white" />}
                             <span className="hidden sm:block">{isGeneratingPDF ? 'Gerando...' : 'Exportar PDF'}</span>
                         </button>
                     </div>
@@ -690,13 +701,11 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
                     </div>
                 </GlassCard>
             ) : singlePlayer && (
-                <div className="animate-fade-in-up">
-                    <button onClick={() => setSelectedPlayer('todos')} className="mb-6 flex items-center gap-2 text-sm font-bold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 transition-colors w-fit px-4 py-2 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg">
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-                        Voltar ao Ranking Geral
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
+                    <button onClick={() => setSelectedPlayer('todos')} className="flex items-center gap-2 text-sm font-bold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 transition-colors w-fit px-4 py-2 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg">
+                        <ArrowLeft className="w-4 h-4"/> Voltar ao Ranking Geral
                     </button>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                        {/* PLAYER CARD */}
                         <GlassCard className="col-span-1 flex flex-col items-center text-center relative overflow-hidden group">
                             <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-indigo-500/20 to-transparent"></div>
                             <div className="relative z-10 pt-6">
@@ -713,7 +722,7 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
                         <div className="col-span-1 md:col-span-2 space-y-8">
                             <GlassCard className="flex items-center gap-8">
                                 <div className="w-32 h-32 shrink-0 relative">
-                                    <ChartComponent chartConfig={singlePlayerChart} />
+                                    <Doughnut data={doughnutData} options={{ cutout: '75%', plugins: { legend: { display: false } } }} />
                                     <div className="absolute inset-0 flex items-center justify-center flex-col mt-1"><span className="text-2xl font-black">{singlePlayer.percentage.toFixed(0)}%</span></div>
                                 </div>
                                 <div className="flex-grow space-y-4">
@@ -731,16 +740,14 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
                             </GlassCard>
                         </div>
                     </div>
-                </div>
+                </motion.div>
             )}
 
             {/* ========================================================= */}
-            {/* RELATÓRIO OCULTO PARA EXPORTAÇÃO EM PDF (ESTILO CORPORATIVO) */}
+            {/* RELATÓRIO OCULTO PARA EXPORTAÇÃO EM PDF */}
             {/* ========================================================= */}
             <div className="absolute opacity-0 pointer-events-none -z-50 left-[-9999px] top-[-9999px]">
-                <div id="pdf-corporate-report" style={{ width: '794px', backgroundColor: '#ffffff', boxSizing: 'border-box' }} className="p-10 mx-auto text-slate-800">
-                    
-                    {/* Cabeçalho do PDF */}
+                <div id="pdf-corporate-report" style={{ width: '750px', backgroundColor: '#ffffff', boxSizing: 'border-box' }} className="p-8 mx-auto text-slate-800">
                     <div className="flex justify-between items-end border-b-4 border-slate-900 pb-6 mb-8">
                         <div className="flex items-center gap-6">
                             <img src="https://lh3.googleusercontent.com/d/131DvcfgiRLLp9irVnVY8m9qNuM-0y7f8" alt="Logo CBA" className="w-24 h-24 rounded-full border-2 border-slate-200 shadow-sm" crossOrigin="anonymous" />
@@ -758,7 +765,6 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
 
                     {selectedPlayer === 'todos' ? (
                         <>
-                            {/* Resumo do Elenco PDF */}
                             <div className="mb-10">
                                 <h2 className="text-xl font-bold text-slate-800 mb-4 border-b border-slate-200 pb-2 uppercase tracking-wide">1. Resumo Operacional</h2>
                                 <div className="grid grid-cols-3 gap-6">
@@ -777,7 +783,6 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
                                 </div>
                             </div>
 
-                            {/* Top Performers Bar Chart PDF */}
                             <div className="mb-10 break-inside-avoid">
                                 <h2 className="text-xl font-bold text-slate-800 mb-6 border-b border-slate-200 pb-2 uppercase tracking-wide">2. Destaques de Assiduidade (Top 10)</h2>
                                 <div className="space-y-4 mt-4 px-2">
@@ -794,7 +799,6 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
                                 </div>
                             </div>
 
-                            {/* Tabela Completa PDF */}
                             <div className="break-before-page">
                                 <h2 className="text-xl font-bold text-slate-800 mb-4 border-b border-slate-200 pb-2 uppercase tracking-wide">3. Desempenho Geral do Elenco</h2>
                                 <table className="w-full text-left border-collapse mt-4">
@@ -827,11 +831,10 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
                         </>
                     ) : singlePlayer && (
                         <>
-                            {/* Relatório Individual PDF */}
                             <div className="flex gap-8 mb-10">
                                 <div className="shrink-0">
                                     {singlePlayer.fotoUrl ? (
-                                        <img src={singlePlayer.fotoUrl} className="w-48 h-48 rounded-2xl object-cover shadow-lg border border-slate-200" crossOrigin="anonymous" />
+                                        <img src={singlePlayer.fotoUrl} className="w-48 h-48 rounded-2xl object-cover shadow-lg border border-slate-200" crossOrigin="anonymous" alt="Player"/>
                                     ) : (
                                         <div className="w-48 h-48 rounded-2xl bg-slate-100 flex items-center justify-center text-7xl font-black text-slate-300 border border-slate-200">{singlePlayer.name.charAt(0)}</div>
                                     )}
@@ -877,7 +880,6 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
                     </div>
                 </div>
             </div>
-
         </div>
     );
 };
@@ -892,20 +894,15 @@ const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin, scri
     useEffect(() => {
         if (!financeData?.paymentStatus?.length) return;
         if (isAdmin) setSelectedPlayer(financeData.paymentStatus[0].player);
-        else {
-            const userRecord = financeData.paymentStatus.find(p => p.player.toLowerCase() === currentUser.name.toLowerCase());
-            if (userRecord) setSelectedPlayer(userRecord.player);
-        }
+        else setSelectedPlayer(financeData.paymentStatus.find(p => p.player.toLowerCase() === currentUser.name.toLowerCase())?.player || '');
     }, [financeData, isAdmin, currentUser.name]);
 
     const getEnhancedStatus = (monthName, originalStatus) => {
         const statusStr = String(originalStatus || '').trim().toLowerCase();
         if (statusStr === 'isento') return { text: 'Isento', code: 'isento' };
         if (statusStr === '20') return { text: 'Pago', code: 'pago' };
-        
         const monthMap = { "janeiro": 0, "fevereiro": 1, "março": 2, "abril": 3, "maio": 4, "junho": 5, "julho": 6, "agosto": 7, "setembro": 8, "outubro": 9, "novembro": 10, "dezembro": 11 };
-        const currentMonth = new Date().getMonth();
-        if (monthMap[monthName.toLowerCase()] < currentMonth) return { text: 'Em Atraso', code: 'atraso' };
+        if (monthMap[monthName.toLowerCase()] < new Date().getMonth()) return { text: 'Em Atraso', code: 'atraso' };
         return { text: 'Pendente', code: 'pendente' };
     };
 
@@ -920,35 +917,28 @@ const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin, scri
 
     const adminStats = useMemo(() => {
         if(!financeData?.paymentStatus) return { totalReceber: 0, inadimplentes: [] };
-        let totalReceber = 0;
-        let inadimplentes = [];
-        
+        let totalReceber = 0; let inadimplentes = [];
         financeData.paymentStatus.forEach(p => {
             const debt = calculatePlayerDebt(p);
-            if (debt > 0) {
-                totalReceber += debt;
-                inadimplentes.push({ name: p.player, debt });
-            }
+            if (debt > 0) { totalReceber += debt; inadimplentes.push({ name: p.player, debt }); }
         });
         inadimplentes.sort((a,b) => b.debt - a.debt);
         return { totalReceber, inadimplentes };
     }, [financeData]);
 
     const handleSendReports = async () => {
-        setIsSending(true);
-        setEmailMessage({ text: 'A enviar relatórios...', type: 'info' });
+        setIsSending(true); setEmailMessage({ text: 'Enviando e-mails...', type: 'info' });
         try {
-            const data = await fetchWithPost(scriptUrl, { action: 'sendFinanceReports' });
-            if (data.result === 'success') {
-                setEmailMessage({ text: data.message, type: 'success' });
-            } else {
-                throw new Error(data.message || 'Erro desconhecido.');
-            }
-        } catch (error) {
-            setEmailMessage({ text: `Erro: ${error.message}`, type: 'error' });
-        } finally {
-            setIsSending(false);
-        }
+            const data = await api.post(scriptUrl, { action: 'sendFinanceReports' });
+            if (data.result === 'success') setEmailMessage({ text: data.message, type: 'success' });
+            else throw new Error(data.message);
+        } catch (err) { setEmailMessage({ text: `Erro: ${err.message}`, type: 'error' }); } 
+        finally { setIsSending(false); }
+    };
+
+    const handleCopyPix = async () => {
+        const success = await copyToClipboard(pixCode);
+        if (success) { setCopySuccess('Copiado!'); setTimeout(() => setCopySuccess(''), 2000); }
     };
 
     if (isLoading) return <Loader message="Sincronizando cofre..." />;
@@ -959,130 +949,86 @@ const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin, scri
     const playerDebt = calculatePlayerDebt(playerData);
 
     return (
-        <div className="space-y-8 animate-fade-in-up">
+        <div className="space-y-8">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <GlassCard className="bg-indigo-600 border-none !text-white text-center">
-                    <h3 className="text-indigo-200 font-bold mb-1 uppercase tracking-wider text-sm">Saldo em Caixa</h3>
-                    <p className="text-4xl font-black">R$ {financeData.summary.balance.toFixed(2)}</p>
-                </GlassCard>
-                <GlassCard className="text-center">
-                    <h3 className="text-slate-500 font-bold mb-1 uppercase tracking-wider text-sm">Total Receitas</h3>
-                    <p className="text-3xl font-bold text-emerald-500">R$ {financeData.summary.revenue.toFixed(2)}</p>
-                </GlassCard>
-                <GlassCard className="text-center">
-                    <h3 className="text-slate-500 font-bold mb-1 uppercase tracking-wider text-sm">Total Despesas</h3>
-                    <p className="text-3xl font-bold text-rose-500">R$ {financeData.summary.expense.toFixed(2)}</p>
-                </GlassCard>
+                <GlassCard className="bg-indigo-600 !text-white text-center"><h3 className="font-bold text-sm uppercase opacity-80">Saldo em Caixa</h3><p className="text-4xl font-black mt-1">R$ {financeData.summary.balance.toFixed(2)}</p></GlassCard>
+                <GlassCard className="text-center"><h3 className="text-slate-500 font-bold text-sm uppercase">Total Receitas</h3><p className="text-3xl font-bold text-emerald-500 mt-1">R$ {financeData.summary.revenue.toFixed(2)}</p></GlassCard>
+                <GlassCard className="text-center"><h3 className="text-slate-500 font-bold text-sm uppercase">Total Despesas</h3><p className="text-3xl font-bold text-rose-500 mt-1">R$ {financeData.summary.expense.toFixed(2)}</p></GlassCard>
             </div>
 
             {isAdmin && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    <GlassCard className="border-orange-500/30">
-                        <div className="flex justify-between items-center mb-6">
-                            <h3 className="text-xl font-bold text-slate-800 dark:text-white">Painel de Cobrança</h3>
-                            <span className="px-4 py-1 bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400 font-bold rounded-full">
-                                A Receber: R$ {adminStats.totalReceber.toFixed(2)}
-                            </span>
-                        </div>
-                        <div className="max-h-60 overflow-y-auto pr-2">
-                            {adminStats.inadimplentes.length === 0 ? <p className="text-emerald-500 font-bold">Todos em dia! 🎉</p> : 
-                            <ul className="space-y-3">
-                                {adminStats.inadimplentes.map(p => (
-                                    <li key={p.name} className="flex justify-between items-center bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-700">
-                                        <span className="font-semibold text-slate-800 dark:text-slate-200">{p.name}</span>
-                                        <span className="text-rose-500 font-bold">R$ {p.debt.toFixed(2)}</span>
-                                    </li>
-                                ))}
-                            </ul>}
-                        </div>
-                        <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
-                            <button onClick={handleSendReports} disabled={isSending} className="w-full bg-cyan-600 text-white font-bold py-3 px-4 rounded-xl hover:bg-cyan-700 disabled:bg-slate-400 transition-all shadow-md">
-                                {isSending ? 'Enviando...' : 'Enviar Relatório por Email'}
-                            </button>
-                            {emailMessage.text && <p className={`mt-2 text-sm text-center font-bold ${emailMessage.type === 'error' ? 'text-rose-500' : 'text-emerald-500'}`}>{emailMessage.text}</p>}
-                        </div>
-                    </GlassCard>
-                </div>
+                <GlassCard className="border-orange-500/30">
+                    <div className="flex justify-between items-center mb-6">
+                        <h3 className="text-xl font-bold text-slate-800 dark:text-white">Painel de Cobrança</h3>
+                        <span className="px-4 py-1 bg-orange-100 text-orange-700 rounded-full font-bold">A Receber: R$ {adminStats.totalReceber.toFixed(2)}</span>
+                    </div>
+                    <div className="max-h-60 overflow-y-auto pr-2">
+                        {adminStats.inadimplentes.length === 0 ? <p className="text-emerald-500 font-bold">Todos em dia! 🎉</p> : 
+                        <ul className="space-y-3">
+                            {adminStats.inadimplentes.map(p => (
+                                <li key={p.name} className="flex justify-between p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700">
+                                    <span className="font-semibold text-slate-800 dark:text-slate-200">{p.name}</span>
+                                    <span className="text-rose-500 font-bold">R$ {p.debt.toFixed(2)}</span>
+                                </li>
+                            ))}
+                        </ul>}
+                    </div>
+                    <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                        <button onClick={handleSendReports} disabled={isSending} className="w-full bg-cyan-600 text-white font-bold py-3 rounded-xl hover:bg-cyan-700 disabled:opacity-50 transition-all flex items-center justify-center gap-2">
+                            {isSending ? <RefreshCw className="animate-spin w-5 h-5"/> : 'Enviar Relatório por Email'}
+                        </button>
+                        {emailMessage.text && <p className={`mt-2 text-sm text-center font-bold ${emailMessage.type === 'error' ? 'text-rose-500' : 'text-emerald-500'}`}>{emailMessage.text}</p>}
+                    </div>
+                </GlassCard>
             )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <GlassCard className="lg:col-span-2">
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-                        <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Situação Anual</h2>
-                        {isAdmin && (
-                            <select value={selectedPlayer} onChange={(e) => setSelectedPlayer(e.target.value)} className="p-3 bg-slate-100 dark:bg-slate-700 rounded-xl font-bold border-none outline-none focus:ring-2 focus:ring-indigo-500">
-                                {financeData.paymentStatus?.map(p => <option key={p.player} value={p.player}>{p.player}</option>)}
-                            </select>
-                        )}
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-2xl font-bold">Situação Anual</h2>
+                        {isAdmin && <select value={selectedPlayer} onChange={e => setSelectedPlayer(e.target.value)} className="p-3 bg-slate-100 dark:bg-slate-700 rounded-xl font-bold outline-none">{financeData.paymentStatus?.map(p => <option key={p.player} value={p.player}>{p.player}</option>)}</select>}
                     </div>
 
-                    {playerData ? (
+                    {playerData && (
                         <div>
                             {playerDebt > 0 && (
-                                <div className="mb-6 p-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl flex items-center justify-between">
-                                    <div>
-                                        <h4 className="text-rose-600 dark:text-rose-400 font-bold text-lg">Atenção! Há pendências.</h4>
-                                        <p className="text-sm text-rose-500/80">Regularize sua situação para não perder benefícios.</p>
-                                    </div>
-                                    <span className="text-3xl font-black text-rose-600 dark:text-rose-400">R$ {playerDebt.toFixed(2)}</span>
+                                <div className="mb-6 p-4 bg-rose-50 border border-rose-200 dark:bg-rose-900/20 dark:border-rose-800/50 rounded-2xl flex items-center justify-between">
+                                    <div><h4 className="text-rose-700 dark:text-rose-400 font-bold text-lg">Atenção! Há pendências.</h4><p className="text-sm text-rose-600/80 dark:text-rose-400/80">Regularize sua situação para não perder benefícios.</p></div>
+                                    <span className="text-3xl font-black text-rose-700 dark:text-rose-400">R$ {playerDebt.toFixed(2)}</span>
                                 </div>
                             )}
-                            
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 md:gap-4 mt-2">
-                                {financeData.paymentHeaders?.map((month, index) => {
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mt-2">
+                                {financeData.paymentHeaders?.map(month => {
                                     const status = getEnhancedStatus(month, playerData.statuses[month]);
                                     const styles = {
-                                        pago: 'bg-emerald-50 border-emerald-200 dark:bg-emerald-900/20 dark:border-emerald-800/50 text-emerald-700 dark:text-emerald-400',
-                                        atraso: 'bg-rose-50 border-rose-200 dark:bg-rose-900/20 dark:border-rose-800/50 text-rose-700 dark:text-rose-400',
-                                        pendente: 'bg-slate-50 border-slate-200 dark:bg-slate-800/40 dark:border-slate-700/50 text-slate-600 dark:text-slate-400',
-                                        isento: 'bg-indigo-50 border-indigo-200 dark:bg-indigo-900/20 dark:border-indigo-800/50 text-indigo-700 dark:text-indigo-400'
+                                        pago: 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-900/20 dark:border-emerald-800/50 dark:text-emerald-400',
+                                        atraso: 'bg-rose-50 border-rose-200 text-rose-700 dark:bg-rose-900/20 dark:border-rose-800/50 dark:text-rose-400',
+                                        pendente: 'bg-slate-50 border-slate-200 text-slate-600 dark:bg-slate-800/50 dark:border-slate-700/50 dark:text-slate-400',
+                                        isento: 'bg-indigo-50 border-indigo-200 text-indigo-700 dark:bg-indigo-900/20 dark:border-indigo-800/50 dark:text-indigo-400'
                                     };
-                                    const icons = {
-                                        pago: <svg className="w-5 h-5 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" /></svg>,
-                                        atraso: <svg className="w-5 h-5 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
-                                        pendente: <svg className="w-5 h-5 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
-                                        isento: <svg className="w-5 h-5 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                    };
-                                    
                                     return (
-                                        <div key={month} className={`flex flex-col p-4 rounded-2xl border transition-transform hover:scale-105 shadow-sm ${styles[status.code]}`}>
+                                        <motion.div whileHover={{ scale: 1.05 }} key={month} className={`flex flex-col p-4 rounded-2xl border shadow-sm ${styles[status.code]}`}>
                                             <span className="text-[10px] font-bold uppercase tracking-widest opacity-70 mb-2">{month}</span>
-                                            <div className="flex items-center justify-between mt-auto">
-                                                <span className="font-black text-sm md:text-base leading-tight">{status.text}</span>
-                                                {icons[status.code]}
-                                            </div>
-                                        </div>
+                                            <span className="font-black text-sm leading-tight">{status.text}</span>
+                                        </motion.div>
                                     );
                                 })}
                             </div>
                         </div>
-                    ) : <p>Selecione um jogador.</p>}
+                    )}
                 </GlassCard>
 
-                <GlassCard className="flex flex-col items-center justify-center text-center bg-indigo-600 !text-white border-none relative overflow-hidden">
+                <GlassCard className="flex flex-col items-center text-center bg-indigo-600 !text-white relative overflow-hidden">
                     <div className="absolute -top-24 -right-24 w-64 h-64 bg-white/10 rounded-full blur-3xl"></div>
                     <div className="relative z-10 w-full">
-                        <h2 className="text-2xl font-bold mb-2 text-white">Quitar Débitos</h2>
-                        <p className="text-indigo-200 text-sm mb-6">Use o PIX oficial do CBA para transferências seguras.</p>
-                        
-                        <div className="bg-white p-3 rounded-2xl mb-6 inline-block mx-auto shadow-2xl">
-                            <img src={`https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(pixCode)}&size=160x160&margin=0`} alt="QR Code PIX" className="w-40 h-40 rounded-xl" />
+                        <h2 className="text-2xl font-bold mb-2">Quitar Débitos</h2>
+                        <p className="text-indigo-200 text-sm mb-6">Use o PIX oficial do CBA.</p>
+                        <div className="bg-white p-3 rounded-2xl mb-6 shadow-2xl inline-block"><img src={`https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(pixCode)}&size=160x160`} alt="QR Code PIX" className="w-40 h-40 rounded-xl" /></div>
+                        <div className="w-full bg-indigo-800/50 p-4 rounded-2xl flex gap-2 border border-indigo-500/30">
+                            <input type="text" readOnly value={pixCode} className="w-full bg-transparent text-sm outline-none truncate" />
+                            <button onClick={handleCopyPix} className="p-2 bg-indigo-500 rounded-lg hover:bg-indigo-400 transition-colors"><Copy className="w-4 h-4"/></button>
                         </div>
-                        
-                        <div className="w-full bg-indigo-800/50 p-4 rounded-2xl border border-indigo-500/30">
-                            <p className="text-xs font-semibold text-indigo-300 mb-2 uppercase tracking-widest">PIX Copia e Cola</p>
-                            <div className="flex gap-2">
-                                <input type="text" readOnly value={pixCode} className="w-full bg-transparent text-sm text-white border-b border-indigo-400 outline-none truncate" />
-                                <button onClick={() => { 
-                                    document.execCommand('copy'); 
-                                    setCopySuccess('Copiado!');
-                                    setTimeout(() => setCopySuccess(''), 2000);
-                                }} className="p-2 bg-indigo-500 hover:bg-indigo-400 rounded-lg shrink-0 transition">
-                                    Copiar
-                                </button>
-                            </div>
-                            {copySuccess && <p className="text-emerald-400 text-xs font-bold mt-2">{copySuccess}</p>}
-                        </div>
+                        {copySuccess && <p className="text-emerald-400 text-xs font-bold mt-2">{copySuccess}</p>}
                     </div>
                 </GlassCard>
             </div>
@@ -1090,412 +1036,244 @@ const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin, scri
     );
 };
 
-// --- ABA JOGOS ---
-const JogosTab = ({ currentUser, isAdmin, scriptUrl, ModalComponent, refreshKey }) => {
-    const { data: gamesData, isLoading, error: queryError, refetch } = useDataQuery(['games', refreshKey], () => fetchWithPost(scriptUrl, { action: 'getGames' }), [refreshKey]);
-
-    const games = useMemo(() => {
-        if (!gamesData?.data) return [];
-        return gamesData.data.sort((a, b) => new Date(b.data) - new Date(a.data));
-    }, [gamesData]);
-
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [editingGame, setEditingGame] = useState(null);
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [modalMessage, setModalMessage] = useState('');
-    const [infoModal, setInfoModal] = useState({ isOpen: false, title: '', content: null });
-    const [confirmDelete, setConfirmDelete] = useState(null);
-
-    const handleOpenModal = (game = null) => {
-        setEditingGame(game);
-        setIsModalOpen(true);
-        setModalMessage('');
-    };
-
-    const handleFormSubmit = async (e) => {
-        e.preventDefault();
-        setIsSubmitting(true);
-        setModalMessage('');
-        const formData = new FormData(e.target);
-        const payload = {
-            action: editingGame ? 'updateGame' : 'createGame',
-            id: editingGame ? editingGame.id : undefined,
-            data: formData.get('data'),
-            horario: formData.get('horario'),
-            local: formData.get('local'),
-        };
-
-        try {
-            const data = await fetchWithPost(scriptUrl, payload);
-            if (data.result === 'success') {
-                setIsModalOpen(false);
-                setEditingGame(null);
-                refetch();
-
-                if (payload.action === 'createGame') {
-                    const gameDate = new Date(payload.data + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
-                    const message = `Novo jogo do CBA marcado! 🏀\n\n📅 Data: ${gameDate}\n⏰ Horário: ${payload.horario}\n📍 Local: ${payload.local}\n\nConfirme sua presença no portal!`;
-                    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
-
-                    setInfoModal({
-                        isOpen: true,
-                        title: 'Jogo Criado com Sucesso!',
-                        content: (
-                            <div>
-                                <p className="mb-4">O novo jogo foi adicionado. Você pode compartilhar a convocação no WhatsApp.</p>
-                                <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center w-full bg-green-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-600 transition-all shadow-md">
-                                    Compartilhar no WhatsApp
-                                </a>
-                            </div>
-                        )
-                    });
-                }
-                if (payload.action === 'createGame' && window.ReactNativeWebView) {
-                    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'PROMPT_SAVE_TO_CALENDAR', payload: { title: `Jogo CBA - ${payload.local}`, startDate: `${payload.data}T${payload.horario}:00`, location: payload.local } }));
-                }
-            } else {
-                throw new Error(data.message || 'Ocorreu um erro desconhecido.');
-            }
-        } catch (error) {
-            setModalMessage(error.message);
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    async function handleAttendance(gameId, actionType) {
-        try {
-            const data = await fetchWithPost(scriptUrl, { action: 'handleAttendanceUpdate', itemId: gameId, playerName: currentUser.name, actionType: actionType, type: 'game' });
-            if (data.result !== 'success') throw new Error(data.message || 'Erro ao atualizar presença.');
-            refetch();
-        } catch (err) {
-            setInfoModal({ isOpen: true, title: "Erro", content: <p>{err.message}</p> });
-        }
-    }
+// 4. ABA JOGOS
+const JogosTab = ({ currentUser, isAdmin, scriptUrl, refreshKey }) => {
+    const { data: gamesData, isLoading, refetch } = useDataQuery(['games', refreshKey], () => api.post(scriptUrl, { action: 'getGames' }), [refreshKey]);
+    const games = [...(gamesData?.data || [])].sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
     
-    const handleDeleteGame = async (game) => {
-        if (!game) return;
-        setConfirmDelete(null); 
-        try {
-            const data = await fetchWithPost(scriptUrl, { action: 'deleteGame', id: game.id });
-            if (data.result === 'success') refetch();
-            else throw new Error(data.message || "Não foi possível apagar o jogo.");
-        } catch (err) {
-            setInfoModal({ isOpen: true, title: 'Erro ao Apagar', content: <p>{err.message}</p> });
-        } 
-    };
-
-    if (isLoading) return <Loader message="A carregar jogos..." />;
-
-    return (
-        <div className="space-y-8 animate-fade-in-up">
-            <div className="flex justify-between items-center">
-                <h2 className="text-3xl font-bold text-slate-800 dark:text-slate-100">Calendário de Jogos</h2>
-                {isAdmin && (
-                    <button onClick={() => handleOpenModal()} className="bg-indigo-600 text-white font-bold py-2 px-6 rounded-xl hover:bg-indigo-700 transition shadow-md">
-                        Criar Jogo
-                    </button>
-                )}
-            </div>
-
-            {games.length === 0 ? (
-                <p className="text-center text-slate-500 py-8">Nenhum jogo agendado no momento.</p>
-            ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                    {games.map(game => {
-                        const isConfirmed = game.confirmados.includes(currentUser.name);
-                        return (
-                            <GlassCard key={game.id} className="flex flex-col relative border-t-4 border-t-indigo-500">
-                                {isAdmin && (
-                                    <div className="absolute top-2 right-2 flex gap-1 bg-white/50 dark:bg-slate-800/50 rounded-lg p-1 backdrop-blur-sm">
-                                        <button onClick={() => handleOpenModal(game)} className="p-1.5 text-slate-500 hover:text-indigo-600"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fillRule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clipRule="evenodd" /></svg></button>
-                                        <button onClick={() => setConfirmDelete(game)} className="p-1.5 text-slate-500 hover:text-red-600"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clipRule="evenodd" /></svg></button>
-                                    </div>
-                                )}
-                                <div className="flex justify-between items-start mb-4 mt-2">
-                                    <div>
-                                        <p className="text-2xl font-black text-slate-800 dark:text-white">{new Date(game.data + 'T00:00:00').toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</p>
-                                        <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">{game.horario} @ {game.local}</p>
-                                    </div>
-                                    <div className="text-right bg-indigo-50 dark:bg-indigo-900/30 p-2 rounded-xl">
-                                        <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400">{game.confirmados.length}</p>
-                                        <p className="text-[10px] uppercase font-bold text-slate-500">Confir.</p>
-                                    </div>
-                                </div>
-                                <div className="flex-grow mb-6 bg-slate-50/50 dark:bg-slate-800/30 p-3 rounded-xl border border-slate-100 dark:border-slate-700/50">
-                                    <h4 className="font-bold text-xs uppercase tracking-wider mb-2 text-slate-500">Lista de Presença</h4>
-                                    <div className="flex flex-wrap gap-1.5">
-                                        {game.confirmados.length > 0 ? game.confirmados.map(name => (
-                                            <span key={name} className="bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 px-2.5 py-1 text-xs font-bold rounded-lg shadow-sm">{name}</span>
-                                        )) : <p className="text-xs text-slate-400">Ninguém confirmado ainda.</p>}
-                                    </div>
-                                </div>
-                                <div className="mt-auto">
-                                    {isConfirmed ? (
-                                        <button onClick={() => handleAttendance(game.id, 'withdraw')} className="w-full font-bold py-3 px-4 rounded-xl transition-all bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 dark:bg-red-900/20 dark:border-red-900/50 dark:hover:bg-red-900/40">
-                                            Desistir da Convocação
-                                        </button>
-                                    ) : (
-                                        <button onClick={() => handleAttendance(game.id, 'confirm')} className="w-full font-bold py-3 px-4 rounded-xl transition-all bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-500/20">
-                                            Confirmar Presença
-                                        </button>
-                                    )}
-                                </div>
-                            </GlassCard>
-                        );
-                    })}
-                </div>
-            )}
-
-            <ModalComponent isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setEditingGame(null); }} title={editingGame ? "Editar Jogo" : "Criar Novo Jogo"}>
-                <form onSubmit={handleFormSubmit} className="space-y-5">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Data</label>
-                            <input name="data" type="date" defaultValue={editingGame?.data} className="w-full p-3 border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" required />
-                        </div>
-                         <div>
-                            <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Horário</label>
-                            <input name="horario" type="time" defaultValue={editingGame?.horario} className="w-full p-3 border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" required />
-                        </div>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-1">Local</label>
-                        <input name="local" type="text" placeholder="Ex: Quadra Vila Militar" defaultValue={editingGame?.local} className="w-full p-3 border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" required />
-                    </div>
-                    {modalMessage && <p className="text-red-500 font-bold text-sm bg-red-50 p-3 rounded-lg">{modalMessage}</p>}
-                    <button type="submit" disabled={isSubmitting} className="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl hover:bg-indigo-700 disabled:opacity-70 transition-all shadow-lg">
-                        {isSubmitting ? 'Processando...' : (editingGame ? 'Guardar Alterações' : 'Agendar Jogo')}
-                    </button>
-                </form>
-            </ModalComponent>
-            
-            <ModalComponent isOpen={!!confirmDelete} onClose={() => setConfirmDelete(null)} title="Confirmar Exclusão">
-                <div>
-                    <p className="text-lg">Tem a certeza que quer apagar o jogo do dia <strong>{confirmDelete ? new Date(confirmDelete.data + 'T00:00:00').toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : ''}</strong>?</p>
-                    <div className="flex justify-end gap-4 mt-8">
-                        <button onClick={() => setConfirmDelete(null)} className="py-3 px-6 bg-slate-200 text-slate-800 font-bold rounded-xl hover:bg-slate-300">Cancelar</button>
-                        <button onClick={() => handleDeleteGame(confirmDelete)} className="py-3 px-6 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 shadow-lg">Sim, Apagar</button>
-                    </div>
-                </div>
-            </ModalComponent>
-
-            <ModalComponent isOpen={infoModal.isOpen} onClose={() => setInfoModal({ isOpen: false, title: '', content: null })} title={infoModal.title}>
-                {infoModal.content}
-            </ModalComponent>
-        </div>
-    );
-};
-
-// --- ABA EVENTOS ---
-const EventosTab = ({ scriptUrl, currentUser, isAdmin, ModalComponent, refreshKey }) => {
-    const { data: eventsData, isLoading, error: queryError, refetch } = useDataQuery(
-        ['events', refreshKey], 
-        () => fetchWithPost(scriptUrl, { action: 'getEvents' }),
-        [refreshKey]
-    );
-
-    const events = useMemo(() => {
-        if (!eventsData?.data) return [];
-        return eventsData.data.map(event => ({
-            ...event,
-            value: parseFloat(event.value) || 0,
-            attendees: event.attendees ? event.attendees.split(',').map(name => name.trim()) : []
-        }));
-    }, [eventsData]);
-
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [editingEvent, setEditingEvent] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [modalMessage, setModalMessage] = useState('');
+    const [editingGame, setEditingGame] = useState(null);
     const [confirmDelete, setConfirmDelete] = useState(null);
     const [infoModal, setInfoModal] = useState({ isOpen: false, title: '', message: '' });
 
-    const formatCurrency = (val) => typeof val === 'number' ? val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ 0,00';
-    
-    const handleOpenModal = (event = null) => {
-        setEditingEvent(event);
-        setIsModalOpen(true);
-        setModalMessage('');
-    };
-
     const handleFormSubmit = async (e) => {
-        e.preventDefault();
+        e.preventDefault(); 
         setIsSubmitting(true);
-        setModalMessage('');
-        const formData = new FormData(e.target);
-        const payload = {
-            action: editingEvent ? 'updateEvent' : 'createEvent',
-            id: editingEvent ? editingEvent.id : undefined,
-            name: formData.get('name'),
-            date: formData.get('date'),
-            deadline: formData.get('deadline'),
-            location: formData.get('location'),
-            value: formData.get('value'),
-            description: formData.get('description'),
+        const formData = new FormData(e.currentTarget);
+        const payload = { 
+            action: editingGame ? 'updateGame' : 'createGame', 
+            id: editingGame ? editingGame.id : undefined,
+            data: formData.get('data'), 
+            horario: formData.get('horario'), 
+            local: formData.get('local') 
         };
-
         try {
-            const data = await fetchWithPost(scriptUrl, payload);
-            if (data.result === 'success') {
-                setIsModalOpen(false);
-                setEditingEvent(null);
-                refetch();
-                if (payload.action === 'createEvent' && window.ReactNativeWebView) {
-                    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'PROMPT_SAVE_TO_CALENDAR', payload: { title: payload.name, startDate: payload.date, location: payload.location } }));
-                }
-            } else {
-                throw new Error(data.message || 'Ocorreu um erro desconhecido.');
+            const res = await api.post(scriptUrl, payload);
+            if (res.result === 'success') { 
+                setIsModalOpen(false); 
+                setEditingGame(null);
+                refetch(); 
             }
-        } catch (error) {
-            setModalMessage(error.message);
-        } finally {
-            setIsSubmitting(false);
+            else throw new Error(res.message);
+        } catch (err) { 
+            setInfoModal({ isOpen: true, title: 'Erro', message: err.message }); 
+        } finally { 
+            setIsSubmitting(false); 
         }
     };
 
-    async function handleAttendance(eventId, actionType) {
+    const handleDeleteGame = async () => {
+        if (!confirmDelete) return;
         try {
-            const data = await fetchWithPost(scriptUrl, { action: 'handleAttendanceUpdate', itemId: eventId, playerName: currentUser.name, actionType: actionType, type: 'event' });
-            if (data.result === 'success') {
+            const res = await api.post(scriptUrl, { action: 'deleteGame', id: confirmDelete.id });
+            if (res.result === 'success') {
+                setConfirmDelete(null);
                 refetch();
-            } else {
-                throw new Error(data.message || `Não foi possível atualizar a presença.`);
-            }
-        } catch (error) {
-            setInfoModal({ isOpen: true, title: 'Erro', message: error.message });
-        }
-    }
-
-     const handleDeleteEvent = async (event) => {
-        if (!event) return;
-        setConfirmDelete(null); 
-        try {
-            const data = await fetchWithPost(scriptUrl, { action: 'deleteEvent', id: event.id });
-            if (data.result === 'success') refetch();
-            else throw new Error(data.message || "Não foi possível apagar o evento.");
+            } else throw new Error(res.message);
         } catch (err) {
-            setInfoModal({ isOpen: true, title: 'Erro ao Apagar', message: err.message });
+            setInfoModal({ isOpen: true, title: 'Erro', message: err.message });
         }
     };
 
-    if (isLoading) return <Loader message="A buscar resenhas..." />;
+    const handleAttendance = async (gameId, actionType) => {
+        await api.post(scriptUrl, { action: 'handleAttendanceUpdate', itemId: gameId, playerName: currentUser.name, actionType, type: 'game' });
+        refetch();
+    };
 
+    if (isLoading) return <Loader message="Carregando jogos..." />;
+    
     return (
         <div className="space-y-8 animate-fade-in-up">
             <div className="flex justify-between items-center">
-                <h2 className="text-3xl font-bold text-slate-800 dark:text-slate-100">Eventos & Confraternizações</h2>
-                {isAdmin && (
-                    <button onClick={() => handleOpenModal()} className="bg-indigo-600 text-white font-bold py-2 px-6 rounded-xl hover:bg-indigo-700 transition shadow-md">
-                        Criar Evento
-                    </button>
-                )}
+                <h2 className="text-3xl font-bold">Calendário de Jogos</h2>
+                {isAdmin && <button onClick={() => { setEditingGame(null); setIsModalOpen(true); }} className="bg-indigo-600 text-white font-bold py-2 px-6 rounded-xl hover:bg-indigo-700 transition shadow-md">Criar Jogo</button>}
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                {games.map(game => (
+                    <GlassCard key={game.id} className="flex flex-col border-t-4 border-t-indigo-500 relative">
+                        {isAdmin && (
+                            <div className="absolute top-2 right-2 flex gap-1 bg-white/50 dark:bg-slate-800/50 rounded-lg p-1 backdrop-blur-sm">
+                                <button onClick={() => { setEditingGame(game); setIsModalOpen(true); }} className="p-1.5 text-slate-500 hover:text-indigo-600"><Edit className="w-4 h-4"/></button>
+                                <button onClick={() => setConfirmDelete(game)} className="p-1.5 text-slate-500 hover:text-red-600"><Trash className="w-4 h-4"/></button>
+                            </div>
+                        )}
+                        <div className="flex justify-between items-start mb-4 mt-2">
+                            <div><p className="text-2xl font-black">{new Date(game.data + 'T00:00:00').toLocaleDateString('pt-BR')}</p><p className="text-sm font-semibold text-slate-500">{game.horario} @ {game.local}</p></div>
+                            <div className="text-right bg-indigo-50 dark:bg-indigo-900/30 p-2 rounded-xl"><p className="text-2xl font-black text-indigo-600">{game.confirmados.length}</p><p className="text-[10px] uppercase font-bold text-slate-500">Confir.</p></div>
+                        </div>
+                        <div className="flex-grow mb-6 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-700">
+                            <h4 className="font-bold text-xs uppercase text-slate-500 mb-2">Presença</h4>
+                            <div className="flex flex-wrap gap-1.5">{game.confirmados.map(name => <span key={name} className="bg-white dark:bg-slate-700 border dark:border-slate-600 px-2.5 py-1 text-xs font-bold rounded-lg">{name}</span>)}</div>
+                        </div>
+                        <button onClick={() => handleAttendance(game.id, game.confirmados.includes(currentUser.name) ? 'withdraw' : 'confirm')} className={`w-full font-bold py-3 px-4 rounded-xl transition-all ${game.confirmados.includes(currentUser.name) ? 'bg-red-50 text-red-600 dark:bg-red-900/20' : 'bg-indigo-600 text-white'}`}>
+                            {game.confirmados.includes(currentUser.name) ? 'Desistir' : 'Confirmar Presença'}
+                        </button>
+                    </GlassCard>
+                ))}
             </div>
 
-            {events.length === 0 ? (
-                <p className="text-center text-slate-500 py-8">Nenhum evento agendado no momento.</p>
-            ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    {events.map(event => {
-                        const isConfirmed = event.attendees.includes(currentUser.name);
-                        const isDeadlinePassed = new Date() > new Date(event.deadline);
-                        const totalCollected = event.attendees.length * event.value;
-
-                        return (
-                            <GlassCard key={event.id} className="flex flex-col relative">
-                                <div className="flex justify-between items-start mb-4">
-                                    <h3 className="text-2xl font-black text-indigo-600 dark:text-indigo-400">{event.name}</h3>
-                                    {isAdmin && (
-                                        <div className="flex gap-1 bg-slate-100 dark:bg-slate-700 rounded-lg p-1">
-                                            <button onClick={() => handleOpenModal(event)} className="p-1.5 text-slate-500 hover:text-indigo-600"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fillRule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clipRule="evenodd" /></svg></button>
-                                            <button onClick={() => setConfirmDelete(event)} className="p-1.5 text-slate-500 hover:text-red-600"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clipRule="evenodd" /></svg></button>
-                                        </div>
-                                    )}
-                                </div>
-                                
-                                <div className="space-y-1 mb-4">
-                                    <p className="font-bold text-slate-800 dark:text-white flex items-center gap-2"><span className="text-xl">📅</span> {new Date(event.date).toLocaleDateString('pt-BR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
-                                    <p className="font-medium text-slate-600 dark:text-slate-300 flex items-center gap-2"><span className="text-xl">📍</span> {event.location}</p>
-                                </div>
-                                
-                                <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl mb-4 border border-slate-100 dark:border-slate-700">
-                                    <p className="text-slate-600 dark:text-slate-300 text-sm mb-4">{event.description}</p>
-                                    <div className="flex justify-between items-center border-t border-slate-200 dark:border-slate-700 pt-3">
-                                        <span className="font-bold text-slate-500 text-xs uppercase tracking-widest">Cota Individual</span>
-                                        <span className="font-black text-emerald-600 dark:text-emerald-400 text-lg">{formatCurrency(event.value)}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center text-sm mt-1">
-                                        <span className="font-semibold text-slate-500">Arrecadado:</span>
-                                        <span className="font-bold text-slate-700 dark:text-slate-300">{formatCurrency(totalCollected)}</span>
-                                    </div>
-                                </div>
-                                
-                                <div className="mb-6 flex-grow">
-                                    <div className="flex justify-between items-end mb-2">
-                                        <h4 className="font-bold text-sm text-slate-800 dark:text-slate-200">Confirmados ({event.attendees.length})</h4>
-                                        <p className="text-[10px] uppercase font-bold text-red-500 bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded">Limite: {new Date(event.deadline).toLocaleDateString('pt-BR')}</p>
-                                    </div>
-                                    <div className="flex flex-wrap gap-1.5">
-                                        {event.attendees.length > 0 ? event.attendees.map(name => (
-                                            <span key={name} className="bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 px-2 py-1 text-xs font-bold rounded-lg shadow-sm">{name}</span>
-                                        )) : <p className="text-xs text-slate-400">Ninguém animou ainda.</p>}
-                                    </div>
-                                </div>
-
-                                <div className="mt-auto">
-                                    {isConfirmed ? (
-                                        <button onClick={() => handleAttendance(event.id, 'withdraw')} disabled={isDeadlinePassed} className={`w-full font-bold py-3 px-4 rounded-xl transition-all ${isDeadlinePassed ? 'bg-slate-200 text-slate-400 dark:bg-slate-800 dark:text-slate-600 cursor-not-allowed' : 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 dark:bg-red-900/20 dark:border-red-900/50'}`}>
-                                            Desistir do Evento
-                                        </button>
-                                    ) : (
-                                        <button onClick={() => handleAttendance(event.id, 'confirm')} disabled={isDeadlinePassed} className={`w-full font-bold py-3 px-4 rounded-xl transition-all ${!isDeadlinePassed ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-500/30' : 'bg-slate-200 text-slate-400 dark:bg-slate-800 dark:text-slate-600 cursor-not-allowed'}`}>
-                                            {isDeadlinePassed ? 'Inscrições Encerradas' : 'Confirmar Presença'}
-                                        </button>
-                                    )}
-                                </div>
-                            </GlassCard>
-                        );
-                    })}
-                </div>
-            )}
-
-            <ModalComponent isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setEditingEvent(null); }} title={editingEvent ? "Editar Evento" : "Criar Evento"}>
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingGame ? "Editar Jogo" : "Novo Jogo"}>
                 <form onSubmit={handleFormSubmit} className="space-y-4">
-                    <input name="name" type="text" placeholder="Nome do Evento" defaultValue={editingEvent?.name || ''} className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" required />
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Data do Evento</label>
-                            <input name="date" type="datetime-local" defaultValue={editingEvent?.date ? new Date(editingEvent.date).toISOString().substring(0, 16) : ''} className="w-full p-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none" required />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Data Limite</label>
-                            <input name="deadline" type="date" defaultValue={editingEvent?.deadline || ''} className="w-full p-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none" required />
-                        </div>
-                    </div>
-                    <input name="location" type="text" placeholder="Local" defaultValue={editingEvent?.location || ''} className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" required />
-                    <input name="value" type="number" step="0.01" placeholder="Valor p/ Pessoa (ex: 50.00)" defaultValue={editingEvent?.value || ''} className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" required />
-                    <textarea name="description" placeholder="Detalhes da resenha..." defaultValue={editingEvent?.description || ''} className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" rows="3" required></textarea>
-                    {modalMessage && <p className="text-red-500 text-sm bg-red-50 p-2 rounded-lg">{modalMessage}</p>}
-                    <button type="submit" disabled={isSubmitting} className="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl hover:bg-indigo-700 disabled:opacity-70 transition-all">
-                        {isSubmitting ? 'Salvando...' : (editingEvent ? 'Atualizar' : 'Criar')}
-                    </button>
+                    <input name="data" type="date" defaultValue={editingGame?.data} className="w-full p-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" required />
+                    <input name="horario" type="time" defaultValue={editingGame?.horario} className="w-full p-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" required />
+                    <input name="local" type="text" placeholder="Local" defaultValue={editingGame?.local} className="w-full p-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" required />
+                    <button type="submit" disabled={isSubmitting} className="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl hover:bg-indigo-700 disabled:opacity-50">{isSubmitting ? 'Salvando...' : 'Agendar'}</button>
                 </form>
-            </ModalComponent>
-            
-            <ModalComponent isOpen={!!confirmDelete} onClose={() => setConfirmDelete(null)} title="Confirmar">
-                <p className="text-lg">Deseja apagar o evento <strong>{confirmDelete?.name}</strong>?</p>
-                <div className="flex justify-end gap-4 mt-6">
-                    <button onClick={() => setConfirmDelete(null)} className="py-3 px-6 bg-slate-200 font-bold rounded-xl text-slate-800">Cancelar</button>
-                    <button onClick={() => handleDeleteEvent(confirmDelete)} className="py-3 px-6 bg-red-600 text-white font-bold rounded-xl">Apagar</button>
+            </Modal>
+
+            <Modal isOpen={!!confirmDelete} onClose={() => setConfirmDelete(null)} title="Confirmar Exclusão">
+                <p className="text-lg">Tem a certeza que quer apagar o jogo do dia <strong>{confirmDelete ? new Date(confirmDelete.data + 'T00:00:00').toLocaleDateString('pt-BR') : ''}</strong>?</p>
+                <div className="flex justify-end gap-4 mt-8">
+                    <button onClick={() => setConfirmDelete(null)} className="py-3 px-6 bg-slate-200 dark:bg-slate-700 font-bold rounded-xl hover:bg-slate-300">Cancelar</button>
+                    <button onClick={handleDeleteGame} className="py-3 px-6 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 shadow-lg">Sim, Apagar</button>
                 </div>
-            </ModalComponent>
-            <ModalComponent isOpen={infoModal.isOpen} onClose={() => setInfoModal({ isOpen: false, title: '', message: '' })} title={infoModal.title}><p>{infoModal.message}</p></ModalComponent>
+            </Modal>
+
+            <Modal isOpen={infoModal.isOpen} onClose={() => setInfoModal({ isOpen: false, title: '', message: '' })} title={infoModal.title}><p>{infoModal.message}</p></Modal>
         </div>
     );
 };
 
-// --- ABA SORTEIO ---
-const SorteioTab = ({ allPlayersData, scriptUrl, ModalComponent }) => {
+// 5. ABA EVENTOS
+const EventosTab = ({ scriptUrl, currentUser, isAdmin, refreshKey }) => {
+    const { data: eventsData, isLoading, refetch } = useDataQuery(['events', refreshKey], () => api.post(scriptUrl, { action: 'getEvents' }), [refreshKey]);
+    const events = (eventsData?.data || []).map(e => ({ ...e, attendees: typeof e.attendees === 'string' ? e.attendees.split(',').filter(Boolean) : [] }));
+    
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingEvent, setEditingEvent] = useState(null);
+    const [confirmDelete, setConfirmDelete] = useState(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const formatCurrency = (val) => typeof val === 'number' ? val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ 0,00';
+
+    const handleFormSubmit = async (e) => {
+        e.preventDefault(); 
+        setIsSubmitting(true);
+        const formData = new FormData(e.currentTarget);
+        const payload = { 
+            action: editingEvent ? 'updateEvent' : 'createEvent', 
+            id: editingEvent ? editingEvent.id : undefined, 
+            name: formData.get('name'), 
+            date: formData.get('date'), 
+            deadline: formData.get('deadline'), 
+            location: formData.get('location'), 
+            value: formData.get('value'), 
+            description: formData.get('description') 
+        };
+        try {
+            const res = await api.post(scriptUrl, payload);
+            if (res.result === 'success') { setIsModalOpen(false); setEditingEvent(null); refetch(); }
+            else throw new Error(res.message);
+        } catch (err) { alert(err.message); } finally { setIsSubmitting(false); }
+    };
+
+    const handleDeleteEvent = async () => {
+        if (!confirmDelete) return;
+        try {
+            const res = await api.post(scriptUrl, { action: 'deleteEvent', id: confirmDelete.id });
+            if (res.result === 'success') { setConfirmDelete(null); refetch(); }
+            else throw new Error(res.message);
+        } catch (err) { alert(err.message); }
+    };
+
+    const handleAttendance = async (eventId, actionType) => {
+        await api.post(scriptUrl, { action: 'handleAttendanceUpdate', itemId: eventId, playerName: currentUser.name, actionType, type: 'event' });
+        refetch();
+    };
+
+    if (isLoading) return <Loader message="Carregando eventos..." />;
+    
+    return (
+        <div className="space-y-8 animate-fade-in-up">
+            <div className="flex justify-between items-center">
+                <h2 className="text-3xl font-bold">Eventos & Confraternizações</h2>
+                {isAdmin && <button onClick={() => { setEditingEvent(null); setIsModalOpen(true); }} className="bg-indigo-600 text-white font-bold py-2 px-6 rounded-xl hover:bg-indigo-700 transition">Criar Evento</button>}
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {events.map(event => {
+                    const isConfirmed = event.attendees.includes(currentUser.name);
+                    const isDeadlinePassed = new Date() > new Date(event.deadline);
+                    const totalCollected = event.attendees.length * event.value;
+
+                    return (
+                        <GlassCard key={event.id} className="flex flex-col relative">
+                            {isAdmin && (
+                                <div className="absolute top-4 right-4 flex gap-1 bg-slate-100 dark:bg-slate-700 rounded-lg p-1">
+                                    <button onClick={() => { setEditingEvent(event); setIsModalOpen(true); }} className="p-1.5 text-slate-500 hover:text-indigo-600"><Edit className="w-4 h-4"/></button>
+                                    <button onClick={() => setConfirmDelete(event)} className="p-1.5 text-slate-500 hover:text-red-600"><Trash className="w-4 h-4"/></button>
+                                </div>
+                            )}
+                            <h3 className="text-2xl font-black text-indigo-600 dark:text-indigo-400 w-3/4">{event.name}</h3>
+                            <p className="font-bold mt-2 text-slate-700 dark:text-slate-300">📅 {new Date(event.date).toLocaleDateString('pt-BR')}</p>
+                            <p className="text-slate-600 dark:text-slate-400 text-sm mt-2 mb-4 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-slate-700">{event.description}</p>
+                            
+                            <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl mb-4 border border-slate-100 dark:border-slate-700">
+                                <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-700 pb-2 mb-2">
+                                    <span className="font-bold text-slate-500 text-xs uppercase tracking-widest">Cota Individual</span>
+                                    <span className="font-black text-emerald-600 dark:text-emerald-400 text-lg">{formatCurrency(event.value)}</span>
+                                </div>
+                                <div className="flex justify-between items-center text-sm">
+                                    <span className="font-semibold text-slate-500">Arrecadado:</span>
+                                    <span className="font-bold text-slate-700 dark:text-slate-300">{formatCurrency(totalCollected)}</span>
+                                </div>
+                            </div>
+
+                            <div className="mb-6 flex-grow">
+                                <div className="flex justify-between items-end mb-2">
+                                    <h4 className="font-bold text-sm text-slate-800 dark:text-slate-200">Confirmados ({event.attendees.length})</h4>
+                                    <p className="text-[10px] uppercase font-bold text-red-500 bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded">Limite: {new Date(event.deadline).toLocaleDateString('pt-BR')}</p>
+                                </div>
+                                <div className="flex flex-wrap gap-1.5 mt-2">{event.attendees.map(name => <span key={name} className="bg-slate-100 dark:bg-slate-700 px-2 py-1 text-xs font-bold rounded-lg">{name}</span>)}</div>
+                            </div>
+                            
+                            <button onClick={() => handleAttendance(event.id, isConfirmed ? 'withdraw' : 'confirm')} disabled={isDeadlinePassed} className={`w-full font-bold py-3 px-4 mt-auto rounded-xl ${isDeadlinePassed ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : isConfirmed ? 'bg-red-50 text-red-600 dark:bg-red-900/20' : 'bg-indigo-600 text-white shadow-lg'}`}>
+                                {isDeadlinePassed ? 'Inscrições Encerradas' : isConfirmed ? 'Desistir' : 'Confirmar Presença'}
+                            </button>
+                        </GlassCard>
+                    );
+                })}
+            </div>
+
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingEvent ? "Editar Evento" : "Criar Evento"}>
+                <form onSubmit={handleFormSubmit} className="space-y-4">
+                    <input name="name" type="text" placeholder="Nome do Evento" defaultValue={editingEvent?.name} className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none" required />
+                    <div className="grid grid-cols-2 gap-4">
+                        <input name="date" type="datetime-local" defaultValue={editingEvent?.date ? new Date(editingEvent.date).toISOString().substring(0,16) : ''} className="w-full p-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none" required />
+                        <input name="deadline" type="date" defaultValue={editingEvent?.deadline} className="w-full p-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none" required />
+                    </div>
+                    <input name="location" type="text" placeholder="Local" defaultValue={editingEvent?.location} className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none" required />
+                    <input name="value" type="number" step="0.01" placeholder="Valor (R$)" defaultValue={editingEvent?.value} className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none" required />
+                    <textarea name="description" placeholder="Detalhes..." defaultValue={editingEvent?.description} className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none" rows={3} required></textarea>
+                    <button type="submit" disabled={isSubmitting} className="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl hover:bg-indigo-700 disabled:opacity-50">{isSubmitting ? 'A salvar...' : 'Salvar Evento'}</button>
+                </form>
+            </Modal>
+
+            <Modal isOpen={!!confirmDelete} onClose={() => setConfirmDelete(null)} title="Confirmar">
+                <p className="text-lg">Deseja apagar o evento <strong>{confirmDelete?.name}</strong>?</p>
+                <div className="flex justify-end gap-4 mt-6">
+                    <button onClick={() => setConfirmDelete(null)} className="py-3 px-6 bg-slate-200 dark:bg-slate-700 font-bold rounded-xl text-slate-800 dark:text-white">Cancelar</button>
+                    <button onClick={handleDeleteEvent} className="py-3 px-6 bg-red-600 text-white font-bold rounded-xl">Apagar</button>
+                </div>
+            </Modal>
+        </div>
+    );
+};
+
+// 6. ABA SORTEIO
+const SorteioTab = ({ allPlayersData, scriptUrl }) => {
     const [selectedPlayers, setSelectedPlayers] = useState([]);
     const [teams, setTeams] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
@@ -1535,7 +1313,7 @@ const SorteioTab = ({ allPlayersData, scriptUrl, ModalComponent }) => {
         if (!teams) return;
         setIsLoading(true);
         try {
-            const data = await fetchWithPost(scriptUrl, { action: 'saveTeams', teamBlack: teams.teamBlack.join(','), teamRed: teams.teamRed.join(',') });
+            const data = await api.post(scriptUrl, { action: 'saveTeams', teamBlack: teams.teamBlack.join(','), teamRed: teams.teamRed.join(',') });
             if (data.result === 'success') setModalInfo({ isOpen: true, title: 'Sucesso', message: 'Times salvos na planilha com sucesso!' });
             else throw new Error(data.message || 'Erro desconhecido.');
         } catch (error) { setModalInfo({ isOpen: true, title: 'Erro', message: error.message }); } 
@@ -1546,9 +1324,9 @@ const SorteioTab = ({ allPlayersData, scriptUrl, ModalComponent }) => {
 
     return (
         <div className="space-y-8 animate-fade-in-up">
-            <ModalComponent isOpen={modalInfo.isOpen} onClose={() => setModalInfo({ isOpen: false, title: '', message: '' })} title={modalInfo.title}>
-                <p>{modalInfo.message}</p>
-            </ModalComponent>
+            <Modal isOpen={modalInfo.isOpen} onClose={() => setModalInfo({ isOpen: false, title: '', message: '' })} title={modalInfo.title}>
+                <p className="text-slate-700 dark:text-slate-300">{modalInfo.message}</p>
+            </Modal>
 
             {drawMode === 'selection' && (
                 <GlassCard>
@@ -1568,7 +1346,7 @@ const SorteioTab = ({ allPlayersData, scriptUrl, ModalComponent }) => {
                         <svg className="w-6 h-6 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 mb-10 max-h-96 overflow-y-auto pr-2 pb-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 mb-10 max-h-[50vh] overflow-y-auto pr-2 pb-2">
                         {filteredPlayers.map(player => (
                             <button
                                 key={player.name}
@@ -1597,7 +1375,7 @@ const SorteioTab = ({ allPlayersData, scriptUrl, ModalComponent }) => {
                             <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-2">Sorteio Avulso</h3>
                             <p className="text-sm text-slate-500 mb-6">Escolha a quantidade para um sorteio rápido.</p>
                             <div className="flex gap-3 w-full">
-                                <select value={numToDraw} onChange={(e) => setNumToDraw(Number(e.target.value))} className="w-1/3 p-4 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 font-bold rounded-xl outline-none focus:ring-2 focus:ring-indigo-500">
+                                <select value={numToDraw} onChange={(e) => setNumToDraw(Number(e.target.value))} className="w-1/3 p-4 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 font-bold rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800 dark:text-white">
                                     {[1,2,3,4,5].map(n => <option key={n} value={n}>{n}</option>)}
                                 </select>
                                 <button onClick={handleCustomDraw} disabled={selectedPlayers.length === 0} className="w-2/3 bg-purple-600 text-white font-bold py-4 rounded-xl hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-purple-600/30">
@@ -1672,9 +1450,9 @@ const SorteioTab = ({ allPlayersData, scriptUrl, ModalComponent }) => {
     );
 };
 
-// --- ABA ESTATUTO ---
+// 7. ABA ESTATUTO
 const EstatutoTab = () => {
-    const [openAccordion, setOpenAccordion] = useState('Regulamento');
+    const [openAccordion, setOpenAccordion] = useState('Regulamento Geral do CBA');
     const toggleAccordion = (title) => setOpenAccordion(openAccordion === title ? null : title);
 
     const estatutoItens = [
@@ -1687,7 +1465,7 @@ const EstatutoTab = () => {
                     <p><strong>COMPOSIÇÃO DIRETORIA:</strong> ARCANJO, GONZAGA, NEILOR, PORTUGAL, VINICIUS, MILHO, ANDRE DIAS</p>
                     <p className="mt-2 text-indigo-600 dark:text-indigo-400"><strong>CHAVE PIX PAGAMENTO CNPJ:</strong> 36.560.422/0001-69 (NEILOR – NUNBANK)</p>
                     <p className="mb-4">COMPROVANTE DEVERÁ SER ENVIADO NO PRIVADO DE NEILOR.</p>
-                    
+
                     <h4 className="font-bold mt-4">1- MENSALIDADE</h4>
                     <ul className="list-disc list-inside">
                         <li>VALOR R$ 20,00 até dia 10 de cada mês;</li>
@@ -1753,7 +1531,7 @@ const EstatutoTab = () => {
                     <h3 className="font-bold">Ata de Reunião - CBA</h3>
                     <p><strong>Data:</strong> 06/01/2025 | <strong>Local:</strong> Reunião Online</p>
                     <p><strong>Presidente:</strong> Neilor Leite | <strong>Vice-presidente:</strong> Lucas Portugal</p>
-                    
+
                     <h4 className="font-bold mt-4">Resoluções:</h4>
                     <ol className="list-decimal list-inside space-y-2">
                         <li><strong>Prestação de Contas:</strong> O Sr. Neilor será responsável por realizar a prestação de contas.</li>
@@ -1781,7 +1559,7 @@ const EstatutoTab = () => {
                  <>
                     <h3 className="font-bold">Ata de Reunião - CBA</h3>
                     <p><strong>Data:</strong> 10/05/2025 | <strong>Local:</strong> Reunião Online</p>
-                    
+
                     <h4 className="font-bold mt-4">Resoluções:</h4>
                     <ol className="list-decimal list-inside space-y-2">
                         <li><strong>Uniformes:</strong> A partir de 12/05/2025 será realizada a solicitação dos novos uniformes. Prazo estipulado para entrega é de 30 dias.</li>
@@ -1811,13 +1589,13 @@ const EstatutoTab = () => {
     );
 };
 
-// --- ABA NOTIFICAÇÕES ---
+// 8. ABA NOTIFICAÇÕES (COM HISTÓRICO RESTAURADO)
 const NotificacoesTab = ({ scriptUrl }) => {
-    const { data: notifData, isLoading, error, refetch } = useDataQuery(['notifications'], () => fetchWithPost(scriptUrl, { action: 'getNotifications' }));
+    const { data: notifData, isLoading, error, refetch } = useDataQuery(['notifications'], () => api.post(scriptUrl, { action: 'getNotifications' }));
 
     const notifications = useMemo(() => {
         if (!notifData?.data) return [];
-        return notifData.data.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        return [...notifData.data].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     }, [notifData]);
 
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -1828,11 +1606,10 @@ const NotificacoesTab = ({ scriptUrl }) => {
         e.preventDefault(); 
         setIsSubmitting(true); 
         setSubmitStatus({ message: '', type: '' });
-        
-        const formData = new FormData(e.target);
+        const formData = new FormData(e.currentTarget);
         
         try {
-            const data = await fetchWithPost(scriptUrl, { 
+            const data = await api.post(scriptUrl, { 
                 action: 'sendPushNotificationToAll', 
                 title: formData.get('title'), 
                 message: formData.get('message'), 
@@ -1858,8 +1635,7 @@ const NotificacoesTab = ({ scriptUrl }) => {
             <GlassCard>
                 <div className="mb-6 border-b border-slate-200 dark:border-slate-700 pb-4">
                     <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                        <svg className="w-6 h-6 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" /></svg> 
-                        Disparar Push
+                        <BellRing className="w-6 h-6 text-indigo-500" /> Disparar Push
                     </h2>
                     <p className="text-sm text-slate-500 mt-1">Atinge todos os utilizadores com a App mobile instalada.</p>
                 </div>
@@ -1870,7 +1646,7 @@ const NotificacoesTab = ({ scriptUrl }) => {
                     </div>
                     <div>
                         <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Corpo da Mensagem</label>
-                        <textarea name="message" placeholder="Escreva a mensagem..." className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800 dark:text-white resize-none" rows="4" required></textarea>
+                        <textarea name="message" placeholder="Escreva a mensagem..." className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800 dark:text-white resize-none" rows={4} required></textarea>
                     </div>
                     <div>
                         <label className="block text-xs font-bold uppercase text-slate-500 mb-2">Ao clicar, abrir na aba:</label>
@@ -1900,7 +1676,7 @@ const NotificacoesTab = ({ scriptUrl }) => {
                     <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
                         {notifications.length === 0 ? (
                             <div className="text-center py-10 text-slate-500">
-                                <svg className="w-12 h-12 mx-auto mb-3 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" /></svg>
+                                <Activity className="w-12 h-12 mx-auto mb-3 opacity-20" />
                                 Nenhum envio registado no sistema.
                             </div>
                         ) : notifications.map((notif, idx) => (
@@ -1922,223 +1698,122 @@ const NotificacoesTab = ({ scriptUrl }) => {
     );
 };
 
-
-// --- MAIN APP E ROTEAMENTO DE ABAS ---
-const MainApp = ({ user, onLogout, SCRIPT_URL, librariesLoaded }) => {
+// --- MAIN APP ---
+const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
     const [activeTab, setActiveTab] = useState('presenca');
-    const [isRefreshing, setIsRefreshing] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-    
-    // O hook gerencia o estado e o cache dos dados base
-    const { data: initialData, isLoading, refetch } = useDataQuery(['initialData'], () => fetchWithPost(SCRIPT_URL, { action: 'getInitialAppData' }));
+    const { data: initialData, isLoading, refetch } = useDataQuery(['initialData'], () => api.post(SCRIPT_URL, { action: 'getInitialAppData' }));
     
     const isAdmin = user?.role?.toUpperCase() === 'ADMIN';
     const TABS = useMemo(() => isAdmin ? ['presenca', 'relatorios', 'financas', 'jogos', 'eventos', 'sorteio', 'estatuto', 'notificacoes'] : ['presenca', 'relatorios', 'financas', 'jogos', 'eventos', 'sorteio', 'estatuto'], [isAdmin]);
 
-    // Global listener for cross-tab navigation (ex: from React Native WebView)
     useEffect(() => {
-        window.navigateToTab = (tabName) => {
-            if (TABS.includes(tabName)) {
-                setActiveTab(tabName);
-            }
-        };
-        return () => {
-            delete window.navigateToTab;
-        };
+        window.navigateToTab = (tabName) => { if (TABS.includes(tabName)) setActiveTab(tabName); };
+        return () => delete window.navigateToTab;
     }, [TABS]);
 
-    const handleRefresh = () => {
-        setIsRefreshing(true);
-        fetchWithPost(SCRIPT_URL, { action: 'clearCache' }).then(() => refetch()).finally(() => setIsRefreshing(false));
+    const TAB_CONFIG = {
+        presenca: { icon: <Activity className="w-6 h-6 md:w-7 md:h-7 shrink-0" />, color: 'text-emerald-500 dark:text-emerald-400', activeBg: 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' },
+        jogos: { icon: <CalendarDays className="w-6 h-6 md:w-7 md:h-7 shrink-0" />, color: 'text-orange-500 dark:text-orange-400', activeBg: 'bg-orange-500 text-white shadow-lg shadow-orange-500/30' },
+        estatuto: { icon: <BookOpen className="w-6 h-6 md:w-7 md:h-7 shrink-0" />, color: 'text-teal-500 dark:text-teal-400', activeBg: 'bg-teal-500 text-white shadow-lg shadow-teal-500/30' },
+        financas: { icon: <DollarSign className="w-6 h-6 md:w-7 md:h-7 shrink-0" />, color: 'text-rose-500 dark:text-rose-400', activeBg: 'bg-rose-500 text-white shadow-lg shadow-rose-500/30' },
+        sorteio: { icon: <Users className="w-6 h-6 md:w-7 md:h-7 shrink-0" />, color: 'text-amber-500 dark:text-amber-400', activeBg: 'bg-amber-500 text-white shadow-lg shadow-amber-500/30' },
+        eventos: { icon: <PartyPopper className="w-6 h-6 md:w-7 md:h-7 shrink-0" />, color: 'text-purple-500 dark:text-purple-400', activeBg: 'bg-purple-500 text-white shadow-lg shadow-purple-500/30' },
+        relatorios: { icon: <BarChart className="w-6 h-6 md:w-7 md:h-7 shrink-0" />, color: 'text-blue-500 dark:text-blue-400', activeBg: 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' },
+        notificacoes: { icon: <BellRing className="w-6 h-6 md:w-7 md:h-7 shrink-0" />, color: 'text-pink-500 dark:text-pink-400', activeBg: 'bg-pink-500 text-white shadow-lg shadow-pink-500/30' },
     };
 
     const renderContent = () => {
         if (isLoading) return <Loader message="Carregando dados na quadra..." />;
         
         const appData = initialData?.data;
+        
         const props = { 
             allPlayersData: appData?.dashboard?.players || [], 
             dates: appData?.dashboard?.dates || [], 
             financeData: appData?.finance, 
             nextGame: appData?.nextGame, 
-            currentUser: user, 
-            isAdmin, 
-            scriptUrl: SCRIPT_URL, 
-            pixCode: appData?.pixCode, 
-            ModalComponent: Modal 
+            currentUser: user, isAdmin, scriptUrl: SCRIPT_URL, 
+            pixCode: appData?.pixCode, refreshKey: Date.now() 
         };
 
-        switch (activeTab) {
-            case 'presenca': return <PresencaTab {...props} onAttendanceUpdate={handleRefresh} onNavigate={setActiveTab} />;
-            case 'relatorios': return <RelatoriosTab {...props} />;
-            case 'financas': return <FinancasTab {...props} />;
-            case 'jogos': return <JogosTab {...props} refreshKey={isRefreshing} />;
-            case 'eventos': return <EventosTab {...props} refreshKey={isRefreshing} />;
-            case 'sorteio': return <SorteioTab {...props} />;
-            case 'estatuto': return <EstatutoTab />;
-            case 'notificacoes': return <NotificacoesTab {...props} />;
-            default: return null;
-        }
-    };
-
-    const TAB_CONFIG = {
-        presenca: {
-            icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 md:h-7 md:w-7 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>,
-            color: 'text-emerald-500 dark:text-emerald-400',
-            activeBg: 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
-        },
-        jogos: {
-            icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 md:h-7 md:w-7 shrink-0" viewBox="0 0 20 20" fill="currentColor"><path d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a1 1 0 011-1h14a1 1 0 110 2H3a1 1 0 01-1-1z" /></svg>,
-            color: 'text-orange-500 dark:text-orange-400',
-            activeBg: 'bg-orange-500 text-white shadow-lg shadow-orange-500/30'
-        },
-        estatuto: {
-            icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 md:h-7 md:w-7 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>,
-            color: 'text-teal-500 dark:text-teal-400',
-            activeBg: 'bg-teal-500 text-white shadow-lg shadow-teal-500/30'
-        },
-        financas: {
-            icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 md:h-7 md:w-7 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>,
-            color: 'text-rose-500 dark:text-rose-400',
-            activeBg: 'bg-rose-500 text-white shadow-lg shadow-rose-500/30'
-        },
-        sorteio: {
-            icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 md:h-7 md:w-7 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>,
-            color: 'text-amber-500 dark:text-amber-400',
-            activeBg: 'bg-amber-500 text-white shadow-lg shadow-amber-500/30'
-        },
-        eventos: {
-            icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 md:h-7 md:w-7 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
-            color: 'text-purple-500 dark:text-purple-400',
-            activeBg: 'bg-purple-500 text-white shadow-lg shadow-purple-500/30'
-        },
-        relatorios: {
-            icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 md:h-7 md:w-7 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>,
-            color: 'text-blue-500 dark:text-blue-400',
-            activeBg: 'bg-blue-600 text-white shadow-lg shadow-blue-500/30'
-        },
-        notificacoes: {
-            icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 md:h-7 md:w-7 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>,
-            color: 'text-pink-500 dark:text-pink-400',
-            activeBg: 'bg-pink-500 text-white shadow-lg shadow-pink-500/30'
-        },
+        return (
+            <AnimatePresence mode="wait">
+                <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
+                    {activeTab === 'presenca' && <PresencaTab {...props} onAttendanceUpdate={refetch} onNavigate={setActiveTab} />}
+                    {activeTab === 'relatorios' && <RelatoriosTab {...props} />}
+                    {activeTab === 'financas' && <FinancasTab {...props} />}
+                    {activeTab === 'jogos' && <JogosTab {...props} />}
+                    {activeTab === 'eventos' && <EventosTab {...props} />}
+                    {activeTab === 'sorteio' && <SorteioTab {...props} />}
+                    {activeTab === 'estatuto' && <EstatutoTab />}
+                    {activeTab === 'notificacoes' && <NotificacoesTab {...props} scriptUrl={SCRIPT_URL} />}
+                </motion.div>
+            </AnimatePresence>
+        );
     };
 
     return (
-        <div className="flex h-screen w-full bg-slate-50 dark:bg-slate-900 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-50/50 via-slate-50 to-slate-100 dark:from-indigo-900/20 dark:via-slate-900 dark:to-slate-900 transition-colors duration-500 text-slate-800 dark:text-slate-200 overflow-hidden">
-            
-            {/* Overlay para Mobile quando Sidebar está aberta */}
-            {isSidebarOpen && (
-                <div 
-                    className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-40 md:hidden transition-opacity"
-                    onClick={() => setIsSidebarOpen(false)}
-                />
-            )}
+        <div className="flex h-screen w-full bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 overflow-hidden">
+            <AnimatePresence>
+                {isSidebarOpen && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-40 md:hidden" onClick={() => setIsSidebarOpen(false)} />
+                )}
+            </AnimatePresence>
 
-            {/* SIDEBAR VERTICAL */}
-            <nav className={`fixed inset-y-0 left-0 z-50 md:relative transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-300 w-[72px] md:w-24 shrink-0 h-full flex flex-col items-center py-6 bg-white/90 dark:bg-slate-800/90 backdrop-blur-2xl border-r border-slate-200/50 dark:border-slate-700/50 shadow-2xl md:shadow-lg overflow-y-auto hide-scrollbar gap-3 md:gap-4`}>
-                <div className="mb-6">
-                     <img src="https://lh3.googleusercontent.com/d/131DvcfgiRLLp9irVnVY8m9qNuM-0y7f8" alt="Logo" className="w-12 h-12 rounded-full shadow-md border-2 border-indigo-100 dark:border-indigo-900/50" />
-                </div>
-                
-                {TABS.map(tab => {
-                    const config = TAB_CONFIG[tab];
-                    const isActive = activeTab === tab;
-                    return (
-                        <button 
-                            key={tab} 
-                            onClick={() => { setActiveTab(tab); setIsSidebarOpen(false); }} 
-                            className={`group relative flex items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-2xl transition-all duration-300 ${isActive ? `${config.activeBg} scale-110` : `${config.color} hover:bg-slate-200/50 dark:hover:bg-slate-700/50 hover:scale-105`}`}
-                            title={tab.charAt(0).toUpperCase() + tab.slice(1)}
-                        >
-                            {config.icon}
-                        </button>
-                    );
-                })}
+            <nav className={`fixed inset-y-0 left-0 z-50 md:relative transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-300 w-[72px] md:w-24 shrink-0 h-full flex flex-col items-center py-6 bg-white/90 dark:bg-slate-800/90 backdrop-blur-2xl border-r border-slate-200/50 dark:border-slate-700/50 shadow-2xl md:shadow-lg overflow-y-auto hide-scrollbar gap-4`}>
+                <img src="https://lh3.googleusercontent.com/d/131DvcfgiRLLp9irVnVY8m9qNuM-0y7f8" alt="Logo" className="w-12 h-12 rounded-full mb-4" />
+                {TABS.map(tab => (
+                    <button key={tab} onClick={() => { setActiveTab(tab); setIsSidebarOpen(false); }} className={`flex items-center justify-center w-12 h-12 rounded-2xl transition-all duration-300 ${activeTab === tab ? `${TAB_CONFIG[tab].activeBg} shadow-lg scale-110` : `${TAB_CONFIG[tab].color} hover:bg-slate-100 dark:hover:bg-slate-800`}`}>
+                        {TAB_CONFIG[tab].icon}
+                    </button>
+                ))}
             </nav>
 
-            {/* ÁREA DE CONTEÚDO PRINCIPAL */}
-            <div className="flex-1 flex flex-col h-full overflow-hidden relative w-full">
-                {/* Cabeçalho */}
-                <header className="shrink-0 p-4 md:px-8 md:py-5 flex justify-between items-center bg-white/40 dark:bg-slate-800/30 backdrop-blur-md border-b border-slate-200/50 dark:border-slate-700/50 z-30">
-                    <div className="flex items-center gap-3 sm:gap-4">
-                        <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2 -ml-2 text-slate-600 dark:text-slate-300 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition">
-                            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
-                        </button>
-                        <img src={user.fotoUrl || 'https://placehold.co/100'} alt="Avatar" className="h-10 w-10 md:h-12 md:w-12 rounded-full object-cover shadow-sm ring-2 ring-white dark:ring-slate-700" crossOrigin="anonymous" />
-                        <div className="hidden sm:block">
-                            <h1 className="text-xl md:text-2xl font-black tracking-tight text-slate-800 dark:text-white leading-none">Portal CBA</h1>
-                            <p className="text-indigo-600 dark:text-indigo-400 font-bold text-[10px] md:text-xs uppercase tracking-widest">{user.name}</p>
-                        </div>
+            <div className="flex-1 flex flex-col h-full overflow-hidden w-full relative">
+                <header className="shrink-0 p-4 flex justify-between items-center bg-white/40 dark:bg-slate-800/30 backdrop-blur-md border-b border-slate-200/50 dark:border-slate-700/50 z-30">
+                    <div className="flex items-center gap-3">
+                        <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2 text-slate-600 dark:text-slate-300 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800"><Menu className="w-6 h-6" /></button>
+                        <img src={user.fotoUrl || 'https://placehold.co/100'} alt="Avatar" className="h-10 w-10 rounded-full object-cover shadow-sm ring-2 ring-white dark:ring-slate-700" crossOrigin="anonymous" />
+                        <div className="hidden sm:block"><h1 className="text-xl font-black leading-none">Portal CBA</h1><p className="text-indigo-600 dark:text-indigo-400 font-bold text-[10px] uppercase tracking-widest">{user.name}</p></div>
                     </div>
-                    <div className="flex gap-2 md:gap-3">
-                        <button onClick={handleRefresh} className="p-2 md:p-2.5 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl shadow-sm hover:shadow-md transition">
-                            <svg className={`w-5 h-5 ${isRefreshing ? 'animate-spin text-indigo-500' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h5M20 20v-5h-5M4 4a14.95 14.95 0 0117.47 9.47M20 20a14.95 14.95 0 01-17.47-9.47" /></svg>
-                        </button>
-                        <button onClick={onLogout} className="px-3 md:px-5 py-2 md:py-2.5 bg-slate-100 dark:bg-slate-800 text-rose-500 font-bold text-sm md:text-base rounded-xl hover:bg-rose-50 dark:hover:bg-rose-900/20 transition shadow-sm border border-slate-200 dark:border-slate-700">Sair</button>
+                    <div className="flex gap-2">
+                        <button onClick={refetch} className="p-2 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl shadow-sm hover:shadow-md"><RefreshCw className="w-5 h-5" /></button>
+                        <button onClick={onLogout} className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-rose-500 font-bold text-sm rounded-xl hover:bg-rose-50 dark:hover:bg-rose-900/20 border border-slate-200 dark:border-slate-700 flex items-center gap-2"><LogOut className="w-4 h-4 hidden sm:block"/> Sair</button>
                     </div>
                 </header>
-
-                {/* Abas / Conteúdo */}
-                <main className="flex-1 overflow-y-auto p-4 md:p-8">
-                    <div className="max-w-7xl mx-auto pb-20">
-                        {renderContent()}
-                    </div>
-                </main>
+                <main className="flex-1 overflow-y-auto p-4 md:p-8"><div className="max-w-7xl mx-auto pb-20">{renderContent()}</div></main>
             </div>
         </div>
     );
-}
+};
 
 export default function App() {
     const [auth, setAuth] = useState({ status: 'unauthenticated', user: null, error: null });
-    const [librariesLoaded, setLibrariesLoaded] = useState(false);
-    
-    // Endpoint do servidor Apps Script
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwNXGI4Cc5qGBye-IfWW_qqUcJ04NfArulExPXE4jgX0SZhWAmeWCjjKg2U9FFfHkHE/exec";
+
+    useEffect(() => {
+        if (!window.html2pdf) {
+            const script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+            document.body.appendChild(script);
+        }
+    }, []);
 
     const handleLogin = async (e) => {
         e.preventDefault();
         setAuth({ status: 'loading', user: null, error: null });
+        const formData = new FormData(e.currentTarget);
         try {
-            const data = await fetchWithPost(SCRIPT_URL, { action: 'loginUser', email: e.target.email.value, password: e.target.password.value });
-            if (data.status === 'approved') {
-                setAuth({ status: 'authenticated', user: data, error: null });
-            } else {
-                setAuth({ status: 'unauthenticated', user: null, error: data.message });
-            }
-        } catch (error) { 
-            setAuth({ status: 'unauthenticated', user: null, error: 'Falha no servidor.' }); 
-        }
+            const data = await api.post(SCRIPT_URL, { action: 'loginUser', email: formData.get('email'), password: formData.get('password') });
+            if (data.status === 'approved') setAuth({ status: 'authenticated', user: data, error: null });
+            else setAuth({ status: 'unauthenticated', user: null, error: data.message });
+        } catch (error) { setAuth({ status: 'unauthenticated', user: null, error: 'Falha no servidor.' }); }
     };
 
-    useEffect(() => {
-        const loadScript = (src, id) => new Promise((resolve) => {
-            if (document.getElementById(id)) return resolve();
-            const s = document.createElement('script'); 
-            s.src = src; s.id = id; s.onload = resolve;
-            document.body.appendChild(s);
-        });
-        
-        Promise.all([
-            loadScript('https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js', 'papa'),
-            loadScript('https://cdn.jsdelivr.net/npm/chart.js', 'chartjs'),
-            // Biblioteca para gerar PDF
-            loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js', 'html2pdf')
-        ]).then(() => setLibrariesLoaded(true));
-    }, []);
-
-    if (!librariesLoaded || auth.status === 'loading') {
-        return <div className="min-h-screen bg-slate-900 flex items-center justify-center"><Loader message="Inicializando Portal..." /></div>;
-    }
-    
     return (
         <ThemeProvider>
-            {auth.status === 'authenticated' ? (
-                <MainApp user={auth.user} onLogout={() => setAuth({ status: 'unauthenticated', user: null, error: null })} SCRIPT_URL={SCRIPT_URL} librariesLoaded={librariesLoaded} /> 
-            ) : (
-                <LoginScreen onLogin={handleLogin} isLoading={false} error={auth.error} />
-            )}
+            {auth.status === 'authenticated' ? <MainApp user={auth.user} onLogout={() => setAuth({ status: 'unauthenticated', user: null, error: null })} SCRIPT_URL={SCRIPT_URL} /> : <LoginScreen onLogin={handleLogin} isLoading={auth.status === 'loading'} error={auth.error} />}
         </ThemeProvider>
     );
 }
