@@ -1789,9 +1789,30 @@ const MesarioTab = ({ allPlayersData, scriptUrl, onStatsSaved }) => {
         }, 0);
     };
 
+    const handleNextGame = () => {
+        const scoreBlack = calculateScore(teamBlack);
+        const scoreGreen = calculateScore(teamGreen);
+
+        if (scoreBlack === scoreGreen) {
+            setModalInfo({ isOpen: true, title: 'Jogo Empatado', message: 'A partida está empatada! Registre o ponto de desempate antes de avançar para a próxima partida.' });
+            return;
+        }
+
+        if (scoreBlack > scoreGreen) {
+            setTeamGreen([]); // Preto venceu, tira o verde de quadra
+            setModalInfo({ isOpen: true, title: 'Fim de Jogo', message: 'O Time Preto venceu e continua na quadra! Selecione os novos desafiantes para o Time Verde.' });
+        } else {
+            setTeamBlack([]); // Verde venceu, tira o preto de quadra
+            setModalInfo({ isOpen: true, title: 'Fim de Jogo', message: 'O Time Verde venceu e continua na quadra! Selecione os novos desafiantes para o Time Preto.' });
+        }
+        
+        setIsLive(false); // Volta para a tela de seleção, mantendo o histórico na memória
+    };
+
     const saveStats = async () => {
         setIsSaving(true);
-        const statsArray = Object.keys(stats).filter(playerName => teamBlack.includes(playerName) || teamGreen.includes(playerName)).map(playerName => ({
+        // Salva TODOS os jogadores que entraram em quadra hoje (que constam no objeto stats)
+        const statsArray = Object.keys(stats).map(playerName => ({
             playerName,
             pts2: stats[playerName].pts2,
             pts3: stats[playerName].pts3,
@@ -1800,11 +1821,20 @@ const MesarioTab = ({ allPlayersData, scriptUrl, onStatsSaved }) => {
             blk: stats[playerName].blk
         }));
 
+        if (statsArray.length === 0) {
+            setModalInfo({ isOpen: true, title: 'Aviso', message: 'Nenhuma estatística foi registrada neste domingo.' });
+            setIsSaving(false);
+            return;
+        }
+
         try {
             const res = await api.post(scriptUrl, { action: 'saveMatchStats', date, stats: statsArray });
             if (res.result === 'success') {
-                setModalInfo({ isOpen: true, title: 'Sucesso', message: 'As estatísticas do domingo foram registradas!' });
+                setModalInfo({ isOpen: true, title: 'Sucesso', message: 'O domingo foi encerrado e todas as estatísticas foram salvas na planilha!' });
                 setIsLive(false);
+                setStats({}); // Limpa a memória para o próximo domingo
+                setTeamBlack([]);
+                setTeamGreen([]);
                 if (onStatsSaved) onStatsSaved();
             } else throw new Error(res.message);
         } catch (err) {
@@ -1856,9 +1886,17 @@ const MesarioTab = ({ allPlayersData, scriptUrl, onStatsSaved }) => {
                         ))}
                     </div>
 
-                    <button onClick={startGame} className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-black py-5 rounded-xl shadow-lg shadow-cyan-600/30 transition-transform active:scale-95 text-lg flex items-center justify-center gap-2">
-                        <Activity className="w-5 h-5"/> Iniciar Anotações
-                    </button>
+                    <div className="flex flex-col sm:flex-row gap-4">
+                        <button onClick={startGame} className="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white font-black py-4 rounded-xl shadow-lg shadow-cyan-600/30 transition-transform active:scale-95 text-lg flex items-center justify-center gap-2">
+                            <Activity className="w-5 h-5"/> Ir para a Quadra
+                        </button>
+                        {Object.keys(stats).length > 0 && (
+                            <button onClick={saveStats} disabled={isSaving} className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-black py-4 rounded-xl shadow-lg shadow-emerald-600/30 transition-transform active:scale-95 text-lg flex items-center justify-center gap-2">
+                                {isSaving ? <RefreshCw className="w-5 h-5 animate-spin"/> : <CheckCircle className="w-5 h-5"/>}
+                                Encerrar Domingo e Salvar
+                            </button>
+                        )}
+                    </div>
                 </GlassCard>
             ) : (
                 <div className="space-y-4">
@@ -1937,12 +1975,23 @@ const MesarioTab = ({ allPlayersData, scriptUrl, onStatsSaved }) => {
                         </div>
                     </div>
 
-                    <GlassCard className="text-center bg-slate-900 dark:bg-slate-800 border-none">
-                        <button onClick={saveStats} disabled={isSaving} className="w-full px-6 py-5 bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-black text-xl rounded-2xl shadow-xl shadow-cyan-500/20 disabled:opacity-50 transition-transform active:scale-95 flex items-center justify-center gap-3">
-                            {isSaving ? <RefreshCw className="w-6 h-6 animate-spin"/> : <CheckCircle className="w-6 h-6"/>}
-                            {isSaving ? 'Salvando Súmula...' : 'Encerrar Partida e Salvar Súmula'}
-                        </button>
-                    </GlassCard>
+                    <div className="flex flex-col md:flex-row gap-4">
+                        <GlassCard className="flex-1 text-center bg-cyan-900 dark:bg-cyan-900 border-none p-4 cursor-pointer hover:bg-cyan-800 transition-colors" onClick={handleNextGame}>
+                            <div className="flex items-center justify-center gap-3">
+                                <PartyPopper className="w-6 h-6 text-cyan-300"/>
+                                <span className="text-white font-black text-lg">Próxima Partida (Mantém Vencedor)</span>
+                            </div>
+                            <p className="text-cyan-200 text-xs mt-1">O time perdedor sai da quadra e você seleciona os próximos.</p>
+                        </GlassCard>
+                        
+                        <GlassCard className="flex-1 text-center bg-emerald-700 dark:bg-emerald-800 border-none p-4 cursor-pointer hover:bg-emerald-600 transition-colors" onClick={saveStats}>
+                            <div className="flex items-center justify-center gap-3">
+                                {isSaving ? <RefreshCw className="w-6 h-6 animate-spin text-emerald-200"/> : <CheckCircle className="w-6 h-6 text-emerald-300"/>}
+                                <span className="text-white font-black text-lg">Encerrar Domingo e Salvar</span>
+                            </div>
+                            <p className="text-emerald-200 text-xs mt-1">Fecha a súmula de hoje e envia todas as anotações para a planilha.</p>
+                        </GlassCard>
+                    </div>
                 </div>
             )}
         </div>
