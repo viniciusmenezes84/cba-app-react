@@ -13,6 +13,28 @@ import { Bar, Doughnut, Line } from 'react-chartjs-2';
 // Registo dos componentes do Chart.js
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
+// Constantes Globais extraídas para evitar avisos no ESLint
+const MONTHS_MAP = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+
+// Funções puras de finanças extraídas do componente
+const getEnhancedStatus = (monthName, originalStatus) => {
+    const statusStr = String(originalStatus || '').trim().toLowerCase();
+    if (statusStr === 'isento') return { text: 'Isento', code: 'isento' };
+    if (statusStr === '20') return { text: 'Pago', code: 'pago' };
+    const monthMap = { "janeiro": 0, "fevereiro": 1, "março": 2, "abril": 3, "maio": 4, "junho": 5, "julho": 6, "agosto": 7, "setembro": 8, "outubro": 9, "novembro": 10, "dezembro": 11 };
+    if (monthMap[monthName.toLowerCase()] < new Date().getMonth()) return { text: 'Em Atraso', code: 'atraso' };
+    return { text: 'Pendente', code: 'pendente' };
+};
+
+const calculatePlayerDebt = (player, financeData) => {
+    if(!financeData?.paymentHeaders || !player) return 0;
+    let debt = 0;
+    financeData.paymentHeaders.forEach(m => {
+        if(getEnhancedStatus(m, player.statuses[m]).code === 'atraso') debt += 20;
+    });
+    return debt;
+};
+
 // --- CONTEXTO DE TEMA ---
 const ThemeContext = createContext({ theme: 'dark', toggleTheme: () => {} });
 
@@ -313,7 +335,6 @@ const PresencaTab = ({ allPlayersData, dates, financeData, isLoading, error, nex
     }
 
     const monthlyData = new Array(12).fill(0);
-    const monthsMap = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
     playedDatesByYear.forEach(dateStr => {
         const monthIndex = parseInt(dateStr.substring(5, 7), 10) - 1;
         if (monthIndex >= 0 && monthIndex < 12) {
@@ -335,7 +356,7 @@ const PresencaTab = ({ allPlayersData, dates, financeData, isLoading, error, nex
     };
     
     const chartDataObj = { 
-        labels: monthsMap, 
+        labels: MONTHS_MAP, 
         datasets: [{ 
             label: 'Total de Presenças', 
             data: monthlyData, 
@@ -374,7 +395,7 @@ const PresencaTab = ({ allPlayersData, dates, financeData, isLoading, error, nex
             });
         });
 
-        return { labels: monthsMap, datasets };
+        return { labels: MONTHS_MAP, datasets };
     }, [dates, allPlayersData, availableYears]);
 
     const lineChartOptions = {
@@ -565,7 +586,8 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
     }, [singlePlayer]);
 
     const displayStats = useMemo(() => {
-        if (!singlePlayer) return null;
+        if (!singlePlayer) return { pts: 0, reb: 0, ast: 0, blk: 0, lblPts: 'PTS', lblReb: 'REB', lblAst: 'AST', lblBlk: 'TOC' };
+        
         if (statDate === 'media' || !singlePlayer.dailyStats?.[statDate]) {
             return {
                 pts: singlePlayer.ppj || 0,
@@ -927,29 +949,11 @@ const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin, scri
         else setSelectedPlayer(financeData.paymentStatus.find(p => p.player.toLowerCase() === currentUser.name.toLowerCase())?.player || '');
     }, [financeData, isAdmin, currentUser.name]);
 
-    const getEnhancedStatus = (monthName, originalStatus) => {
-        const statusStr = String(originalStatus || '').trim().toLowerCase();
-        if (statusStr === 'isento') return { text: 'Isento', code: 'isento' };
-        if (statusStr === '20') return { text: 'Pago', code: 'pago' };
-        const monthMap = { "janeiro": 0, "fevereiro": 1, "março": 2, "abril": 3, "maio": 4, "junho": 5, "julho": 6, "agosto": 7, "setembro": 8, "outubro": 9, "novembro": 10, "dezembro": 11 };
-        if (monthMap[monthName.toLowerCase()] < new Date().getMonth()) return { text: 'Em Atraso', code: 'atraso' };
-        return { text: 'Pendente', code: 'pendente' };
-    };
-
-    const calculatePlayerDebt = (player) => {
-        if(!financeData?.paymentHeaders || !player) return 0;
-        let debt = 0;
-        financeData.paymentHeaders.forEach(m => {
-            if(getEnhancedStatus(m, player.statuses[m]).code === 'atraso') debt += 20;
-        });
-        return debt;
-    };
-
     const adminStats = useMemo(() => {
         if(!financeData?.paymentStatus) return { totalReceber: 0, inadimplentes: [] };
         let totalReceber = 0; let inadimplentes = [];
         financeData.paymentStatus.forEach(p => {
-            const debt = calculatePlayerDebt(p);
+            const debt = calculatePlayerDebt(p, financeData);
             if (debt > 0) { totalReceber += debt; inadimplentes.push({ name: p.player, debt }); }
         });
         inadimplentes.sort((a,b) => b.debt - a.debt);
@@ -976,7 +980,7 @@ const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin, scri
     if (!financeData) return <p className="text-center text-slate-500 py-8">Nenhum dado financeiro encontrado.</p>;
 
     const playerData = financeData.paymentStatus?.find(p => p.player === selectedPlayer);
-    const playerDebt = calculatePlayerDebt(playerData);
+    const playerDebt = calculatePlayerDebt(playerData, financeData);
 
     return (
         <div className="space-y-8">
@@ -1810,38 +1814,17 @@ const MesarioTab = ({ allPlayersData, scriptUrl, onStatsSaved }) => {
         }
     };
 
-    const PlayerStatCard = ({ player, isBlack }) => {
-        const pStats = stats[player] || { pts2: 0, pts3: 0, reb: 0, ast: 0, blk: 0 };
-        const totalPts = (pStats.pts2 * 2) + (pStats.pts3 * 3);
-        
-        const StatBtn = ({ label, statKey }) => (
-            <div className="flex flex-col items-center bg-black/30 rounded-lg p-1 w-full">
-                <span className="text-[9px] sm:text-[10px] font-black uppercase opacity-60 mb-0.5">{label}</span>
-                <button onClick={() => updateStat(player, statKey, 1)} className="bg-white/20 hover:bg-white/40 w-full rounded py-2 sm:py-3 font-black text-lg sm:text-2xl transition-colors active:scale-95 shadow-sm">
-                    {pStats[statKey]}
-                </button>
-                <button onClick={() => updateStat(player, statKey, -1)} className="mt-1 w-full text-center text-white/30 hover:text-white transition-colors py-0.5 flex justify-center active:scale-90" title={`Subtrair ${label}`}>
-                    <Minus className="w-3 h-3 sm:w-4 sm:h-4" />
-                </button>
-            </div>
-        );
-
-        return (
-            <div className={`p-2 sm:p-3 rounded-xl mb-3 border ${isBlack ? 'bg-slate-800 border-slate-700' : 'bg-emerald-700 border-emerald-500'} shadow-md`}>
-                <div className="flex justify-between items-center mb-2 px-1">
-                    <span className="font-black text-white truncate text-base sm:text-lg tracking-tight w-2/3">{player}</span>
-                    <span className="bg-white/20 px-2 py-1 rounded-lg text-white font-black text-xs sm:text-sm whitespace-nowrap shadow-inner">{totalPts} pts</span>
-                </div>
-                <div className="flex gap-1 justify-between">
-                    <StatBtn label="+2" statKey="pts2" />
-                    <StatBtn label="+3" statKey="pts3" />
-                    <StatBtn label="REB" statKey="reb" />
-                    <StatBtn label="AST" statKey="ast" />
-                    <StatBtn label="TOC" statKey="blk" />
-                </div>
-            </div>
-        );
-    };
+    const renderStatBtn = (player, pStats, label, statKey) => (
+        <div className="flex flex-col items-center bg-black/30 rounded-lg p-1 w-full">
+            <span className="text-[9px] sm:text-[10px] font-black uppercase opacity-60 mb-0.5">{label}</span>
+            <button onClick={() => updateStat(player, statKey, 1)} className="bg-white/20 hover:bg-white/40 w-full rounded py-2 sm:py-3 font-black text-lg sm:text-2xl transition-colors active:scale-95 shadow-sm">
+                {pStats[statKey]}
+            </button>
+            <button onClick={() => updateStat(player, statKey, -1)} className="mt-1 w-full text-center text-white/30 hover:text-white transition-colors py-0.5 flex justify-center active:scale-90" title={`Subtrair ${label}`}>
+                <Minus className="w-3 h-3 sm:w-4 sm:h-4" />
+            </button>
+        </div>
+    );
 
     return (
         <div className="space-y-6 animate-fade-in-up">
@@ -1905,14 +1888,50 @@ const MesarioTab = ({ allPlayersData, scriptUrl, onStatsSaved }) => {
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                         <div className="bg-slate-900 p-3 sm:p-5 rounded-3xl shadow-2xl border-2 border-slate-800">
                             <div className="space-y-2">
-                                {teamBlack.map(p => <PlayerStatCard key={p} player={p} isBlack={true} />)}
+                                {teamBlack.map(player => {
+                                    const pStats = stats[player] || { pts2: 0, pts3: 0, reb: 0, ast: 0, blk: 0 };
+                                    const totalPts = (pStats.pts2 * 2) + (pStats.pts3 * 3);
+                                    return (
+                                        <div key={player} className="p-2 sm:p-3 rounded-xl mb-3 border bg-slate-800 border-slate-700 shadow-md">
+                                            <div className="flex justify-between items-center mb-2 px-1">
+                                                <span className="font-black text-white truncate text-base sm:text-lg tracking-tight w-2/3">{player}</span>
+                                                <span className="bg-white/20 px-2 py-1 rounded-lg text-white font-black text-xs sm:text-sm whitespace-nowrap shadow-inner">{totalPts} pts</span>
+                                            </div>
+                                            <div className="flex gap-1 justify-between">
+                                                {renderStatBtn(player, pStats, "+2", "pts2")}
+                                                {renderStatBtn(player, pStats, "+3", "pts3")}
+                                                {renderStatBtn(player, pStats, "REB", "reb")}
+                                                {renderStatBtn(player, pStats, "AST", "ast")}
+                                                {renderStatBtn(player, pStats, "TOC", "blk")}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
                                 {teamBlack.length === 0 && <p className="text-slate-600 text-center font-bold py-8 uppercase">Ninguém no Preto</p>}
                             </div>
                         </div>
 
                         <div className="bg-emerald-500 p-3 sm:p-5 rounded-3xl shadow-2xl border-2 border-emerald-400">
                             <div className="space-y-2">
-                                {teamGreen.map(p => <PlayerStatCard key={p} player={p} isBlack={false} />)}
+                                {teamGreen.map(player => {
+                                    const pStats = stats[player] || { pts2: 0, pts3: 0, reb: 0, ast: 0, blk: 0 };
+                                    const totalPts = (pStats.pts2 * 2) + (pStats.pts3 * 3);
+                                    return (
+                                        <div key={player} className="p-2 sm:p-3 rounded-xl mb-3 border bg-emerald-700 border-emerald-500 shadow-md">
+                                            <div className="flex justify-between items-center mb-2 px-1">
+                                                <span className="font-black text-white truncate text-base sm:text-lg tracking-tight w-2/3">{player}</span>
+                                                <span className="bg-white/20 px-2 py-1 rounded-lg text-white font-black text-xs sm:text-sm whitespace-nowrap shadow-inner">{totalPts} pts</span>
+                                            </div>
+                                            <div className="flex gap-1 justify-between">
+                                                {renderStatBtn(player, pStats, "+2", "pts2")}
+                                                {renderStatBtn(player, pStats, "+3", "pts3")}
+                                                {renderStatBtn(player, pStats, "REB", "reb")}
+                                                {renderStatBtn(player, pStats, "AST", "ast")}
+                                                {renderStatBtn(player, pStats, "TOC", "blk")}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
                                 {teamGreen.length === 0 && <p className="text-emerald-700 text-center font-bold py-8 uppercase">Ninguém no Verde</p>}
                             </div>
                         </div>
@@ -1934,7 +1953,12 @@ const MesarioTab = ({ allPlayersData, scriptUrl, onStatsSaved }) => {
 const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
     const [activeTab, setActiveTab] = useState('presenca');
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-    const { data: initialData, isLoading, refetch } = useDataQuery(() => api.post(SCRIPT_URL, { action: 'getInitialAppData' }));
+    const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+    const { data: initialData, isLoading, refetch } = useDataQuery(
+        () => api.post(SCRIPT_URL, { action: 'getInitialAppData' }), 
+        [refreshTrigger]
+    );
     
     const isAdmin = user?.role?.toUpperCase() === 'ADMIN';
     const TABS = useMemo(() => isAdmin ? ['presenca', 'relatorios', 'mesario', 'financas', 'jogos', 'eventos', 'sorteio', 'estatuto', 'notificacoes'] : ['presenca', 'relatorios', 'financas', 'jogos', 'eventos', 'sorteio', 'estatuto'], [isAdmin]);
@@ -1950,7 +1974,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
         } catch (e) {
             console.error("Erro ao limpar cache", e);
         }
-        refetch();
+        setRefreshTrigger(prev => prev + 1);
     };
 
     const TAB_CONFIG = {
@@ -1976,7 +2000,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
             financeData: appData?.finance, 
             nextGame: appData?.nextGame, 
             currentUser: user, isAdmin, scriptUrl: SCRIPT_URL, 
-            pixCode: appData?.pixCode, refreshKey: Date.now() 
+            pixCode: appData?.pixCode, refreshKey: refreshTrigger 
         };
 
         return (
