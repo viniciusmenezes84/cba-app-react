@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, createContext, useCon
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Activity, CalendarDays, BookOpen, DollarSign, Users, PartyPopper, BarChart, BellRing, 
-    X, Menu, Copy, LogOut, RefreshCw, Trophy, Flame, MapPin, ChevronDown, CheckCircle, AlertCircle, Share2, ArrowLeft, Trash, Edit
+    X, Menu, Copy, LogOut, RefreshCw, Trophy, Flame, MapPin, ChevronDown, CheckCircle, AlertCircle, Share2, ArrowLeft, Trash, Edit, ClipboardList, Minus
 } from 'lucide-react';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, 
@@ -481,6 +481,9 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
     const [selectedPlayer, setSelectedPlayer] = useState('todos');
     const [sortConfig, setSortConfig] = useState({ key: 'percentage', direction: 'desc' });
     const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+    const [infoModal, setInfoModal] = useState({ isOpen: false, title: '', message: '' });
+
+    const [statDate, setStatDate] = useState('media');
 
     const availableYears = useMemo(() => {
         if (!dates || dates.length === 0) return [new Date().getFullYear().toString()];
@@ -496,6 +499,10 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
         }
     }, [availableYears, selectedYear]);
 
+    useEffect(() => {
+        setStatDate('media');
+    }, [selectedPlayer]);
+
     const filteredDates = useMemo(() => {
         const uniqueDates = [...new Set(dates || [])];
         return uniqueDates.filter(d => d.startsWith(selectedYear));
@@ -506,6 +513,23 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
             allPlayersData.some(p => p.attendance[date]?.includes('✅'))
         );
     }, [filteredDates, allPlayersData]);
+
+    const { globalTotalGames, globalAveragePercentage } = useMemo(() => {
+        let validGames = 0, presences = 0;
+        playedDates.forEach(date => {
+            allPlayersData.forEach(p => {
+                const status = p.attendance[date]?.trim() || '';
+                if (status !== '' && status !== 'N/A') {
+                    validGames++;
+                    if (status.includes('✅')) presences++;
+                }
+            });
+        });
+        return {
+            globalTotalGames: playedDates.length,
+            globalAveragePercentage: validGames > 0 ? (presences / validGames) * 100 : 0
+        };
+    }, [playedDates, allPlayersData]);
 
     const reportData = useMemo(() => {
         let data = allPlayersData.map(player => {
@@ -535,6 +559,39 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
 
     const singlePlayer = useMemo(() => reportData.find(p => p.name === selectedPlayer), [reportData, selectedPlayer]);
     
+    const availableStatDates = useMemo(() => {
+        if (!singlePlayer || !singlePlayer.dailyStats) return [];
+        return Object.keys(singlePlayer.dailyStats).sort((a, b) => new Date(b) - new Date(a));
+    }, [singlePlayer]);
+
+    const displayStats = useMemo(() => {
+        if (!singlePlayer) return null;
+        if (statDate === 'media' || !singlePlayer.dailyStats?.[statDate]) {
+            return {
+                pts: singlePlayer.ppj || 0,
+                reb: singlePlayer.rpj || 0,
+                ast: singlePlayer.apj || 0,
+                blk: singlePlayer.tpj || 0,
+                lblPts: 'PTS / Jogo',
+                lblReb: 'REB / Jogo',
+                lblAst: 'AST / Jogo',
+                lblBlk: 'TOC / Jogo'
+            };
+        } else {
+            const d = singlePlayer.dailyStats[statDate];
+            return {
+                pts: (d.pts2 * 2) + (d.pts3 * 3),
+                reb: d.reb,
+                ast: d.ast,
+                blk: d.blk,
+                lblPts: 'PTS (Dia)',
+                lblReb: 'REB (Dia)',
+                lblAst: 'AST (Dia)',
+                lblBlk: 'TOC (Dia)'
+            };
+        }
+    }, [singlePlayer, statDate]);
+
     const doughnutData = {
         labels: ['Presença', 'Ausência'],
         datasets: [{ 
@@ -557,7 +614,7 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
                     document.head.appendChild(script);
                 });
             } catch (err) {
-                alert('Erro ao carregar a biblioteca de PDF. Verifique a sua conexão.');
+                setInfoModal({ isOpen: true, title: 'Erro', message: 'Erro ao carregar a biblioteca de PDF. Verifique a sua conexão.' });
                 setIsGeneratingPDF(false);
                 return;
             }
@@ -609,8 +666,10 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
             text += `📊 *Aproveitamento:* ${singlePlayer.percentage.toFixed(0)}%\n`;
             text += `✅ *Presenças:* ${singlePlayer.presences} de ${singlePlayer.totalGames} jogos\n`;
             text += `⚠️ *Faltas não justificadas:* ${singlePlayer.faults}\n\n`;
-            if (singlePlayer.ppj) text += `🏀 *PTS/Jogo:* ${singlePlayer.ppj}\n`;
-            if (singlePlayer.rpj) text += `🤚 *REB/Jogo:* ${singlePlayer.rpj}\n`;
+            text += `🏀 *${displayStats.lblPts}:* ${displayStats.pts}\n`;
+            text += `🤚 *${displayStats.lblReb}:* ${displayStats.reb}\n`;
+            text += `🤝 *${displayStats.lblAst}:* ${displayStats.ast}\n`;
+            text += `🧱 *${displayStats.lblBlk}:* ${displayStats.blk}\n`;
         }
 
         text += `\nVeja os detalhes completos no Portal do CBA!`;
@@ -619,6 +678,10 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
 
     return (
         <div className="space-y-8">
+            <Modal isOpen={infoModal.isOpen} onClose={() => setInfoModal({ isOpen: false, title: '', message: '' })} title={infoModal.title}>
+                <p>{infoModal.message}</p>
+            </Modal>
+
             <GlassCard className="flex flex-col xl:flex-row justify-between items-center gap-4">
                 <div className="flex items-center w-full xl:w-auto">
                     <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-2xl mr-4"><BarChart className="w-8 h-8" /></div>
@@ -705,9 +768,26 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
                                 {singlePlayer.fotoUrl ? <img src={singlePlayer.fotoUrl} alt={singlePlayer.name} className="w-40 h-40 rounded-3xl object-cover border-4 border-white dark:border-slate-700 shadow-2xl group-hover:scale-105 transition-transform duration-500" crossOrigin="anonymous" onError={(e) => { e.target.onerror = null; e.target.src='https://placehold.co/160/4f46e5/ffffff?text=' + singlePlayer.name.charAt(0); }} /> : <div className="w-40 h-40 rounded-3xl bg-indigo-600 text-white flex items-center justify-center text-6xl font-bold shadow-2xl border-4 border-white dark:border-slate-700">{singlePlayer.name.charAt(0)}</div>}
                                 <h2 className="text-3xl font-black mt-6 text-slate-800 dark:text-white uppercase tracking-tight">{singlePlayer.name}</h2>
                                 <p className="text-indigo-600 dark:text-indigo-400 font-bold tracking-widest uppercase text-sm mt-1">{singlePlayer.posicao || 'JOGADOR'} • #{singlePlayer.numero || '--'}</p>
-                                <div className="grid grid-cols-2 gap-4 w-full mt-8 border-t border-slate-200 dark:border-slate-700/50 pt-6">
-                                    <div><p className="text-3xl font-black text-slate-800 dark:text-white">{singlePlayer.ppj || 0}</p><p className="text-xs text-slate-500 font-bold uppercase tracking-wider">PTS / Jogo</p></div>
-                                    <div><p className="text-3xl font-black text-slate-800 dark:text-white">{singlePlayer.rpj || 0}</p><p className="text-xs text-slate-500 font-bold uppercase tracking-wider">REB / Jogo</p></div>
+                                
+                                <div className="flex justify-between items-center mt-8 border-t border-slate-200 dark:border-slate-700/50 pt-4 mb-2">
+                                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Estatísticas</h3>
+                                    {availableStatDates.length > 0 ? (
+                                        <select value={statDate} onChange={(e) => setStatDate(e.target.value)} className="p-1.5 text-xs bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg font-bold text-slate-700 dark:text-slate-200 outline-none cursor-pointer">
+                                            <option value="media">Média Geral</option>
+                                            {availableStatDates.map(d => (
+                                                <option key={d} value={d}>Jogo: {d.split('-').reverse().join('/')}</option>
+                                            ))}
+                                        </select>
+                                    ) : (
+                                        <span className="text-[10px] text-slate-400 font-bold uppercase bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-md" title="Aguardando dados do servidor">Média Geral</span>
+                                    )}
+                                </div>
+                                
+                                <div className="grid grid-cols-4 gap-2 w-full text-center">
+                                    <div><p className="text-2xl sm:text-3xl font-black text-slate-800 dark:text-white">{displayStats.pts}</p><p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">{displayStats.lblPts}</p></div>
+                                    <div><p className="text-2xl sm:text-3xl font-black text-slate-800 dark:text-white">{displayStats.reb}</p><p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">{displayStats.lblReb}</p></div>
+                                    <div><p className="text-2xl sm:text-3xl font-black text-slate-800 dark:text-white">{displayStats.ast}</p><p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">{displayStats.lblAst}</p></div>
+                                    <div><p className="text-2xl sm:text-3xl font-black text-slate-800 dark:text-white">{displayStats.blk}</p><p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">{displayStats.lblBlk}</p></div>
                                 </div>
                             </div>
                         </GlassCard>
@@ -1105,6 +1185,7 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, refreshKey }) => {
     const [editingEvent, setEditingEvent] = useState(null);
     const [confirmDelete, setConfirmDelete] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [infoModal, setInfoModal] = useState({ isOpen: false, title: '', message: '' });
 
     const formatCurrency = (val) => typeof val === 'number' ? val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ 0,00';
 
@@ -1126,7 +1207,7 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, refreshKey }) => {
             const res = await api.post(scriptUrl, payload);
             if (res.result === 'success') { setIsModalOpen(false); setEditingEvent(null); refetch(); }
             else throw new Error(res.message);
-        } catch (err) { alert(err.message); } finally { setIsSubmitting(false); }
+        } catch (err) { setInfoModal({ isOpen: true, title: 'Erro', message: err.message }); } finally { setIsSubmitting(false); }
     };
 
     const handleDeleteEvent = async () => {
@@ -1135,7 +1216,7 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, refreshKey }) => {
             const res = await api.post(scriptUrl, { action: 'deleteEvent', id: confirmDelete.id });
             if (res.result === 'success') { setConfirmDelete(null); refetch(); }
             else throw new Error(res.message);
-        } catch (err) { alert(err.message); }
+        } catch (err) { setInfoModal({ isOpen: true, title: 'Erro', message: err.message }); }
     };
 
     const handleAttendance = async (eventId, actionType) => {
@@ -1147,6 +1228,10 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, refreshKey }) => {
     
     return (
         <div className="space-y-8 animate-fade-in-up">
+            <Modal isOpen={infoModal.isOpen} onClose={() => setInfoModal({ isOpen: false, title: '', message: '' })} title={infoModal.title}>
+                <p>{infoModal.message}</p>
+            </Modal>
+            
             <div className="flex justify-between items-center">
                 <h2 className="text-3xl font-bold">Eventos & Confraternizações</h2>
                 {isAdmin && <button onClick={() => { setEditingEvent(null); setIsModalOpen(true); }} className="bg-indigo-600 text-white font-bold py-2 px-6 rounded-xl hover:bg-indigo-700 transition">Criar Evento</button>}
@@ -1648,6 +1733,203 @@ const NotificacoesTab = ({ scriptUrl }) => {
     );
 };
 
+// 9. ABA MODO MESÁRIO (NOVA)
+const MesarioTab = ({ allPlayersData, scriptUrl, onStatsSaved }) => {
+    const [isLive, setIsLive] = useState(false);
+    const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+    const [teamBlack, setTeamBlack] = useState([]);
+    const [teamGreen, setTeamGreen] = useState([]);
+    const [stats, setStats] = useState({});
+    const [isSaving, setIsSaving] = useState(false);
+    const [modalInfo, setModalInfo] = useState({ isOpen: false, title: '', message: '' });
+
+    const sortedPlayers = useMemo(() => [...allPlayersData].sort((a, b) => a.name.localeCompare(b.name)), [allPlayersData]);
+
+    const toggleTeam = (player, team) => {
+        if (team === 'black') {
+            if (teamBlack.includes(player)) setTeamBlack(prev => prev.filter(p => p !== player));
+            else { setTeamBlack(prev => [...prev, player]); setTeamGreen(prev => prev.filter(p => p !== player)); }
+        } else {
+            if (teamGreen.includes(player)) setTeamGreen(prev => prev.filter(p => p !== player));
+            else { setTeamGreen(prev => [...prev, player]); setTeamBlack(prev => prev.filter(p => p !== player)); }
+        }
+    };
+
+    const startGame = () => {
+        if (teamBlack.length === 0 && teamGreen.length === 0) {
+            setModalInfo({ isOpen: true, title: 'Atenção', message: 'Selecione pelo menos 1 jogador de cada lado para iniciar a partida.' });
+            return;
+        }
+        
+        const initialStats = {};
+        [...teamBlack, ...teamGreen].forEach(p => {
+            if (!stats[p]) initialStats[p] = { pts2: 0, pts3: 0, reb: 0, ast: 0, blk: 0 };
+            else initialStats[p] = stats[p];
+        });
+        setStats(prev => ({ ...prev, ...initialStats }));
+        setIsLive(true);
+    };
+
+    const updateStat = (player, statKey, delta) => {
+        setStats(prev => {
+            const currentVal = prev[player]?.[statKey] || 0;
+            const newVal = Math.max(0, currentVal + delta);
+            return { ...prev, [player]: { ...prev[player], [statKey]: newVal } };
+        });
+    };
+
+    const calculateScore = (team) => {
+        return team.reduce((total, player) => {
+            const pStats = stats[player] || { pts2: 0, pts3: 0 };
+            return total + (pStats.pts2 * 2) + (pStats.pts3 * 3);
+        }, 0);
+    };
+
+    const saveStats = async () => {
+        setIsSaving(true);
+        const statsArray = Object.keys(stats).filter(playerName => teamBlack.includes(playerName) || teamGreen.includes(playerName)).map(playerName => ({
+            playerName,
+            pts2: stats[playerName].pts2,
+            pts3: stats[playerName].pts3,
+            reb: stats[playerName].reb,
+            ast: stats[playerName].ast,
+            blk: stats[playerName].blk
+        }));
+
+        try {
+            const res = await api.post(scriptUrl, { action: 'saveMatchStats', date, stats: statsArray });
+            if (res.result === 'success') {
+                setModalInfo({ isOpen: true, title: 'Sucesso', message: 'As estatísticas do domingo foram registradas!' });
+                setIsLive(false);
+                if (onStatsSaved) onStatsSaved();
+            } else throw new Error(res.message);
+        } catch (err) {
+            setModalInfo({ isOpen: true, title: 'Erro', message: err.message });
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const PlayerStatCard = ({ player, isBlack }) => {
+        const pStats = stats[player] || { pts2: 0, pts3: 0, reb: 0, ast: 0, blk: 0 };
+        const totalPts = (pStats.pts2 * 2) + (pStats.pts3 * 3);
+        
+        const StatBtn = ({ label, statKey }) => (
+            <div className="flex flex-col items-center bg-black/30 rounded-lg p-1 w-full">
+                <span className="text-[9px] sm:text-[10px] font-black uppercase opacity-60 mb-0.5">{label}</span>
+                <button onClick={() => updateStat(player, statKey, 1)} className="bg-white/20 hover:bg-white/40 w-full rounded py-2 sm:py-3 font-black text-lg sm:text-2xl transition-colors active:scale-95 shadow-sm">
+                    {pStats[statKey]}
+                </button>
+                <button onClick={() => updateStat(player, statKey, -1)} className="mt-1 w-full text-center text-white/30 hover:text-white transition-colors py-0.5 flex justify-center active:scale-90" title={`Subtrair ${label}`}>
+                    <Minus className="w-3 h-3 sm:w-4 sm:h-4" />
+                </button>
+            </div>
+        );
+
+        return (
+            <div className={`p-2 sm:p-3 rounded-xl mb-3 border ${isBlack ? 'bg-slate-800 border-slate-700' : 'bg-emerald-700 border-emerald-500'} shadow-md`}>
+                <div className="flex justify-between items-center mb-2 px-1">
+                    <span className="font-black text-white truncate text-base sm:text-lg tracking-tight w-2/3">{player}</span>
+                    <span className="bg-white/20 px-2 py-1 rounded-lg text-white font-black text-xs sm:text-sm whitespace-nowrap shadow-inner">{totalPts} pts</span>
+                </div>
+                <div className="flex gap-1 justify-between">
+                    <StatBtn label="+2" statKey="pts2" />
+                    <StatBtn label="+3" statKey="pts3" />
+                    <StatBtn label="REB" statKey="reb" />
+                    <StatBtn label="AST" statKey="ast" />
+                    <StatBtn label="TOC" statKey="blk" />
+                </div>
+            </div>
+        );
+    };
+
+    return (
+        <div className="space-y-6 animate-fade-in-up">
+            <Modal isOpen={modalInfo.isOpen} onClose={() => setModalInfo({ isOpen: false, title: '', message: '' })} title={modalInfo.title}>
+                <p className="text-slate-700 dark:text-slate-300">{modalInfo.message}</p>
+            </Modal>
+
+            {!isLive ? (
+                <GlassCard>
+                    <div className="mb-6 border-b border-slate-200 dark:border-slate-700 pb-4">
+                        <h2 className="text-2xl font-black flex items-center gap-2 text-slate-800 dark:text-white"><ClipboardList className="w-6 h-6 text-cyan-500"/> Modo Mesário</h2>
+                        <p className="text-slate-500 text-sm mt-1">Selecione a data e distribua os jogadores nas equipes.</p>
+                    </div>
+                    
+                    <div className="mb-6">
+                        <label className="font-bold text-sm text-slate-500 uppercase mb-2 block">Data da Partida</label>
+                        <input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full md:w-1/3 p-4 bg-slate-50 dark:bg-slate-700 font-bold text-slate-800 dark:text-white rounded-xl outline-none focus:ring-2 focus:ring-cyan-500 border border-slate-200 dark:border-slate-600" />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 max-h-[50vh] overflow-y-auto pr-2 mb-6">
+                        {sortedPlayers.map(p => (
+                            <div key={p.name} className={`flex flex-col p-3 rounded-xl border transition-colors ${teamBlack.includes(p.name) ? 'bg-slate-800 border-slate-700' : teamGreen.includes(p.name) ? 'bg-emerald-50 border-emerald-200 dark:bg-emerald-900/30 dark:border-emerald-700' : 'bg-slate-50 border-slate-200 dark:bg-slate-800/50 dark:border-slate-700'}`}>
+                                <span className={`font-bold mb-2 truncate ${teamBlack.includes(p.name) ? 'text-white' : teamGreen.includes(p.name) ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-800 dark:text-slate-200'}`}>{p.name}</span>
+                                <div className="flex gap-2 w-full">
+                                    <button onClick={() => toggleTeam(p.name, 'black')} className={`flex-1 py-2 text-xs font-black rounded-lg transition-colors ${teamBlack.includes(p.name) ? 'bg-slate-950 text-white shadow-md' : 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-300 dark:hover:bg-slate-600'}`}>PRETO</button>
+                                    <button onClick={() => toggleTeam(p.name, 'green')} className={`flex-1 py-2 text-xs font-black rounded-lg transition-colors ${teamGreen.includes(p.name) ? 'bg-emerald-600 text-white shadow-md' : 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-300 dark:hover:bg-slate-600'}`}>VERDE</button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <button onClick={startGame} className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-black py-5 rounded-xl shadow-lg shadow-cyan-600/30 transition-transform active:scale-95 text-lg flex items-center justify-center gap-2">
+                        <Activity className="w-5 h-5"/> Iniciar Anotações
+                    </button>
+                </GlassCard>
+            ) : (
+                <div className="space-y-4">
+                    {/* PLACAR FIXO NO TOPO */}
+                    <div className="flex justify-between items-center bg-white dark:bg-slate-800 p-4 rounded-3xl shadow-xl border border-slate-200 dark:border-slate-700 sticky top-4 z-20">
+                        <div className="hidden sm:flex flex-col items-center">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Jogo de</span>
+                            <span className="font-black text-slate-800 dark:text-slate-200">{date.split('-').reverse().join('/')}</span>
+                        </div>
+                        <div className="flex items-center gap-4 sm:gap-8 mx-auto sm:mx-0">
+                            <div className="text-center bg-slate-900 px-4 sm:px-6 py-2 rounded-2xl shadow-inner">
+                                <span className="block text-3xl sm:text-4xl font-black text-white">{calculateScore(teamBlack)}</span>
+                                <span className="text-[10px] font-bold uppercase text-slate-400 tracking-widest">Time Preto</span>
+                            </div>
+                            <span className="text-xl font-black text-slate-300 dark:text-slate-600">X</span>
+                            <div className="text-center bg-emerald-600 px-4 sm:px-6 py-2 rounded-2xl shadow-inner">
+                                <span className="block text-3xl sm:text-4xl font-black text-white">{calculateScore(teamGreen)}</span>
+                                <span className="text-[10px] font-bold uppercase text-emerald-200 tracking-widest">Time Verde</span>
+                            </div>
+                        </div>
+                        <button onClick={() => setIsLive(false)} className="hidden sm:block px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold rounded-xl hover:bg-slate-200 dark:hover:bg-slate-600 text-sm">
+                            Voltar
+                        </button>
+                    </div>
+
+                    {/* QUADRA (ESQUERDA / DIREITA) */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <div className="bg-slate-900 p-3 sm:p-5 rounded-3xl shadow-2xl border-2 border-slate-800">
+                            <div className="space-y-2">
+                                {teamBlack.map(p => <PlayerStatCard key={p} player={p} isBlack={true} />)}
+                                {teamBlack.length === 0 && <p className="text-slate-600 text-center font-bold py-8 uppercase">Ninguém no Preto</p>}
+                            </div>
+                        </div>
+
+                        <div className="bg-emerald-500 p-3 sm:p-5 rounded-3xl shadow-2xl border-2 border-emerald-400">
+                            <div className="space-y-2">
+                                {teamGreen.map(p => <PlayerStatCard key={p} player={p} isBlack={false} />)}
+                                {teamGreen.length === 0 && <p className="text-emerald-700 text-center font-bold py-8 uppercase">Ninguém no Verde</p>}
+                            </div>
+                        </div>
+                    </div>
+
+                    <GlassCard className="text-center bg-slate-900 dark:bg-slate-800 border-none">
+                        <button onClick={saveStats} disabled={isSaving} className="w-full px-6 py-5 bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-black text-xl rounded-2xl shadow-xl shadow-cyan-500/20 disabled:opacity-50 transition-transform active:scale-95 flex items-center justify-center gap-3">
+                            {isSaving ? <RefreshCw className="w-6 h-6 animate-spin"/> : <CheckCircle className="w-6 h-6"/>}
+                            {isSaving ? 'Salvando Súmula...' : 'Encerrar Partida e Salvar Súmula'}
+                        </button>
+                    </GlassCard>
+                </div>
+            )}
+        </div>
+    );
+};
+
 // --- MAIN APP ---
 const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
     const [activeTab, setActiveTab] = useState('presenca');
@@ -1655,12 +1937,21 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
     const { data: initialData, isLoading, refetch } = useDataQuery(() => api.post(SCRIPT_URL, { action: 'getInitialAppData' }));
     
     const isAdmin = user?.role?.toUpperCase() === 'ADMIN';
-    const TABS = useMemo(() => isAdmin ? ['presenca', 'relatorios', 'financas', 'jogos', 'eventos', 'sorteio', 'estatuto', 'notificacoes'] : ['presenca', 'relatorios', 'financas', 'jogos', 'eventos', 'sorteio', 'estatuto'], [isAdmin]);
+    const TABS = useMemo(() => isAdmin ? ['presenca', 'relatorios', 'mesario', 'financas', 'jogos', 'eventos', 'sorteio', 'estatuto', 'notificacoes'] : ['presenca', 'relatorios', 'financas', 'jogos', 'eventos', 'sorteio', 'estatuto'], [isAdmin]);
 
     useEffect(() => {
         window.navigateToTab = (tabName) => { if (TABS.includes(tabName)) setActiveTab(tabName); };
         return () => delete window.navigateToTab;
     }, [TABS]);
+
+    const handleForceRefresh = async () => {
+        try {
+            await api.post(SCRIPT_URL, { action: 'clearCache' });
+        } catch (e) {
+            console.error("Erro ao limpar cache", e);
+        }
+        refetch();
+    };
 
     const TAB_CONFIG = {
         presenca: { icon: <Activity className="w-6 h-6 md:w-7 md:h-7 shrink-0" />, color: 'text-emerald-500 dark:text-emerald-400', activeBg: 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' },
@@ -1670,6 +1961,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
         sorteio: { icon: <Users className="w-6 h-6 md:w-7 md:h-7 shrink-0" />, color: 'text-amber-500 dark:text-amber-400', activeBg: 'bg-amber-500 text-white shadow-lg shadow-amber-500/30' },
         eventos: { icon: <PartyPopper className="w-6 h-6 md:w-7 md:h-7 shrink-0" />, color: 'text-purple-500 dark:text-purple-400', activeBg: 'bg-purple-500 text-white shadow-lg shadow-purple-500/30' },
         relatorios: { icon: <BarChart className="w-6 h-6 md:w-7 md:h-7 shrink-0" />, color: 'text-blue-500 dark:text-blue-400', activeBg: 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' },
+        mesario: { icon: <ClipboardList className="w-6 h-6 md:w-7 md:h-7 shrink-0" />, color: 'text-cyan-500 dark:text-cyan-400', activeBg: 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/30' },
         notificacoes: { icon: <BellRing className="w-6 h-6 md:w-7 md:h-7 shrink-0" />, color: 'text-pink-500 dark:text-pink-400', activeBg: 'bg-pink-500 text-white shadow-lg shadow-pink-500/30' },
     };
 
@@ -1690,8 +1982,9 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
         return (
             <AnimatePresence mode="wait">
                 <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
-                    {activeTab === 'presenca' && <PresencaTab {...props} onAttendanceUpdate={refetch} />}
+                    {activeTab === 'presenca' && <PresencaTab {...props} onAttendanceUpdate={handleForceRefresh} />}
                     {activeTab === 'relatorios' && <RelatoriosTab {...props} />}
+                    {activeTab === 'mesario' && <MesarioTab {...props} onStatsSaved={handleForceRefresh} />}
                     {activeTab === 'financas' && <FinancasTab {...props} />}
                     {activeTab === 'jogos' && <JogosTab {...props} />}
                     {activeTab === 'eventos' && <EventosTab {...props} />}
@@ -1728,7 +2021,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
                         <div className="hidden sm:block"><h1 className="text-xl font-black leading-none">Portal CBA</h1><p className="text-indigo-600 dark:text-indigo-400 font-bold text-[10px] uppercase tracking-widest">{user.name}</p></div>
                     </div>
                     <div className="flex gap-2">
-                        <button onClick={refetch} className="p-2 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl shadow-sm hover:shadow-md"><RefreshCw className="w-5 h-5" /></button>
+                        <button onClick={handleForceRefresh} className="p-2 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl shadow-sm hover:shadow-md"><RefreshCw className="w-5 h-5" /></button>
                         <button onClick={onLogout} className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-rose-500 font-bold text-sm rounded-xl hover:bg-rose-50 dark:hover:bg-rose-900/20 border border-slate-200 dark:border-slate-700 flex items-center gap-2"><LogOut className="w-4 h-4 hidden sm:block"/> Sair</button>
                     </div>
                 </header>
