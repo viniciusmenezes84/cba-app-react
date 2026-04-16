@@ -594,10 +594,10 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
                 reb: singlePlayer.rpj || 0,
                 ast: singlePlayer.apj || 0,
                 blk: singlePlayer.tpj || 0,
-                lblPts: 'PTS / Jogo',
-                lblReb: 'REB / Jogo',
-                lblAst: 'AST / Jogo',
-                lblBlk: 'TOC / Jogo'
+                lblPts: 'PTS / Total',
+                lblReb: 'REB / Total',
+                lblAst: 'AST / Total',
+                lblBlk: 'TOC / Total'
             };
         } else {
             const d = singlePlayer.dailyStats[statDate];
