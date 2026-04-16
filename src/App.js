@@ -1746,6 +1746,7 @@ const MesarioTab = ({ allPlayersData, scriptUrl, onStatsSaved }) => {
     const [stats, setStats] = useState({});
     const [isSaving, setIsSaving] = useState(false);
     const [modalInfo, setModalInfo] = useState({ isOpen: false, title: '', message: '' });
+    const [isScoreExpanded, setIsScoreExpanded] = useState(false);
 
     const sortedPlayers = useMemo(() => [...allPlayersData].sort((a, b) => a.name.localeCompare(b.name)), [allPlayersData]);
 
@@ -1799,19 +1800,18 @@ const MesarioTab = ({ allPlayersData, scriptUrl, onStatsSaved }) => {
         }
 
         if (scoreBlack > scoreGreen) {
-            setTeamGreen([]); // Preto venceu, tira o verde de quadra
+            setTeamGreen([]); 
             setModalInfo({ isOpen: true, title: 'Fim de Jogo', message: 'O Time Preto venceu e continua na quadra! Selecione os novos desafiantes para o Time Verde.' });
         } else {
-            setTeamBlack([]); // Verde venceu, tira o preto de quadra
+            setTeamBlack([]); 
             setModalInfo({ isOpen: true, title: 'Fim de Jogo', message: 'O Time Verde venceu e continua na quadra! Selecione os novos desafiantes para o Time Preto.' });
         }
         
-        setIsLive(false); // Volta para a tela de seleção, mantendo o histórico na memória
+        setIsLive(false); 
     };
 
     const saveStats = async () => {
         setIsSaving(true);
-        // Salva TODOS os jogadores que entraram em quadra hoje (que constam no objeto stats)
         const statsArray = Object.keys(stats).map(playerName => ({
             playerName,
             pts2: stats[playerName].pts2,
@@ -1832,7 +1832,7 @@ const MesarioTab = ({ allPlayersData, scriptUrl, onStatsSaved }) => {
             if (res.result === 'success') {
                 setModalInfo({ isOpen: true, title: 'Sucesso', message: 'O domingo foi encerrado e todas as estatísticas foram salvas na planilha!' });
                 setIsLive(false);
-                setStats({}); // Limpa a memória para o próximo domingo
+                setStats({}); 
                 setTeamBlack([]);
                 setTeamGreen([]);
                 if (onStatsSaved) onStatsSaved();
@@ -1899,31 +1899,44 @@ const MesarioTab = ({ allPlayersData, scriptUrl, onStatsSaved }) => {
                     </div>
                 </GlassCard>
             ) : (
-                <div className="space-y-4">
-                    {/* PLACAR FIXO NO TOPO */}
-                    <div className="flex justify-between items-center bg-white dark:bg-slate-800 p-4 rounded-3xl shadow-xl border border-slate-200 dark:border-slate-700 sticky top-4 z-20">
-                        <div className="hidden sm:flex flex-col items-center">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Jogo de</span>
-                            <span className="font-black text-slate-800 dark:text-slate-200">{date.split('-').reverse().join('/')}</span>
-                        </div>
-                        <div className="flex items-center gap-4 sm:gap-8 mx-auto sm:mx-0">
-                            <div className="text-center bg-slate-900 px-4 sm:px-6 py-2 rounded-2xl shadow-inner">
-                                <span className="block text-3xl sm:text-4xl font-black text-white">{calculateScore(teamBlack)}</span>
-                                <span className="text-[10px] font-bold uppercase text-slate-400 tracking-widest">Time Preto</span>
-                            </div>
-                            <span className="text-xl font-black text-slate-300 dark:text-slate-600">X</span>
-                            <div className="text-center bg-emerald-600 px-4 sm:px-6 py-2 rounded-2xl shadow-inner">
-                                <span className="block text-3xl sm:text-4xl font-black text-white">{calculateScore(teamGreen)}</span>
-                                <span className="text-[10px] font-bold uppercase text-emerald-200 tracking-widest">Time Verde</span>
-                            </div>
-                        </div>
-                        <button onClick={() => setIsLive(false)} className="hidden sm:block px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold rounded-xl hover:bg-slate-200 dark:hover:bg-slate-600 text-sm">
-                            Voltar
+                <div className="space-y-4 pt-12 relative">
+                    
+                    {/* BOTOES FIXOS FLUTUANTES NO TOPO */}
+                    <div className="absolute -top-4 left-0 z-50">
+                        <button onClick={() => setIsLive(false)} className="flex items-center gap-2 bg-slate-800 text-white p-3 rounded-full shadow-lg border border-slate-600 hover:bg-slate-700 transition-colors">
+                            <ArrowLeft className="w-5 h-5" />
                         </button>
                     </div>
 
+                    <div className="absolute -top-4 right-0 z-50">
+                        <div 
+                            className="group relative flex items-center justify-end"
+                            onMouseEnter={() => setIsScoreExpanded(true)}
+                            onMouseLeave={() => setIsScoreExpanded(false)}
+                            onClick={() => setIsScoreExpanded(!isScoreExpanded)}
+                        >
+                            {/* O Placar Expandido */}
+                            <div className={`flex items-center gap-2 bg-slate-800 p-1.5 px-3 rounded-full shadow-lg border border-slate-600 transition-all duration-300 origin-right ${isScoreExpanded ? 'scale-100 opacity-100 mr-2' : 'scale-0 opacity-0 absolute right-12'}`}>
+                                <div className="flex items-center gap-1 bg-slate-900 px-2 py-0.5 rounded-md border border-slate-700">
+                                    <span className="text-[10px] font-bold text-slate-500 uppercase">Preto</span>
+                                    <span className="text-lg font-black text-white">{calculateScore(teamBlack)}</span>
+                                </div>
+                                <span className="text-[10px] font-black text-slate-500">X</span>
+                                <div className="flex items-center gap-1 bg-emerald-700 px-2 py-0.5 rounded-md border border-emerald-600">
+                                    <span className="text-lg font-black text-white">{calculateScore(teamGreen)}</span>
+                                    <span className="text-[10px] font-bold text-emerald-300 uppercase">Verde</span>
+                                </div>
+                            </div>
+
+                            {/* O Ícone Fixo */}
+                            <button className="bg-slate-800 text-white p-3 rounded-full shadow-lg border border-slate-600 hover:bg-slate-700 transition-colors z-10 flex items-center justify-center">
+                                <Trophy className="w-5 h-5 text-yellow-500" />
+                            </button>
+                        </div>
+                    </div>
+
                     {/* QUADRA (ESQUERDA / DIREITA) */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-8">
                         <div className="bg-slate-900 p-3 sm:p-5 rounded-3xl shadow-2xl border-2 border-slate-800">
                             <div className="space-y-2">
                                 {teamBlack.map(player => {
@@ -2132,4 +2145,4 @@ export default function App() {
             {auth.status === 'authenticated' ? <MainApp user={auth.user} onLogout={() => setAuth({ status: 'unauthenticated', user: null, error: null })} SCRIPT_URL={SCRIPT_URL} /> : <LoginScreen onLogin={handleLogin} isLoading={auth.status === 'loading'} error={auth.error} />}
         </ThemeProvider>
     );
-} 
+}
