@@ -594,10 +594,10 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
                 reb: singlePlayer.rpj || 0,
                 ast: singlePlayer.apj || 0,
                 blk: singlePlayer.tpj || 0,
-                lblPts: 'PTS / Total',
-                lblReb: 'REB / Total',
-                lblAst: 'AST / Total',
-                lblBlk: 'TOC / Total'
+                lblPts: 'PTS / Jogo',
+                lblReb: 'REB / Jogo',
+                lblAst: 'AST / Jogo',
+                lblBlk: 'TOC / Jogo'
             };
         } else {
             const d = singlePlayer.dailyStats[statDate];
@@ -793,16 +793,23 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
                                 
                                 <div className="flex justify-between items-center mt-8 border-t border-slate-200 dark:border-slate-700/50 pt-4 mb-2">
                                     <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Estatísticas</h3>
-                                    {availableStatDates.length > 0 ? (
-                                        <select value={statDate} onChange={(e) => setStatDate(e.target.value)} className="p-1.5 text-xs bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg font-bold text-slate-700 dark:text-slate-200 outline-none cursor-pointer">
+                                    <div className="relative flex items-center">
+                                        <select 
+                                            value={statDate} 
+                                            onChange={(e) => setStatDate(e.target.value)} 
+                                            disabled={!singlePlayer || singlePlayer.dailyStats === undefined || availableStatDates.length === 0}
+                                            className="appearance-none p-2 pr-8 text-xs bg-slate-200 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg font-bold text-slate-800 dark:text-slate-100 outline-none cursor-pointer max-w-[160px] shadow-sm hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
                                             <option value="media">Média Geral</option>
                                             {availableStatDates.map(d => (
-                                                <option key={d} value={d}>Jogo: {d.split('-').reverse().join('/')}</option>
+                                                <option key={d} value={d}>Dia: {d.split('-').reverse().join('/')}</option>
                                             ))}
+                                            {singlePlayer && singlePlayer.dailyStats !== undefined && availableStatDates.length === 0 && (
+                                                <option value="empty" disabled>Sem jogos salvos</option>
+                                            )}
                                         </select>
-                                    ) : (
-                                        <span className="text-[10px] text-slate-400 font-bold uppercase bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-md" title="Aguardando dados do servidor">Média Geral</span>
-                                    )}
+                                        <ChevronDown className="w-4 h-4 absolute right-2 pointer-events-none text-slate-600 dark:text-slate-300" />
+                                    </div>
                                 </div>
                                 
                                 <div className="grid grid-cols-4 gap-2 w-full text-center">
@@ -1899,16 +1906,17 @@ const MesarioTab = ({ allPlayersData, scriptUrl, onStatsSaved }) => {
                     </div>
                 </GlassCard>
             ) : (
-                <div className="space-y-4 pt-12 relative">
+                <div className="space-y-4 pt-16 pb-24 relative">
                     
-                    {/* BOTOES FIXOS FLUTUANTES NO TOPO */}
-                    <div className="absolute -top-4 left-0 z-50">
-                        <button onClick={() => setIsLive(false)} className="flex items-center gap-2 bg-slate-800 text-white p-3 rounded-full shadow-lg border border-slate-600 hover:bg-slate-700 transition-colors">
-                            <ArrowLeft className="w-5 h-5" />
+                    {/* BOTAO VOLTAR FLUTUANTE */}
+                    <div className="absolute top-0 left-0 z-50">
+                        <button onClick={() => setIsLive(false)} className="flex items-center gap-2 bg-slate-800 text-white px-4 py-2 rounded-full shadow-xl border border-slate-600 hover:bg-slate-700 transition-colors">
+                            <ArrowLeft className="w-5 h-5" /> <span className="font-bold text-sm hidden sm:block">Voltar</span>
                         </button>
                     </div>
 
-                    <div className="absolute -top-4 right-0 z-50">
+                    {/* PLACAR FLUTUANTE RETRÁTIL */}
+                    <div className="absolute top-0 right-0 z-[100]">
                         <div 
                             className="group relative flex items-center justify-end"
                             onMouseEnter={() => setIsScoreExpanded(true)}
@@ -1916,7 +1924,7 @@ const MesarioTab = ({ allPlayersData, scriptUrl, onStatsSaved }) => {
                             onClick={() => setIsScoreExpanded(!isScoreExpanded)}
                         >
                             {/* O Placar Expandido */}
-                            <div className={`flex items-center gap-2 bg-slate-800 p-1.5 px-3 rounded-full shadow-lg border border-slate-600 transition-all duration-300 origin-right ${isScoreExpanded ? 'scale-100 opacity-100 mr-2' : 'scale-0 opacity-0 absolute right-12'}`}>
+                            <div className={`absolute top-0 right-14 flex items-center gap-2 bg-slate-800 p-1.5 px-3 rounded-full shadow-lg border border-slate-600 transition-all duration-300 origin-right ${isScoreExpanded ? 'scale-100 opacity-100' : 'scale-0 opacity-0 pointer-events-none'}`}>
                                 <div className="flex items-center gap-1 bg-slate-900 px-2 py-0.5 rounded-md border border-slate-700">
                                     <span className="text-[10px] font-bold text-slate-500 uppercase">Preto</span>
                                     <span className="text-lg font-black text-white">{calculateScore(teamBlack)}</span>
