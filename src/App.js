@@ -13,7 +13,7 @@ import { Bar, Doughnut, Line } from 'react-chartjs-2';
 // Registo dos componentes do Chart.js
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
-// Constantes Globais extraídas para evitar avisos no ESLint
+// Constantes Globais
 const MONTHS_MAP = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
 // Funções puras de finanças extraídas do componente
@@ -1750,7 +1750,13 @@ const MesarioTab = ({ allPlayersData, scriptUrl, onStatsSaved }) => {
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [teamBlack, setTeamBlack] = useState([]);
     const [teamGreen, setTeamGreen] = useState([]);
-    const [stats, setStats] = useState({});
+    
+    // dayStats armazena as estatísticas acumuladas do domingo todo (que irão para a planilha)
+    const [dayStats, setDayStats] = useState({});
+    
+    // matchStats armazena APENAS as estatísticas do jogo atual (mostradas na tela e no placar)
+    const [matchStats, setMatchStats] = useState({});
+    
     const [isSaving, setIsSaving] = useState(false);
     const [modalInfo, setModalInfo] = useState({ isOpen: false, title: '', message: '' });
     const [isScoreExpanded, setIsScoreExpanded] = useState(false);
@@ -1773,26 +1779,51 @@ const MesarioTab = ({ allPlayersData, scriptUrl, onStatsSaved }) => {
             return;
         }
         
-        const initialStats = {};
+        // Zera o placar e as estatísticas para o JOGO ATUAL
+        const newMatchStats = {};
         [...teamBlack, ...teamGreen].forEach(p => {
-            if (!stats[p]) initialStats[p] = { pts2: 0, pts3: 0, reb: 0, ast: 0, blk: 0 };
-            else initialStats[p] = stats[p];
+            newMatchStats[p] = { pts2: 0, pts3: 0, reb: 0, ast: 0, blk: 0 };
         });
-        setStats(prev => ({ ...prev, ...initialStats }));
+        setMatchStats(newMatchStats);
+
+        // Prepara a memória do dia caso um novo jogador tenha entrado, SEM zerar quem já estava
+        setDayStats(prev => {
+            const newDayStats = { ...prev };
+            [...teamBlack, ...teamGreen].forEach(p => {
+                if (!newDayStats[p]) newDayStats[p] = { pts2: 0, pts3: 0, reb: 0, ast: 0, blk: 0 };
+            });
+            return newDayStats;
+        });
+
         setIsLive(true);
     };
 
     const updateStat = (player, statKey, delta) => {
-        setStats(prev => {
-            const currentVal = prev[player]?.[statKey] || 0;
-            const newVal = Math.max(0, currentVal + delta);
-            return { ...prev, [player]: { ...prev[player], [statKey]: newVal } };
+        setMatchStats(prevMatch => {
+            const currentMatchVal = prevMatch[player]?.[statKey] || 0;
+            const newMatchVal = Math.max(0, currentMatchVal + delta);
+            const actualDelta = newMatchVal - currentMatchVal;
+
+            // Se alterou no jogo atual, reflete essa mesma alteração na memória do DIA
+            if (actualDelta !== 0) {
+                setDayStats(prevDay => {
+                    const currentDayVal = prevDay[player]?.[statKey] || 0;
+                    return {
+                        ...prevDay,
+                        [player]: {
+                            ...prevDay[player],
+                            [statKey]: currentDayVal + actualDelta
+                        }
+                    };
+                });
+            }
+            return { ...prevMatch, [player]: { ...prevMatch[player], [statKey]: newMatchVal } };
         });
     };
 
     const calculateScore = (team) => {
         return team.reduce((total, player) => {
-            const pStats = stats[player] || { pts2: 0, pts3: 0 };
+            const pStats = matchStats[player] || { pts2: 0, pts3: 0 };
             return total + (pStats.pts2 * 2) + (pStats.pts3 * 3);
         }, 0);
     };
@@ -1819,13 +1850,14 @@ const MesarioTab = ({ allPlayersData, scriptUrl, onStatsSaved }) => {
 
     const saveStats = async () => {
         setIsSaving(true);
-        const statsArray = Object.keys(stats).map(playerName => ({
+        // Pega as métricas ACUMULADAS do dia de todo mundo que jogou
+        const statsArray = Object.keys(dayStats).map(playerName => ({
             playerName,
-            pts2: stats[playerName].pts2,
-            pts3: stats[playerName].pts3,
-            reb: stats[playerName].reb,
-            ast: stats[playerName].ast,
-            blk: stats[playerName].blk
+            pts2: dayStats[playerName].pts2,
+            pts3: dayStats[playerName].pts3,
+            reb: dayStats[playerName].reb,
+            ast: dayStats[playerName].ast,
+            blk: dayStats[playerName].blk
         }));
 
         if (statsArray.length === 0) {
@@ -1839,7 +1871,8 @@ const MesarioTab = ({ allPlayersData, scriptUrl, onStatsSaved }) => {
             if (res.result === 'success') {
                 setModalInfo({ isOpen: true, title: 'Sucesso', message: 'O domingo foi encerrado e todas as estatísticas foram salvas na planilha!' });
                 setIsLive(false);
-                setStats({}); 
+                setDayStats({}); // Limpa a memória global
+                setMatchStats({}); // Limpa a memória da partida
                 setTeamBlack([]);
                 setTeamGreen([]);
                 if (onStatsSaved) onStatsSaved();
@@ -1893,14 +1926,15 @@ const MesarioTab = ({ allPlayersData, scriptUrl, onStatsSaved }) => {
                         ))}
                     </div>
 
-                    <div className="flex flex-col sm:flex-row gap-4">
-                        <button onClick={startGame} className="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white font-black py-4 rounded-xl shadow-lg shadow-cyan-600/30 transition-transform active:scale-95 text-lg flex items-center justify-center gap-2">
+                    <div className="flex flex-col items-center gap-4">
+                        <button onClick={startGame} className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-black py-4 rounded-xl shadow-lg shadow-cyan-600/30 transition-transform active:scale-95 text-lg flex items-center justify-center gap-2">
                             <Activity className="w-5 h-5"/> Ir para a Quadra
                         </button>
-                        {Object.keys(stats).length > 0 && (
-                            <button onClick={saveStats} disabled={isSaving} className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-black py-4 rounded-xl shadow-lg shadow-emerald-600/30 transition-transform active:scale-95 text-lg flex items-center justify-center gap-2">
-                                {isSaving ? <RefreshCw className="w-5 h-5 animate-spin"/> : <CheckCircle className="w-5 h-5"/>}
-                                Encerrar Domingo e Salvar
+                        
+                        {Object.keys(dayStats).length > 0 && (
+                            <button onClick={saveStats} disabled={isSaving} className="px-6 py-2 text-xs font-bold text-slate-500 hover:text-emerald-600 dark:text-slate-400 dark:hover:text-emerald-400 transition-colors flex items-center gap-2 border border-transparent hover:border-emerald-200 dark:hover:border-emerald-800 rounded-full">
+                                {isSaving ? <RefreshCw className="w-4 h-4 animate-spin"/> : <CheckCircle className="w-4 h-4"/>}
+                                Encerrar Domingo e Salvar ({Object.keys(dayStats).length} ativos)
                             </button>
                         )}
                     </div>
@@ -1948,7 +1982,7 @@ const MesarioTab = ({ allPlayersData, scriptUrl, onStatsSaved }) => {
                         <div className="bg-slate-900 p-3 sm:p-5 rounded-3xl shadow-2xl border-2 border-slate-800">
                             <div className="space-y-2">
                                 {teamBlack.map(player => {
-                                    const pStats = stats[player] || { pts2: 0, pts3: 0, reb: 0, ast: 0, blk: 0 };
+                                    const pStats = matchStats[player] || { pts2: 0, pts3: 0, reb: 0, ast: 0, blk: 0 };
                                     const totalPts = (pStats.pts2 * 2) + (pStats.pts3 * 3);
                                     return (
                                         <div key={player} className="p-2 sm:p-3 rounded-xl mb-3 border bg-slate-800 border-slate-700 shadow-md">
@@ -1973,7 +2007,7 @@ const MesarioTab = ({ allPlayersData, scriptUrl, onStatsSaved }) => {
                         <div className="bg-emerald-500 p-3 sm:p-5 rounded-3xl shadow-2xl border-2 border-emerald-400">
                             <div className="space-y-2">
                                 {teamGreen.map(player => {
-                                    const pStats = stats[player] || { pts2: 0, pts3: 0, reb: 0, ast: 0, blk: 0 };
+                                    const pStats = matchStats[player] || { pts2: 0, pts3: 0, reb: 0, ast: 0, blk: 0 };
                                     const totalPts = (pStats.pts2 * 2) + (pStats.pts3 * 3);
                                     return (
                                         <div key={player} className="p-2 sm:p-3 rounded-xl mb-3 border bg-emerald-700 border-emerald-500 shadow-md">
@@ -2003,14 +2037,6 @@ const MesarioTab = ({ allPlayersData, scriptUrl, onStatsSaved }) => {
                                 <span className="text-white font-black text-lg">Próxima Partida (Mantém Vencedor)</span>
                             </div>
                             <p className="text-cyan-200 text-xs mt-1">O time perdedor sai da quadra e você seleciona os próximos.</p>
-                        </GlassCard>
-                        
-                        <GlassCard className="flex-1 text-center bg-emerald-700 dark:bg-emerald-800 border-none p-4 cursor-pointer hover:bg-emerald-600 transition-colors" onClick={saveStats}>
-                            <div className="flex items-center justify-center gap-3">
-                                {isSaving ? <RefreshCw className="w-6 h-6 animate-spin text-emerald-200"/> : <CheckCircle className="w-6 h-6 text-emerald-300"/>}
-                                <span className="text-white font-black text-lg">Encerrar Domingo e Salvar</span>
-                            </div>
-                            <p className="text-emerald-200 text-xs mt-1">Fecha a súmula de hoje e envia todas as anotações para a planilha.</p>
                         </GlassCard>
                     </div>
                 </div>
