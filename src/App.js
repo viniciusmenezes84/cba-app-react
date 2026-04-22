@@ -498,13 +498,13 @@ const PresencaTab = ({ allPlayersData, dates, financeData, isLoading, error, nex
 };
 
 // 2. ABA RELATÓRIOS
-const RelatoriosTab = ({ allPlayersData, dates }) => {
+const RelatoriosTab = ({ allPlayersData, dates, financeData }) => {
     const [selectedPlayer, setSelectedPlayer] = useState('todos');
     const [sortConfig, setSortConfig] = useState({ key: 'percentage', direction: 'desc' });
     const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
     const [infoModal, setInfoModal] = useState({ isOpen: false, title: '', message: '' });
-
     const [statDate, setStatDate] = useState('media');
+    const [rankingTab, setRankingTab] = useState('presencas'); // presencas, pontos, rebotes, assistencias, tocos
 
     const availableYears = useMemo(() => {
         if (!dates || dates.length === 0) return [new Date().getFullYear().toString()];
@@ -564,19 +564,37 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
                 }
             });
             const percentage = validGames > 0 ? (presences / validGames) * 100 : 0;
-            return { ...player, presences, faults, totalGames: validGames, percentage };
-        });
 
-        data.sort((a, b) => {
-            if (a[sortConfig.key] < b[sortConfig.key]) return sortConfig.direction === 'asc' ? -1 : 1;
-            if (a[sortConfig.key] > b[sortConfig.key]) return sortConfig.direction === 'asc' ? 1 : -1;
-            if (sortConfig.key === 'percentage') return b.presences - a.presences;
-            return 0;
+            let yearlyPoints = 0, yearlyReb = 0, yearlyAst = 0, yearlyBlk = 0, yearlyGamesWithStats = 0;
+            if (player.dailyStats) {
+                Object.entries(player.dailyStats).forEach(([dateStr, stats]) => {
+                    if (dateStr.startsWith(selectedYear)) {
+                        yearlyGamesWithStats++;
+                        yearlyPoints += (stats.pts2 * 2) + (stats.pts3 * 3);
+                        yearlyReb += stats.reb || 0;
+                        yearlyAst += stats.ast || 0;
+                        yearlyBlk += stats.blk || 0;
+                    }
+                });
+            }
+            const ppjYear = yearlyGamesWithStats > 0 ? (yearlyPoints / yearlyGamesWithStats) : 0;
+            const rpjYear = yearlyGamesWithStats > 0 ? (yearlyReb / yearlyGamesWithStats) : 0;
+            const apjYear = yearlyGamesWithStats > 0 ? (yearlyAst / yearlyGamesWithStats) : 0;
+            const tpjYear = yearlyGamesWithStats > 0 ? (yearlyBlk / yearlyGamesWithStats) : 0;
+
+            return { 
+                ...player, presences, faults, totalGames: validGames, percentage,
+                yearlyPoints, yearlyReb, yearlyAst, yearlyBlk, yearlyGamesWithStats,
+                ppjYear, rpjYear, apjYear, tpjYear 
+            };
         });
         return data;
-    }, [allPlayersData, playedDates, sortConfig]);
+    }, [allPlayersData, playedDates, selectedYear]);
 
-    const requestSort = (key) => setSortConfig({ key, direction: sortConfig.key === key && sortConfig.direction === 'desc' ? 'asc' : 'desc' });
+    const topCestinhaName = useMemo(() => {
+        const sorted = [...reportData].sort((a, b) => b.yearlyPoints - a.yearlyPoints);
+        return sorted.length > 0 && sorted[0].yearlyPoints > 0 ? sorted[0].name : null;
+    }, [reportData]);
 
     const singlePlayer = useMemo(() => reportData.find(p => p.name === selectedPlayer), [reportData, selectedPlayer]);
     
@@ -614,6 +632,20 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
         }
     }, [singlePlayer, statDate]);
 
+    const careerHighs = useMemo(() => {
+        if (!singlePlayer || !singlePlayer.dailyStats) return null;
+        let maxPts = { val: 0, date: '' }, maxReb = { val: 0, date: '' }, maxAst = { val: 0, date: '' }, maxBlk = { val: 0, date: '' };
+        Object.entries(singlePlayer.dailyStats).forEach(([date, st]) => {
+            const pts = (st.pts2 * 2) + (st.pts3 * 3);
+            if (pts > maxPts.val) maxPts = { val: pts, date };
+            if (st.reb > maxReb.val) maxReb = { val: st.reb, date };
+            if (st.ast > maxAst.val) maxAst = { val: st.ast, date };
+            if (st.blk > maxBlk.val) maxBlk = { val: st.blk, date };
+        });
+        if (maxPts.val === 0 && maxReb.val === 0 && maxAst.val === 0 && maxBlk.val === 0) return null;
+        return { pts: maxPts, reb: maxReb, ast: maxAst, blk: maxBlk };
+    }, [singlePlayer]);
+
     const doughnutData = {
         labels: ['Presença', 'Ausência'],
         datasets: [{ 
@@ -621,6 +653,85 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
             backgroundColor: ['#4f46e5', '#334155'], 
             borderWidth: 0 
         }]
+    };
+
+    const renderRankingList = () => {
+        let list = [...reportData];
+        if (rankingTab === 'presencas') {
+            list.sort((a, b) => b.percentage - a.percentage || b.presences - a.presences);
+            return (
+                <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-x-8 gap-y-1">
+                    <div className="hidden lg:flex justify-between px-2 pb-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 col-span-full">
+                        <span>Posição & Atleta</span>
+                        <div className="flex gap-4">
+                            <span className="w-10 text-right">Pres.</span>
+                            <span className="w-12 text-center">Faltas</span>
+                            <span className="w-12 text-right">Aprov.</span>
+                        </div>
+                    </div>
+                    {list.map((p, idx) => (
+                        <div key={p.name} onClick={() => setSelectedPlayer(p.name)} className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors border-b border-slate-100 dark:border-slate-700/30 cursor-pointer">
+                            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 mr-2">
+                                <span className="text-slate-400 w-4 sm:w-5 text-right text-[10px] sm:text-xs font-bold shrink-0">{idx + 1}º</span>
+                                <span className="font-bold text-slate-800 dark:text-slate-100 truncate flex items-center gap-1">
+                                    {p.name}
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+                                <span className="text-[10px] sm:text-xs font-medium text-slate-500 w-8 sm:w-10 text-right">{p.presences}/{p.totalGames}</span>
+                                <span className="w-8 sm:w-12 text-center">
+                                    {p.faults > 0 ? <span className="bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-400 px-1 sm:px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] font-bold" title="Faltas não justificadas">{p.faults} F</span> : <span className="text-slate-300 dark:text-slate-600">-</span>}
+                                </span>
+                                <span className={`w-10 sm:w-12 text-right font-black text-xs sm:text-sm ${p.percentage >= 50 ? 'text-indigo-600 dark:text-indigo-400' : 'text-rose-500 dark:text-rose-400'}`}>
+                                    {p.percentage.toFixed(0)}%
+                                </span>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            );
+        }
+
+        let statKey = '', label = '', avgKey = '';
+        if (rankingTab === 'pontos') { statKey = 'yearlyPoints'; label = 'PTS'; avgKey = 'ppjYear'; list.sort((a,b)=>b.yearlyPoints - a.yearlyPoints); }
+        if (rankingTab === 'rebotes') { statKey = 'yearlyReb'; label = 'REB'; avgKey = 'rpjYear'; list.sort((a,b)=>b.yearlyReb - a.yearlyReb); }
+        if (rankingTab === 'assistencias') { statKey = 'yearlyAst'; label = 'AST'; avgKey = 'apjYear'; list.sort((a,b)=>b.yearlyAst - a.yearlyAst); }
+        if (rankingTab === 'tocos') { statKey = 'yearlyBlk'; label = 'TOC'; avgKey = 'tpjYear'; list.sort((a,b)=>b.yearlyBlk - a.yearlyBlk); }
+
+        list = list.filter(p => p.yearlyGamesWithStats > 0);
+
+        return (
+            <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-x-8 gap-y-1">
+                <div className="hidden lg:flex justify-between px-2 pb-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 col-span-full">
+                    <span>Posição & Atleta</span>
+                    <div className="flex gap-4">
+                        <span className="w-16 text-center">Jogos</span>
+                        <span className="w-16 text-center">Total {label}</span>
+                        <span className="w-16 text-right">Média</span>
+                    </div>
+                </div>
+                {list.length === 0 && <p className="text-slate-500 text-sm py-4">Nenhum dado registrado para este fundamento no ano selecionado.</p>}
+                {list.map((p, idx) => (
+                    <div key={p.name} onClick={() => setSelectedPlayer(p.name)} className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors border-b border-slate-100 dark:border-slate-700/30 cursor-pointer">
+                        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 mr-2">
+                            <span className="text-slate-400 w-4 sm:w-5 text-right text-[10px] sm:text-xs font-bold shrink-0">{idx + 1}º</span>
+                            <span className="font-bold text-slate-800 dark:text-slate-100 truncate flex items-center gap-1.5">
+                                {p.name}
+                                {idx === 0 && rankingTab === 'pontos' && <span title="Cestinha">🔥</span>}
+                                {idx === 0 && rankingTab === 'rebotes' && <span title="Rei do Garrafão">🛡️</span>}
+                                {idx === 0 && rankingTab === 'assistencias' && <span title="Garçom">🎩</span>}
+                                {idx === 0 && rankingTab === 'tocos' && <span title="Muralha">🧱</span>}
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-2 sm:gap-4 shrink-0 text-[10px] sm:text-xs font-medium text-slate-500">
+                            <span className="w-10 sm:w-16 text-center">{p.yearlyGamesWithStats} J</span>
+                            <span className="w-10 sm:w-16 text-center font-bold text-slate-700 dark:text-slate-300">{p[statKey]}</span>
+                            <span className="w-12 sm:w-16 text-right font-black text-indigo-600 dark:text-indigo-400">{p[avgKey].toFixed(1)}</span>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        );
     };
 
     const handleExportPDF = async () => {
@@ -678,7 +789,7 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
 
         if (selectedPlayer === 'todos') {
             text += `🏆 *Ranking de Assiduidade* 🏆\n\n`;
-            reportData.forEach((p, idx) => {
+            reportData.sort((a,b)=>b.percentage - a.percentage || b.presences - a.presences).forEach((p, idx) => {
                 let emoji = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '▪️';
                 text += `${emoji} *${p.name}* - ${p.percentage.toFixed(0)}% (${p.presences}/${p.totalGames})\n`;
                 if (p.faults > 0) text += `   ⚠️ Faltas (NJ): ${p.faults}\n`;
@@ -699,7 +810,7 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
     };
 
     return (
-        <div className="space-y-8">
+        <div className="space-y-8 animate-fade-in-up">
             <Modal isOpen={infoModal.isOpen} onClose={() => setInfoModal({ isOpen: false, title: '', message: '' })} title={infoModal.title}>
                 <p>{infoModal.message}</p>
             </Modal>
@@ -733,50 +844,15 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
 
             {selectedPlayer === 'todos' ? (
                 <GlassCard className="p-6">
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 border-b border-slate-200 dark:border-slate-700 pb-4">
-                        <h3 className="text-xl font-bold text-slate-800 dark:text-white">Ranking Geral</h3>
-                        <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-sm font-bold text-slate-500 mr-1">Ordenar por:</span>
-                            <button onClick={() => requestSort('percentage')} className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-colors ${sortConfig.key === 'percentage' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}>
-                                % Aproveitamento {sortConfig.key === 'percentage' && (sortConfig.direction === 'desc' ? '↓' : '↑')}
-                            </button>
-                            <button onClick={() => requestSort('faults')} className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-colors ${sortConfig.key === 'faults' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}>
-                                Faltas NJ {sortConfig.key === 'faults' && (sortConfig.direction === 'desc' ? '↓' : '↑')}
-                            </button>
-                            <button onClick={() => requestSort('name')} className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-colors ${sortConfig.key === 'name' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}>
-                                Nome {sortConfig.key === 'name' && (sortConfig.direction === 'desc' ? '↓' : '↑')}
-                            </button>
-                        </div>
+                    <div className="flex gap-2 overflow-x-auto pb-4 mb-4 border-b border-slate-200 dark:border-slate-700 hide-scrollbar">
+                        <button onClick={() => setRankingTab('presencas')} className={`px-4 py-2 font-bold text-sm rounded-xl whitespace-nowrap transition-colors ${rankingTab === 'presencas' ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}>Assiduidade</button>
+                        <button onClick={() => setRankingTab('pontos')} className={`px-4 py-2 font-bold text-sm rounded-xl whitespace-nowrap transition-colors ${rankingTab === 'pontos' ? 'bg-orange-500 text-white shadow-md' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}>Cestinhas 🔥</button>
+                        <button onClick={() => setRankingTab('rebotes')} className={`px-4 py-2 font-bold text-sm rounded-xl whitespace-nowrap transition-colors ${rankingTab === 'rebotes' ? 'bg-emerald-500 text-white shadow-md' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}>Rei do Garrafão 🛡️</button>
+                        <button onClick={() => setRankingTab('assistencias')} className={`px-4 py-2 font-bold text-sm rounded-xl whitespace-nowrap transition-colors ${rankingTab === 'assistencias' ? 'bg-cyan-500 text-white shadow-md' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}>Garçom 🎩</button>
+                        <button onClick={() => setRankingTab('tocos')} className={`px-4 py-2 font-bold text-sm rounded-xl whitespace-nowrap transition-colors ${rankingTab === 'tocos' ? 'bg-purple-500 text-white shadow-md' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}>Muralha 🧱</button>
                     </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-x-8 gap-y-1">
-                        <div className="hidden lg:flex justify-between px-2 pb-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 col-span-full">
-                            <span>Posição & Atleta</span>
-                            <div className="flex gap-4">
-                                <span className="w-10 text-right">Pres.</span>
-                                <span className="w-12 text-center">Faltas</span>
-                                <span className="w-12 text-right">Aprov.</span>
-                            </div>
-                        </div>
-                        
-                        {reportData.map((p, idx) => (
-                            <div key={p.name} onClick={() => setSelectedPlayer(p.name)} className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors border-b border-slate-100 dark:border-slate-700/30 cursor-pointer">
-                                <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 mr-2">
-                                    <span className="text-slate-400 w-4 sm:w-5 text-right text-[10px] sm:text-xs font-bold shrink-0">{idx + 1}º</span>
-                                    <span className="font-bold text-slate-800 dark:text-slate-100 truncate">{p.name}</span>
-                                </div>
-                                <div className="flex items-center gap-2 sm:gap-4 shrink-0">
-                                    <span className="text-[10px] sm:text-xs font-medium text-slate-500 w-8 sm:w-10 text-right">{p.presences}/{p.totalGames}</span>
-                                    <span className="w-8 sm:w-12 text-center">
-                                        {p.faults > 0 ? <span className="bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-400 px-1 sm:px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] font-bold" title="Faltas não justificadas">{p.faults} F</span> : <span className="text-slate-300 dark:text-slate-600">-</span>}
-                                    </span>
-                                    <span className={`w-10 sm:w-12 text-right font-black text-xs sm:text-sm ${p.percentage >= 50 ? 'text-indigo-600 dark:text-indigo-400' : 'text-rose-500 dark:text-rose-400'}`}>
-                                        {p.percentage.toFixed(0)}%
-                                    </span>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
+                    {renderRankingList()}
                 </GlassCard>
             ) : singlePlayer && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
@@ -788,28 +864,40 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
                             <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-indigo-500/20 to-transparent"></div>
                             <div className="relative z-10 pt-6">
                                 {singlePlayer.fotoUrl ? <img src={singlePlayer.fotoUrl} alt={singlePlayer.name} className="w-40 h-40 rounded-3xl object-cover border-4 border-white dark:border-slate-700 shadow-2xl group-hover:scale-105 transition-transform duration-500" crossOrigin="anonymous" onError={(e) => { e.target.onerror = null; e.target.src='https://placehold.co/160/4f46e5/ffffff?text=' + singlePlayer.name.charAt(0); }} /> : <div className="w-40 h-40 rounded-3xl bg-indigo-600 text-white flex items-center justify-center text-6xl font-bold shadow-2xl border-4 border-white dark:border-slate-700">{singlePlayer.name.charAt(0)}</div>}
-                                <h2 className="text-3xl font-black mt-6 text-slate-800 dark:text-white uppercase tracking-tight">{singlePlayer.name}</h2>
+                                <h2 className="text-3xl font-black mt-6 text-slate-800 dark:text-white uppercase tracking-tight flex items-center justify-center gap-2">
+                                    {singlePlayer.name}
+                                    {singlePlayer.percentage >= 80 && financeData?.paymentStatus?.find(f => f.player.toLowerCase() === singlePlayer.name.toLowerCase()) && calculatePlayerDebt(financeData.paymentStatus.find(f => f.player.toLowerCase() === singlePlayer.name.toLowerCase()), financeData) === 0 && (
+                                        <span title="Atleta Padrão (80%+ Presença & Mensalidade em dia)" className="text-xl cursor-help hover:scale-125 transition-transform">⭐</span>
+                                    )}
+                                    {topCestinhaName === singlePlayer.name && (
+                                        <span title="Cestinha da Temporada" className="text-xl cursor-help hover:scale-125 transition-transform">🔥</span>
+                                    )}
+                                </h2>
                                 <p className="text-indigo-600 dark:text-indigo-400 font-bold tracking-widest uppercase text-sm mt-1">{singlePlayer.posicao || 'JOGADOR'} • #{singlePlayer.numero || '--'}</p>
                                 
                                 <div className="flex justify-between items-center mt-8 border-t border-slate-200 dark:border-slate-700/50 pt-4 mb-2">
                                     <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Estatísticas</h3>
-                                    <div className="relative flex items-center">
-                                        <select 
-                                            value={statDate} 
-                                            onChange={(e) => setStatDate(e.target.value)} 
-                                            disabled={!singlePlayer || singlePlayer.dailyStats === undefined || availableStatDates.length === 0}
-                                            className="appearance-none p-2 pr-8 text-xs bg-slate-200 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg font-bold text-slate-800 dark:text-slate-100 outline-none cursor-pointer max-w-[160px] shadow-sm hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                        >
-                                            <option value="media">Média Geral</option>
-                                            {availableStatDates.map(d => (
-                                                <option key={d} value={d}>Dia: {d.split('-').reverse().join('/')}</option>
-                                            ))}
-                                            {singlePlayer && singlePlayer.dailyStats !== undefined && availableStatDates.length === 0 && (
-                                                <option value="empty" disabled>Sem jogos salvos</option>
-                                            )}
-                                        </select>
-                                        <ChevronDown className="w-4 h-4 absolute right-2 pointer-events-none text-slate-600 dark:text-slate-300" />
-                                    </div>
+                                    {singlePlayer && singlePlayer.dailyStats !== undefined ? (
+                                        availableStatDates.length > 0 ? (
+                                            <div className="relative flex items-center">
+                                                <select 
+                                                    value={statDate} 
+                                                    onChange={(e) => setStatDate(e.target.value)} 
+                                                    className="appearance-none p-1.5 pr-7 text-xs bg-slate-200 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg font-bold text-slate-800 dark:text-slate-100 outline-none cursor-pointer max-w-[140px] shadow-sm hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
+                                                >
+                                                    <option value="media">Média Geral</option>
+                                                    {availableStatDates.map(d => (
+                                                        <option key={d} value={d}>Dia: {d.split('-').reverse().join('/')}</option>
+                                                    ))}
+                                                </select>
+                                                <ChevronDown className="w-3.5 h-3.5 absolute right-2 pointer-events-none text-slate-600 dark:text-slate-300" />
+                                            </div>
+                                        ) : (
+                                            <span className="text-[10px] text-slate-400 font-bold uppercase bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-md" title="Nenhum dado salvo para este jogador">Sem Súmulas</span>
+                                        )
+                                    ) : (
+                                        <span className="text-[10px] text-rose-500 font-bold uppercase bg-rose-100 dark:bg-rose-900/30 px-2 py-1 rounded-md" title="O backend ainda está rodando a versão antiga. Refaça o Deploy como 'Nova Versão'.">Atualizar Script</span>
+                                    )}
                                 </div>
                                 
                                 <div className="grid grid-cols-4 gap-2 w-full text-center">
@@ -821,7 +909,7 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
                             </div>
                         </GlassCard>
 
-                        <div className="col-span-1 md:col-span-2 space-y-8">
+                        <div className="col-span-1 md:col-span-2 space-y-6">
                             <GlassCard className="flex items-center gap-8">
                                 <div className="w-32 h-32 shrink-0 relative">
                                     <Doughnut data={doughnutData} options={{ cutout: '75%', plugins: { legend: { display: false } } }} />
@@ -832,6 +920,37 @@ const RelatoriosTab = ({ allPlayersData, dates }) => {
                                     {singlePlayer.faults > 0 && <div className="bg-red-500/10 border border-red-500/20 p-3 rounded-xl inline-block"><span className="font-bold text-red-600 dark:text-red-400">⚠️ {singlePlayer.faults} faltas não justificadas</span></div>}
                                 </div>
                             </GlassCard>
+                            
+                            {careerHighs && (
+                                <GlassCard className="border-orange-500/30 bg-gradient-to-br from-orange-50/50 to-white dark:from-orange-900/10 dark:to-slate-800/60">
+                                    <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4 border-b border-orange-200 dark:border-slate-700 pb-3 flex items-center gap-2">
+                                        <Flame className="text-orange-500 w-5 h-5"/> Recordes Pessoais (Single Game)
+                                    </h3>
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                                        <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 text-center">
+                                            <p className="text-[10px] uppercase font-bold text-slate-500">Máx Pontos</p>
+                                            <p className="text-3xl font-black text-slate-800 dark:text-white">{careerHighs.pts.val}</p>
+                                            <p className="text-[10px] font-bold text-orange-400 mt-1">{careerHighs.pts.date ? careerHighs.pts.date.split('-').reverse().join('/') : '--'}</p>
+                                        </div>
+                                        <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 text-center">
+                                            <p className="text-[10px] uppercase font-bold text-slate-500">Máx Rebotes</p>
+                                            <p className="text-3xl font-black text-slate-800 dark:text-white">{careerHighs.reb.val}</p>
+                                            <p className="text-[10px] font-bold text-emerald-500 mt-1">{careerHighs.reb.date ? careerHighs.reb.date.split('-').reverse().join('/') : '--'}</p>
+                                        </div>
+                                        <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 text-center">
+                                            <p className="text-[10px] uppercase font-bold text-slate-500">Máx Assistências</p>
+                                            <p className="text-3xl font-black text-slate-800 dark:text-white">{careerHighs.ast.val}</p>
+                                            <p className="text-[10px] font-bold text-cyan-500 mt-1">{careerHighs.ast.date ? careerHighs.ast.date.split('-').reverse().join('/') : '--'}</p>
+                                        </div>
+                                        <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 text-center">
+                                            <p className="text-[10px] uppercase font-bold text-slate-500">Máx Tocos</p>
+                                            <p className="text-3xl font-black text-slate-800 dark:text-white">{careerHighs.blk.val}</p>
+                                            <p className="text-[10px] font-bold text-purple-500 mt-1">{careerHighs.blk.date ? careerHighs.blk.date.split('-').reverse().join('/') : '--'}</p>
+                                        </div>
+                                    </div>
+                                </GlassCard>
+                            )}
+
                             <GlassCard>
                                 <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4 border-b border-slate-200 dark:border-slate-700 pb-3">Ficha Técnica</h3>
                                 <div className="grid grid-cols-2 gap-y-6">
@@ -1501,134 +1620,109 @@ const EstatutoTab = () => {
     const [openAccordion, setOpenAccordion] = useState('Regulamento Geral do CBA');
     const toggleAccordion = (title) => setOpenAccordion(openAccordion === title ? null : title);
 
-    const estatutoItens = [
-        {
-            title: "Regulamento Geral do CBA",
-            content: (
-                <>
-                    <h3 className="font-bold text-lg">CBA – BASQUETE DOS APOSENTADOS</h3>
-                    <p><strong>PRESIDENTE:</strong> NEILOR</p>
-                    <p><strong>COMPOSIÇÃO DIRETORIA:</strong> ARCANJO, GONZAGA, NEILOR, PORTUGAL, VINICIUS, MILHO, ANDRE DIAS</p>
-                    <p className="mt-2 text-indigo-600 dark:text-indigo-400"><strong>CHAVE PIX PAGAMENTO CNPJ:</strong> 36.560.422/0001-69 (NEILOR – NUNBANK)</p>
-                    <p className="mb-4">COMPROVANTE DEVERÁ SER ENVIADO NO PRIVADO DE NEILOR.</p>
-
-                    <h4 className="font-bold mt-4">1- MENSALIDADE</h4>
-                    <ul className="list-disc list-inside">
-                        <li>VALOR R$ 20,00 até dia 10 de cada mês;</li>
-                        <li>Controle financeiro – Neilor;</li>
-                    </ul>
-
-                    <h4 className="font-bold mt-4 text-red-500">2- PENALIDADES</h4>
-                    <ul className="list-disc list-inside">
-                        <li>Briga – expulsão do basquete dos aposentados;</li>
-                        <li>Xingamentos direcionados – advertências verbal;</li>
-                        <li>Inclusão de nome na lista e não ir(falta injustificada) – 1 domingo suspenso;</li>
-                        <li>Falta grave intencional( NÃO PODE EXISTIR) – avaliar no dia, em caso de reincidência 1 domingo suspenso;</li>
-                        <li>Atraso não justificado(30 minutos tolerância) – Irá aguardar 2 “babas”;</li>
-                        <li>Obrigatório utilização de calçado(tênis) para jogar;</li>
-                        <li>Utilização de camisa e bermuda nas dependências da Vila Militar;</li>
-                    </ul>
-
-                    <h4 className="font-bold mt-4">3- CONFRATERNIZAÇÃO</h4>
-                    <ul className="list-disc list-inside">
-                        <li>A cada 2 meses conforme disponibilidade financeira;</li>
-                        <li>A mega festa do final ano, juntamente com o torneio;</li>
-                    </ul>
-
-                    <h4 className="font-bold mt-4">4- PADRÃO</h4>
-                    <ul className="list-disc list-inside">
-                        <li>Prazo de troca do padrão – 2 anos (data base setembro);</li>
-                        <li>Convidado irá utilizar colete (preto e vermelho). O responsável pelo convidado irá lavar.
-                            <ul className="list-disc list-inside ml-6 text-sm">
-                                <li>Na falta do colete, o convidado deverá estar de camisa preta ou vermelha;</li>
-                            </ul>
-                        </li>
-                        <li>Utilização de bermuda PRETA ou o mais escura possível;</li>
-                    </ul>
-
-                    <h4 className="font-bold mt-4">5- CONVIDADO</h4>
-                    <ul className="list-disc list-inside">
-                        <li>Limitado a 2 convites, após só com efetivação;</li>
-                        <li>Limitador na lista até sexta. Atingindo o quórum de 15 efetivos, não haverá convidado;</li>
-                        <li>Convidados deverão ter acima de 30 anos ou estar no perfil do CBA;</li>
-                        <li>Permissão de 2 convidados por domingo – Considerando taxa de manutenção paga pelo mensalista responsável de R$ 10,00;</li>
-                    </ul>
-
-                    <h4 className="font-bold mt-4">6- PARA PERMANENCIA NO CBA DEVERÁ:</h4>
-                    <ul className="list-disc list-inside">
-                        <li>Manter assiduidade. Exclusão do grupo irá ocorrer após 2 meses de inatividade;</li>
-                        <li>A inatividade poderá ser levada em conta no período de até 4 meses;</li>
-                        <li>Inadimplência por 3 meses, irá ocorrer a exclusão;</li>
-                    </ul>
-
-                    <h4 className="font-bold mt-4">7- EXCEÇÕES</h4>
-                    <ul className="list-disc list-inside">
-                        <li>Soldados e Oficiais da Policia Militar;</li>
-                        <li>Não atingindo o quórum mínimo (15 mensalistas) e os convidados estarem fora do padrão, será analisado caso a caso;</li>
-                        <li>Referente a assiduidade, irá ser analisado caso de impossibilidade real de presença.</li>
-                    </ul>
-                </>
-            )
-        },
-        {
-            title: "Ata de Reunião - 06/01/2025",
-            content: (
-                 <>
-                    <h3 className="font-bold">Ata de Reunião - CBA</h3>
-                    <p><strong>Data:</strong> 06/01/2025 | <strong>Local:</strong> Reunião Online</p>
-                    <p><strong>Presidente:</strong> Neilor Leite | <strong>Vice-presidente:</strong> Lucas Portugal</p>
-
-                    <h4 className="font-bold mt-4">Resoluções:</h4>
-                    <ol className="list-decimal list-inside space-y-2">
-                        <li><strong>Prestação de Contas:</strong> O Sr. Neilor será responsável por realizar a prestação de contas.</li>
-                        <li><strong>Verificação de Orçamento:</strong> Consulta ao fabricante para obtenção de um novo orçamento de uniformes atualizado.</li>
-                        <li><strong>Site do CBA:</strong> O site (www.basquetedosaposentados.com.br) foi criado. É necessário alimentar o cadastro.</li>
-                        <li><strong>Controle de Presença:</strong> Cumprir uma frequência mínima de 50% dos jogos a cada 60 dias.</li>
-                        <li><strong>Política de Cota:</strong> Cota especial (até 360 dias) para jogadores que comprovarem situação de desemprego.</li>
-                        <li><strong>Confraternização Periódica:</strong> Realizada a cada 90 dias com fundo do caixa do CBA.</li>
-                    </ol>
-                </>
-            )
-        },
-        {
-            title: "Ata de Reunião - 02/04/2025",
-            content: (
-                <>
-                    <h3 className="font-bold">Ata de Reunião - CBA</h3>
-                    <p>Reiteração e acompanhamento dos tópicos abordados em Janeiro/2025. Prazos e metas revistas pela diretoria.</p>
-                </>
-            )
-        },
-        {
-            title: "Ata de Reunião - 10/05/2025",
-            content: (
-                 <>
-                    <h3 className="font-bold">Ata de Reunião - CBA</h3>
-                    <p><strong>Data:</strong> 10/05/2025 | <strong>Local:</strong> Reunião Online</p>
-
-                    <h4 className="font-bold mt-4">Resoluções:</h4>
-                    <ol className="list-decimal list-inside space-y-2">
-                        <li><strong>Uniformes:</strong> A partir de 12/05/2025 será realizada a solicitação dos novos uniformes. Prazo estipulado para entrega é de 30 dias.</li>
-                        <li><strong>Assiduidade:</strong> Constatado que a maioria possui assiduidade inferior a 50%. A diretoria deliberou pela adição de 4 novos jogadores. Nenhum jogador será excluído neste momento.</li>
-                        <li><strong>Datas especiais:</strong> Mínimo de 12 jogadores confirmados até sexta-feira às 18h, caso contrário o domingo é cancelado.</li>
-                        <li><strong>Arbitragem:</strong> Partidas contarão com dois árbitros se o quórum for alcançado.</li>
-                        <li><strong>Tempo:</strong> Por ser amistoso, não será aplicada a contagem de tempo técnicos (8/24/3s). Lances livres permitidos em caso de falta que justifique.</li>
-                    </ol>
-                </>
-            )
-        }
-    ];
-
     return (
         <div className="space-y-8 animate-fade-in-up">
             <GlassCard>
                 <h2 className="text-3xl font-bold mb-6 text-center text-slate-800 dark:text-slate-100">Estatuto e Documentos Oficiais</h2>
                 <div className="space-y-2">
-                    {estatutoItens.map((item) => (
-                        <AccordionItem key={item.title} title={item.title} isOpen={openAccordion === item.title} onClick={() => toggleAccordion(item.title)}>
-                            {item.content}
-                        </AccordionItem>
-                    ))}
+                    <AccordionItem title="Regulamento Geral do CBA" isOpen={openAccordion === 'Regulamento Geral do CBA'} onClick={() => toggleAccordion('Regulamento Geral do CBA')}>
+                        <h3 className="font-bold text-lg">CBA – BASQUETE DOS APOSENTADOS</h3>
+                        <p><strong>PRESIDENTE:</strong> NEILOR</p>
+                        <p><strong>COMPOSIÇÃO DIRETORIA:</strong> ARCANJO, GONZAGA, NEILOR, PORTUGAL, VINICIUS, MILHO, ANDRE DIAS</p>
+                        <p className="mt-2 text-indigo-600 dark:text-indigo-400"><strong>CHAVE PIX PAGAMENTO CNPJ:</strong> 36.560.422/0001-69 (NEILOR – NUNBANK)</p>
+                        <p className="mb-4">COMPROVANTE DEVERÁ SER ENVIADO NO PRIVADO DE NEILOR.</p>
+
+                        <h4 className="font-bold mt-4">1- MENSALIDADE</h4>
+                        <ul className="list-disc list-inside">
+                            <li>VALOR R$ 20,00 até dia 10 de cada mês;</li>
+                            <li>Controle financeiro – Neilor;</li>
+                        </ul>
+
+                        <h4 className="font-bold mt-4 text-red-500">2- PENALIDADES</h4>
+                        <ul className="list-disc list-inside">
+                            <li>Briga – expulsão do basquete dos aposentados;</li>
+                            <li>Xingamentos direcionados – advertências verbal;</li>
+                            <li>Inclusão de nome na lista e não ir(falta injustificada) – 1 domingo suspenso;</li>
+                            <li>Falta grave intencional( NÃO PODE EXISTIR) – avaliar no dia, em caso de reincidência 1 domingo suspenso;</li>
+                            <li>Atraso não justificado(30 minutos tolerância) – Irá aguardar 2 “babas”;</li>
+                            <li>Obrigatório utilização de calçado(tênis) para jogar;</li>
+                            <li>Utilização de camisa e bermuda nas dependências da Vila Militar;</li>
+                        </ul>
+
+                        <h4 className="font-bold mt-4">3- CONFRATERNIZAÇÃO</h4>
+                        <ul className="list-disc list-inside">
+                            <li>A cada 2 meses conforme disponibilidade financeira;</li>
+                            <li>A mega festa do final ano, juntamente com o torneio;</li>
+                        </ul>
+
+                        <h4 className="font-bold mt-4">4- PADRÃO</h4>
+                        <ul className="list-disc list-inside">
+                            <li>Prazo de troca do padrão – 2 anos (data base setembro);</li>
+                            <li>Convidado irá utilizar colete (preto e vermelho). O responsável pelo convidado irá lavar.
+                                <ul className="list-disc list-inside ml-6 text-sm">
+                                    <li>Na falta do colete, o convidado deverá estar de camisa preta ou vermelha;</li>
+                                </ul>
+                            </li>
+                            <li>Utilização de bermuda PRETA ou o mais escura possível;</li>
+                        </ul>
+
+                        <h4 className="font-bold mt-4">5- CONVIDADO</h4>
+                        <ul className="list-disc list-inside">
+                            <li>Limitado a 2 convites, após só com efetivação;</li>
+                            <li>Limitador na lista até sexta. Atingindo o quórum de 15 efetivos, não haverá convidado;</li>
+                            <li>Convidados deverão ter acima de 30 anos ou estar no perfil do CBA;</li>
+                            <li>Permissão de 2 convidados por domingo – Considerando taxa de manutenção paga pelo mensalista responsável de R$ 10,00;</li>
+                        </ul>
+
+                        <h4 className="font-bold mt-4">6- PARA PERMANENCIA NO CBA DEVERÁ:</h4>
+                        <ul className="list-disc list-inside">
+                            <li>Manter assiduidade. Exclusão do grupo irá ocorrer após 2 meses de inatividade;</li>
+                            <li>A inatividade poderá ser levada em conta no período de até 4 meses;</li>
+                            <li>Inadimplência por 3 meses, irá ocorrer a exclusão;</li>
+                        </ul>
+
+                        <h4 className="font-bold mt-4">7- EXCEÇÕES</h4>
+                        <ul className="list-disc list-inside">
+                            <li>Soldados e Oficiais da Policia Militar;</li>
+                            <li>Não atingindo o quórum mínimo (15 mensalistas) e os convidados estarem fora do padrão, será analisado caso a caso;</li>
+                            <li>Referente a assiduidade, irá ser analisado caso de impossibilidade real de presença.</li>
+                        </ul>
+                    </AccordionItem>
+
+                    <AccordionItem title="Ata de Reunião - 06/01/2025" isOpen={openAccordion === 'Ata de Reunião - 06/01/2025'} onClick={() => toggleAccordion('Ata de Reunião - 06/01/2025')}>
+                        <h3 className="font-bold">Ata de Reunião - CBA</h3>
+                        <p><strong>Data:</strong> 06/01/2025 | <strong>Local:</strong> Reunião Online</p>
+                        <p><strong>Presidente:</strong> Neilor Leite | <strong>Vice-presidente:</strong> Lucas Portugal</p>
+
+                        <h4 className="font-bold mt-4">Resoluções:</h4>
+                        <ol className="list-decimal list-inside space-y-2">
+                            <li><strong>Prestação de Contas:</strong> O Sr. Neilor será responsável por realizar a prestação de contas.</li>
+                            <li><strong>Verificação de Orçamento:</strong> Consulta ao fabricante para obtenção de um novo orçamento de uniformes atualizado.</li>
+                            <li><strong>Site do CBA:</strong> O site (www.basquetedosaposentados.com.br) foi criado. É necessário alimentar o cadastro.</li>
+                            <li><strong>Controle de Presença:</strong> Cumprir uma frequência mínima de 50% dos jogos a cada 60 dias.</li>
+                            <li><strong>Política de Cota:</strong> Cota especial (até 360 dias) para jogadores que comprovarem situação de desemprego.</li>
+                            <li><strong>Confraternização Periódica:</strong> Realizada a cada 90 dias com fundo do caixa do CBA.</li>
+                        </ol>
+                    </AccordionItem>
+
+                    <AccordionItem title="Ata de Reunião - 02/04/2025" isOpen={openAccordion === 'Ata de Reunião - 02/04/2025'} onClick={() => toggleAccordion('Ata de Reunião - 02/04/2025')}>
+                        <h3 className="font-bold">Ata de Reunião - CBA</h3>
+                        <p>Reiteração e acompanhamento dos tópicos abordados em Janeiro/2025. Prazos e metas revistas pela diretoria.</p>
+                    </AccordionItem>
+
+                    <AccordionItem title="Ata de Reunião - 10/05/2025" isOpen={openAccordion === 'Ata de Reunião - 10/05/2025'} onClick={() => toggleAccordion('Ata de Reunião - 10/05/2025')}>
+                        <h3 className="font-bold">Ata de Reunião - CBA</h3>
+                        <p><strong>Data:</strong> 10/05/2025 | <strong>Local:</strong> Reunião Online</p>
+
+                        <h4 className="font-bold mt-4">Resoluções:</h4>
+                        <ol className="list-decimal list-inside space-y-2">
+                            <li><strong>Uniformes:</strong> A partir de 12/05/2025 será realizada a solicitação dos novos uniformes. Prazo estipulado para entrega é de 30 dias.</li>
+                            <li><strong>Assiduidade:</strong> Constatado que a maioria possui assiduidade inferior a 50%. A diretoria deliberou pela adição de 4 novos jogadores. Nenhum jogador será excluído neste momento.</li>
+                            <li><strong>Datas especiais:</strong> Mínimo de 12 jogadores confirmados até sexta-feira às 18h, caso contrário o domingo é cancelado.</li>
+                            <li><strong>Arbitragem:</strong> Partidas contarão com dois árbitros se o quórum for alcançado.</li>
+                            <li><strong>Tempo:</strong> Por ser amistoso, não será aplicada a contagem de tempo técnicos (8/24/3s). Lances livres permitidos em caso de falta que justifique.</li>
+                        </ol>
+                    </AccordionItem>
                 </div>
             </GlassCard>
         </div>
@@ -1931,6 +2025,7 @@ const MesarioTab = ({ allPlayersData, scriptUrl, onStatsSaved }) => {
                             <Activity className="w-5 h-5"/> Ir para a Quadra
                         </button>
                         
+                        {/* Botão de encerrar o domingo movido para cá e menor */}
                         {Object.keys(dayStats).length > 0 && (
                             <button onClick={saveStats} disabled={isSaving} className="px-6 py-2 text-xs font-bold text-slate-500 hover:text-emerald-600 dark:text-slate-400 dark:hover:text-emerald-400 transition-colors flex items-center gap-2 border border-transparent hover:border-emerald-200 dark:hover:border-emerald-800 rounded-full">
                                 {isSaving ? <RefreshCw className="w-4 h-4 animate-spin"/> : <CheckCircle className="w-4 h-4"/>}
@@ -2074,15 +2169,15 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
     };
 
     const TAB_CONFIG = {
-        presenca: { icon: <Activity className="w-6 h-6 md:w-7 md:h-7 shrink-0" />, color: 'text-emerald-500 dark:text-emerald-400', activeBg: 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' },
-        jogos: { icon: <CalendarDays className="w-6 h-6 md:w-7 md:h-7 shrink-0" />, color: 'text-orange-500 dark:text-orange-400', activeBg: 'bg-orange-500 text-white shadow-lg shadow-orange-500/30' },
-        estatuto: { icon: <BookOpen className="w-6 h-6 md:w-7 md:h-7 shrink-0" />, color: 'text-teal-500 dark:text-teal-400', activeBg: 'bg-teal-500 text-white shadow-lg shadow-teal-500/30' },
-        financas: { icon: <DollarSign className="w-6 h-6 md:w-7 md:h-7 shrink-0" />, color: 'text-rose-500 dark:text-rose-400', activeBg: 'bg-rose-500 text-white shadow-lg shadow-rose-500/30' },
-        sorteio: { icon: <Users className="w-6 h-6 md:w-7 md:h-7 shrink-0" />, color: 'text-amber-500 dark:text-amber-400', activeBg: 'bg-amber-500 text-white shadow-lg shadow-amber-500/30' },
-        eventos: { icon: <PartyPopper className="w-6 h-6 md:w-7 md:h-7 shrink-0" />, color: 'text-purple-500 dark:text-purple-400', activeBg: 'bg-purple-500 text-white shadow-lg shadow-purple-500/30' },
-        relatorios: { icon: <BarChart className="w-6 h-6 md:w-7 md:h-7 shrink-0" />, color: 'text-blue-500 dark:text-blue-400', activeBg: 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' },
-        mesario: { icon: <ClipboardList className="w-6 h-6 md:w-7 md:h-7 shrink-0" />, color: 'text-cyan-500 dark:text-cyan-400', activeBg: 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/30' },
-        notificacoes: { icon: <BellRing className="w-6 h-6 md:w-7 md:h-7 shrink-0" />, color: 'text-pink-500 dark:text-pink-400', activeBg: 'bg-pink-500 text-white shadow-lg shadow-pink-500/30' },
+        presenca: { Icon: Activity, color: 'text-emerald-500 dark:text-emerald-400', activeBg: 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' },
+        jogos: { Icon: CalendarDays, color: 'text-orange-500 dark:text-orange-400', activeBg: 'bg-orange-500 text-white shadow-lg shadow-orange-500/30' },
+        estatuto: { Icon: BookOpen, color: 'text-teal-500 dark:text-teal-400', activeBg: 'bg-teal-500 text-white shadow-lg shadow-teal-500/30' },
+        financas: { Icon: DollarSign, color: 'text-rose-500 dark:text-rose-400', activeBg: 'bg-rose-500 text-white shadow-lg shadow-rose-500/30' },
+        sorteio: { Icon: Users, color: 'text-amber-500 dark:text-amber-400', activeBg: 'bg-amber-500 text-white shadow-lg shadow-amber-500/30' },
+        eventos: { Icon: PartyPopper, color: 'text-purple-500 dark:text-purple-400', activeBg: 'bg-purple-500 text-white shadow-lg shadow-purple-500/30' },
+        relatorios: { Icon: BarChart, color: 'text-blue-500 dark:text-blue-400', activeBg: 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' },
+        mesario: { Icon: ClipboardList, color: 'text-cyan-500 dark:text-cyan-400', activeBg: 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/30' },
+        notificacoes: { Icon: BellRing, color: 'text-pink-500 dark:text-pink-400', activeBg: 'bg-pink-500 text-white shadow-lg shadow-pink-500/30' },
     };
 
     const renderContent = () => {
@@ -2126,11 +2221,14 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
 
             <nav className={`fixed inset-y-0 left-0 z-50 md:relative transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-300 w-[72px] md:w-24 shrink-0 h-full flex flex-col items-center py-6 bg-white/90 dark:bg-slate-800/90 backdrop-blur-2xl border-r border-slate-200/50 dark:border-slate-700/50 shadow-2xl md:shadow-lg overflow-y-auto hide-scrollbar gap-4`}>
                 <img src="https://lh3.googleusercontent.com/d/131DvcfgiRLLp9irVnVY8m9qNuM-0y7f8" alt="Logo" className="w-12 h-12 rounded-full mb-4" />
-                {TABS.map(tab => (
-                    <button key={tab} onClick={() => { setActiveTab(tab); setIsSidebarOpen(false); }} className={`flex items-center justify-center w-12 h-12 rounded-2xl transition-all duration-300 ${activeTab === tab ? `${TAB_CONFIG[tab].activeBg} shadow-lg scale-110` : `${TAB_CONFIG[tab].color} hover:bg-slate-100 dark:hover:bg-slate-800`}`}>
-                        {TAB_CONFIG[tab].icon}
-                    </button>
-                ))}
+                {TABS.map(tab => {
+                    const { Icon, activeBg, color } = TAB_CONFIG[tab];
+                    return (
+                        <button key={tab} onClick={() => { setActiveTab(tab); setIsSidebarOpen(false); }} className={`flex items-center justify-center w-12 h-12 rounded-2xl transition-all duration-300 ${activeTab === tab ? `${activeBg} shadow-lg scale-110` : `${color} hover:bg-slate-100 dark:hover:bg-slate-800`}`}>
+                            <Icon className="w-6 h-6 md:w-7 md:h-7 shrink-0" />
+                        </button>
+                    );
+                })}
             </nav>
 
             <div className="flex-1 flex flex-col h-full overflow-hidden w-full relative">
