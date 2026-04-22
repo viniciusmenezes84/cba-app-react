@@ -646,6 +646,21 @@ const RelatoriosTab = ({ allPlayersData, dates, financeData }) => {
         return { pts: maxPts, reb: maxReb, ast: maxAst, blk: maxBlk };
     }, [singlePlayer]);
 
+    const playerBadges = useMemo(() => {
+        if (!singlePlayer) return [];
+        const badges = [];
+        if (singlePlayer.percentage >= 80) {
+            const pFinance = financeData?.paymentStatus?.find(f => f.player.toLowerCase() === singlePlayer.name.toLowerCase());
+            if (pFinance && calculatePlayerDebt(pFinance, financeData) === 0) {
+                badges.push({ icon: '⭐', title: 'Atleta Padrão (80%+ Presença & Mensalidade em dia)' });
+            }
+        }
+        if (topCestinhaName === singlePlayer.name) {
+            badges.push({ icon: '🔥', title: 'Cestinha da Temporada' });
+        }
+        return badges;
+    }, [singlePlayer, financeData, topCestinhaName]);
+
     const doughnutData = {
         labels: ['Presença', 'Ausência'],
         datasets: [{ 
@@ -1838,22 +1853,37 @@ const NotificacoesTab = ({ scriptUrl }) => {
     );
 };
 
-// 9. ABA MODO MESÁRIO (NOVA)
+// 9. ABA MODO MESÁRIO (NOVA COM AUTO-SAVE)
 const MesarioTab = ({ allPlayersData, scriptUrl, onStatsSaved }) => {
-    const [isLive, setIsLive] = useState(false);
-    const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-    const [teamBlack, setTeamBlack] = useState([]);
-    const [teamGreen, setTeamGreen] = useState([]);
     
-    // dayStats armazena as estatísticas acumuladas do domingo todo (que irão para a planilha)
-    const [dayStats, setDayStats] = useState({});
-    
-    // matchStats armazena APENAS as estatísticas do jogo atual (mostradas na tela e no placar)
-    const [matchStats, setMatchStats] = useState({});
+    // Funcao para ler o backup (usada na inicialização do useState)
+    const getInitialState = () => {
+        try {
+            const saved = localStorage.getItem('cba_mesario_backup');
+            if (saved) return JSON.parse(saved);
+        } catch (e) { console.error('Erro ao ler backup', e); }
+        return null;
+    };
+
+    const initialBackup = getInitialState();
+
+    const [isLive, setIsLive] = useState(() => initialBackup?.isLive || false);
+    const [date, setDate] = useState(() => initialBackup?.date || new Date().toISOString().split('T')[0]);
+    const [teamBlack, setTeamBlack] = useState(() => initialBackup?.teamBlack || []);
+    const [teamGreen, setTeamGreen] = useState(() => initialBackup?.teamGreen || []);
+    const [dayStats, setDayStats] = useState(() => initialBackup?.dayStats || {});
+    const [matchStats, setMatchStats] = useState(() => initialBackup?.matchStats || {});
     
     const [isSaving, setIsSaving] = useState(false);
     const [modalInfo, setModalInfo] = useState({ isOpen: false, title: '', message: '' });
     const [isScoreExpanded, setIsScoreExpanded] = useState(false);
+    const [confirmDiscard, setConfirmDiscard] = useState(false);
+
+    // Efeito para salvar em tempo real no localStorage
+    useEffect(() => {
+        const stateToSave = { isLive, date, teamBlack, teamGreen, dayStats, matchStats };
+        localStorage.setItem('cba_mesario_backup', JSON.stringify(stateToSave));
+    }, [isLive, date, teamBlack, teamGreen, dayStats, matchStats]);
 
     const sortedPlayers = useMemo(() => [...allPlayersData].sort((a, b) => a.name.localeCompare(b.name)), [allPlayersData]);
 
@@ -1873,14 +1903,12 @@ const MesarioTab = ({ allPlayersData, scriptUrl, onStatsSaved }) => {
             return;
         }
         
-        // Zera o placar e as estatísticas para o JOGO ATUAL
         const newMatchStats = {};
         [...teamBlack, ...teamGreen].forEach(p => {
             newMatchStats[p] = { pts2: 0, pts3: 0, reb: 0, ast: 0, blk: 0 };
         });
         setMatchStats(newMatchStats);
 
-        // Prepara a memória do dia caso um novo jogador tenha entrado, SEM zerar quem já estava
         setDayStats(prev => {
             const newDayStats = { ...prev };
             [...teamBlack, ...teamGreen].forEach(p => {
@@ -1898,7 +1926,6 @@ const MesarioTab = ({ allPlayersData, scriptUrl, onStatsSaved }) => {
             const newMatchVal = Math.max(0, currentMatchVal + delta);
             const actualDelta = newMatchVal - currentMatchVal;
 
-            // Se alterou no jogo atual, reflete essa mesma alteração na memória do DIA
             if (actualDelta !== 0) {
                 setDayStats(prevDay => {
                     const currentDayVal = prevDay[player]?.[statKey] || 0;
@@ -1944,7 +1971,6 @@ const MesarioTab = ({ allPlayersData, scriptUrl, onStatsSaved }) => {
 
     const saveStats = async () => {
         setIsSaving(true);
-        // Pega as métricas ACUMULADAS do dia de todo mundo que jogou
         const statsArray = Object.keys(dayStats).map(playerName => ({
             playerName,
             pts2: dayStats[playerName].pts2,
@@ -1965,10 +1991,11 @@ const MesarioTab = ({ allPlayersData, scriptUrl, onStatsSaved }) => {
             if (res.result === 'success') {
                 setModalInfo({ isOpen: true, title: 'Sucesso', message: 'O domingo foi encerrado e todas as estatísticas foram salvas na planilha!' });
                 setIsLive(false);
-                setDayStats({}); // Limpa a memória global
-                setMatchStats({}); // Limpa a memória da partida
+                setDayStats({}); 
+                setMatchStats({}); 
                 setTeamBlack([]);
                 setTeamGreen([]);
+                localStorage.removeItem('cba_mesario_backup'); // Limpa o backup
                 if (onStatsSaved) onStatsSaved();
             } else throw new Error(res.message);
         } catch (err) {
@@ -1996,11 +2023,30 @@ const MesarioTab = ({ allPlayersData, scriptUrl, onStatsSaved }) => {
                 <p className="text-slate-700 dark:text-slate-300">{modalInfo.message}</p>
             </Modal>
 
+            <Modal isOpen={confirmDiscard} onClose={() => setConfirmDiscard(false)} title="Atenção!">
+                <p className="text-lg text-slate-800 dark:text-slate-200">Tem a certeza que deseja <strong>descartar</strong> todas as anotações deste domingo? (Isso não afetará os dados já salvos na planilha)</p>
+                <div className="flex justify-end gap-4 mt-8">
+                    <button onClick={() => setConfirmDiscard(false)} className="py-3 px-6 bg-slate-200 dark:bg-slate-700 font-bold rounded-xl hover:bg-slate-300 text-slate-800 dark:text-white">Cancelar</button>
+                    <button onClick={() => {
+                        setIsLive(false);
+                        setDayStats({});
+                        setMatchStats({});
+                        setTeamBlack([]);
+                        setTeamGreen([]);
+                        localStorage.removeItem('cba_mesario_backup');
+                        setConfirmDiscard(false);
+                    }} className="py-3 px-6 bg-rose-600 text-white font-bold rounded-xl hover:bg-rose-700 shadow-lg">Sim, Descartar</button>
+                </div>
+            </Modal>
+
             {!isLive ? (
                 <GlassCard>
                     <div className="mb-6 border-b border-slate-200 dark:border-slate-700 pb-4">
                         <h2 className="text-2xl font-black flex items-center gap-2 text-slate-800 dark:text-white"><ClipboardList className="w-6 h-6 text-cyan-500"/> Modo Mesário</h2>
                         <p className="text-slate-500 text-sm mt-1">Selecione a data e distribua os jogadores nas equipes.</p>
+                        {Object.keys(dayStats).length > 0 && (
+                            <p className="text-orange-500 text-xs font-bold mt-2 animate-pulse">⚠️ Você possui uma súmula em andamento não salva.</p>
+                        )}
                     </div>
                     
                     <div className="mb-6">
@@ -2020,17 +2066,21 @@ const MesarioTab = ({ allPlayersData, scriptUrl, onStatsSaved }) => {
                         ))}
                     </div>
 
-                    <div className="flex flex-col items-center gap-4">
+                    <div className="flex flex-col items-center gap-4 border-t border-slate-200 dark:border-slate-700 pt-6">
                         <button onClick={startGame} className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-black py-4 rounded-xl shadow-lg shadow-cyan-600/30 transition-transform active:scale-95 text-lg flex items-center justify-center gap-2">
                             <Activity className="w-5 h-5"/> Ir para a Quadra
                         </button>
                         
-                        {/* Botão de encerrar o domingo movido para cá e menor */}
                         {Object.keys(dayStats).length > 0 && (
-                            <button onClick={saveStats} disabled={isSaving} className="px-6 py-2 text-xs font-bold text-slate-500 hover:text-emerald-600 dark:text-slate-400 dark:hover:text-emerald-400 transition-colors flex items-center gap-2 border border-transparent hover:border-emerald-200 dark:hover:border-emerald-800 rounded-full">
-                                {isSaving ? <RefreshCw className="w-4 h-4 animate-spin"/> : <CheckCircle className="w-4 h-4"/>}
-                                Encerrar Domingo e Salvar ({Object.keys(dayStats).length} ativos)
-                            </button>
+                            <div className="flex flex-col w-full gap-2">
+                                <button onClick={saveStats} disabled={isSaving} className="w-full py-3 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 dark:bg-emerald-900/30 dark:hover:bg-emerald-800/40 dark:text-emerald-400 font-bold rounded-xl transition-colors flex items-center justify-center gap-2 border border-emerald-200 dark:border-emerald-800">
+                                    {isSaving ? <RefreshCw className="w-5 h-5 animate-spin"/> : <CheckCircle className="w-5 h-5"/>}
+                                    Encerrar Domingo e Salvar ({Object.keys(dayStats).length} jogadores na memória)
+                                </button>
+                                <button onClick={() => setConfirmDiscard(true)} className="text-xs text-rose-500 hover:text-rose-700 underline font-bold py-2">
+                                    Descartar anotações atuais e limpar memória
+                                </button>
+                            </div>
                         )}
                     </div>
                 </GlassCard>
