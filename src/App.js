@@ -1066,9 +1066,56 @@ const RelatoriosTab = ({ allPlayersData, dates, financeData }) => {
                             </div>
                         </>
                     ) : singlePlayer && (
-                        <div className="flex gap-8">
-                            {singlePlayer.fotoUrl && <img src={singlePlayer.fotoUrl} className="w-48 h-48 rounded-2xl object-cover border border-slate-200" crossOrigin="anonymous" alt="Player"/>}
-                            <div><h2 className="text-4xl font-black uppercase">{singlePlayer.name}</h2><p className="text-xl text-slate-500">{singlePlayer.percentage.toFixed(0)}% de Assiduidade</p></div>
+                        <div className="space-y-6">
+                            <div className="flex gap-8 mb-8 border-b-2 border-slate-200 pb-6">
+                                {singlePlayer.fotoUrl ? (
+                                    <img src={singlePlayer.fotoUrl} className="w-32 h-32 rounded-2xl object-cover border border-slate-200 shadow-sm" crossOrigin="anonymous" alt="Player"/>
+                                ) : (
+                                     <div className="w-32 h-32 rounded-2xl bg-slate-100 flex items-center justify-center text-5xl font-black text-slate-300 border border-slate-200">{singlePlayer.name.charAt(0)}</div>
+                                )}
+                                <div className="flex flex-col justify-center">
+                                    <h2 className="text-4xl font-black uppercase text-slate-900">{singlePlayer.name}</h2>
+                                    <p className="text-xl text-slate-500 font-bold mt-1">{singlePlayer.percentage.toFixed(0)}% de Assiduidade Anual</p>
+                                    <div className="flex gap-4 mt-3">
+                                         <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-lg text-sm font-bold">✅ {singlePlayer.presences} Presenças</span>
+                                         <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-lg text-sm font-bold">❌ {singlePlayer.totalGames - singlePlayer.presences} Ausências</span>
+                                         {singlePlayer.faults > 0 && <span className="bg-red-100 text-red-700 px-3 py-1 rounded-lg text-sm font-bold">⚠️ {singlePlayer.faults} Faltas (NJ)</span>}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div>
+                                <h3 className="text-xl font-bold text-slate-800 mb-4 uppercase tracking-wide border-b border-slate-200 pb-2">Histórico de Presenças ({selectedYear})</h3>
+                                <div className="grid grid-cols-3 gap-4">
+                                    {playedDates.sort((a,b) => new Date(a) - new Date(b)).map(date => {
+                                        const statusRaw = singlePlayer.attendance[date]?.trim() || '';
+                                        const isPresent = statusRaw.includes('✅');
+                                        const isJustified = statusRaw.toUpperCase() === 'JUSTIFICOU';
+                                        const isUnjustified = statusRaw.toUpperCase() === 'NÃO JUSTIFICOU';
+                                        
+                                        let statusText = "Ausente";
+                                        let statusColor = "text-slate-500 bg-slate-50 border-slate-200";
+                                        
+                                        if (isPresent) {
+                                            statusText = "Presente";
+                                            statusColor = "text-emerald-700 bg-emerald-50 border-emerald-200";
+                                        } else if (isUnjustified) {
+                                            statusText = "Falta (NJ)";
+                                            statusColor = "text-red-700 bg-red-50 border-red-200";
+                                        } else if (isJustified) {
+                                            statusText = "Justificado";
+                                            statusColor = "text-amber-700 bg-amber-50 border-amber-200";
+                                        }
+
+                                        return (
+                                            <div key={date} className={`p-3 rounded-xl border flex justify-between items-center ${statusColor}`}>
+                                                <span className="font-bold">{date.split('-').reverse().join('/')}</span>
+                                                <span className="text-xs font-black uppercase">{statusText}</span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
                         </div>
                     )}
                 </div>
@@ -1348,6 +1395,7 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, refreshKey }) => {
     const [editingEvent, setEditingEvent] = useState(null);
     const [confirmDelete, setConfirmDelete] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [infoModal, setInfoModal] = useState({ isOpen: false, title: '', message: '' });
 
     const formatCurrency = (val) => typeof val === 'number' ? val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ 0,00';
 
@@ -1369,7 +1417,7 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, refreshKey }) => {
             const res = await api.post(scriptUrl, payload);
             if (res.result === 'success') { setIsModalOpen(false); setEditingEvent(null); refetch(); }
             else throw new Error(res.message);
-        } catch (err) { alert(err.message); } finally { setIsSubmitting(false); }
+        } catch (err) { setInfoModal({ isOpen: true, title: 'Erro', message: err.message }); } finally { setIsSubmitting(false); }
     };
 
     const handleDeleteEvent = async () => {
@@ -1378,7 +1426,7 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, refreshKey }) => {
             const res = await api.post(scriptUrl, { action: 'deleteEvent', id: confirmDelete.id });
             if (res.result === 'success') { setConfirmDelete(null); refetch(); }
             else throw new Error(res.message);
-        } catch (err) { alert(err.message); }
+        } catch (err) { setInfoModal({ isOpen: true, title: 'Erro', message: err.message }); }
     };
 
     const handleAttendance = async (eventId, actionType) => {
@@ -1390,6 +1438,10 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, refreshKey }) => {
     
     return (
         <div className="space-y-8 animate-fade-in-up">
+            <Modal isOpen={infoModal.isOpen} onClose={() => setInfoModal({ isOpen: false, title: '', message: '' })} title={infoModal.title}>
+                <p>{infoModal.message}</p>
+            </Modal>
+            
             <div className="flex justify-between items-center">
                 <h2 className="text-3xl font-bold">Eventos & Confraternizações</h2>
                 {isAdmin && <button onClick={() => { setEditingEvent(null); setIsModalOpen(true); }} className="bg-indigo-600 text-white font-bold py-2 px-6 rounded-xl hover:bg-indigo-700 transition">Criar Evento</button>}
