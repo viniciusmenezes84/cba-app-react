@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, createContext, useCon
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Activity, CalendarDays, BookOpen, DollarSign, Users, PartyPopper, BarChart, BellRing, 
-    X, Menu, Copy, LogOut, RefreshCw, Trophy, Flame, MapPin, ChevronDown, CheckCircle, AlertCircle, Share2, ArrowLeft, Trash, Edit, ClipboardList, Minus
+    X, Menu, Copy, LogOut, RefreshCw, Trophy, Flame, MapPin, ChevronDown, CheckCircle, AlertCircle, Share2, ArrowLeft, Trash, Edit, ClipboardList, Minus, Award, Crown, Star
 } from 'lucide-react';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, 
@@ -91,7 +91,7 @@ function useDataQuery(queryFn, dependencies = []) {
         } finally {
             setIsLoading(false);
         }
-    }, dependencies); // eslint-disable-line react-hooks/exhaustive-deps
+    }, dependencies);
 
     useEffect(() => { fetchData(); }, [fetchData]);
     return { data, isLoading, error, refetch: fetchData };
@@ -2280,6 +2280,160 @@ const MesarioTab = ({ allPlayersData, scriptUrl, onStatsSaved }) => {
     );
 };
 
+// 10. ABA HALL DA FAMA (NOVA)
+const HallDaFamaTab = ({ allPlayersData, dates }) => {
+    
+    // Cálculo dos líderes All-Time (Histórico Geral)
+    const allTimeStats = useMemo(() => {
+        if (!allPlayersData || allPlayersData.length === 0) return [];
+        
+        let stats = allPlayersData.map(p => {
+            let totalPts = 0, totalReb = 0, totalAst = 0, totalBlk = 0;
+            let presences = 0;
+            
+            // Somatório de presenças (✅)
+            if (p.attendance) {
+                Object.values(p.attendance).forEach(status => {
+                    if (String(status).includes('✅')) presences++;
+                });
+            }
+
+            // Somatório de estatísticas (dailyStats)
+            if (p.dailyStats) {
+                Object.values(p.dailyStats).forEach(st => {
+                    totalPts += (st.pts2 * 2) + (st.pts3 * 3);
+                    totalReb += st.reb || 0;
+                    totalAst += st.ast || 0;
+                    totalBlk += st.blk || 0;
+                });
+            }
+            
+            return { ...p, presences, totalPts, totalReb, totalAst, totalBlk };
+        });
+
+        return stats;
+    }, [allPlayersData]);
+
+    const getTopPlayer = (key) => {
+        if (allTimeStats.length === 0) return null;
+        const sorted = [...allTimeStats].sort((a, b) => b[key] - a[key]);
+        return sorted[0][key] > 0 ? sorted[0] : null;
+    };
+
+    const topAssiduidade = getTopPlayer('presences');
+    const topPontos = getTopPlayer('totalPts');
+    const topRebotes = getTopPlayer('totalReb');
+    const topAst = getTopPlayer('totalAst');
+    const topBlk = getTopPlayer('totalBlk');
+
+    return (
+        <div className="space-y-8 animate-fade-in-up pb-10">
+            <GlassCard className="text-center bg-gradient-to-br from-yellow-500 to-amber-600 !text-white border-none shadow-2xl relative overflow-hidden">
+                <div className="absolute -top-24 -right-24 w-64 h-64 bg-white/20 rounded-full blur-3xl pointer-events-none"></div>
+                <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-amber-900/40 rounded-full blur-3xl pointer-events-none"></div>
+                
+                <div className="relative z-10 py-6">
+                    <Crown className="w-20 h-20 mx-auto mb-4 text-yellow-200 drop-shadow-md" />
+                    <h2 className="text-4xl md:text-5xl font-black uppercase tracking-widest drop-shadow-lg">Hall da Fama</h2>
+                    <p className="text-yellow-100 mt-3 font-medium text-lg max-w-2xl mx-auto">
+                        O mural definitivo com as maiores lendas e os recordistas absolutos da história do Basquete dos Aposentados.
+                    </p>
+                </div>
+            </GlassCard>
+            
+            <div>
+                <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-6 flex items-center gap-2 border-b border-slate-200 dark:border-slate-700 pb-3">
+                    <Trophy className="w-5 h-5 text-yellow-500"/> Recordistas (Histórico Geral)
+                </h3>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    
+                    {/* Cestinha */}
+                    <GlassCard className="relative overflow-hidden border-t-4 border-t-orange-500 bg-gradient-to-b from-white to-orange-50 dark:from-slate-800 dark:to-orange-950/20">
+                        <div className="absolute top-4 right-4 bg-orange-100 dark:bg-orange-900/50 p-2 rounded-full">
+                            <Flame className="w-6 h-6 text-orange-500" />
+                        </div>
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Cestinha de Ouro</p>
+                        <h4 className="text-2xl font-black text-slate-800 dark:text-white mt-1 mb-6 truncate">{topPontos?.name || '---'}</h4>
+                        <div className="flex items-end gap-2">
+                            <span className="text-4xl font-black text-orange-500">{topPontos?.totalPts || 0}</span>
+                            <span className="text-sm font-bold text-slate-500 pb-1">Pontos</span>
+                        </div>
+                    </GlassCard>
+
+                    {/* MVP Assiduidade */}
+                    <GlassCard className="relative overflow-hidden border-t-4 border-t-blue-500 bg-gradient-to-b from-white to-blue-50 dark:from-slate-800 dark:to-blue-950/20">
+                        <div className="absolute top-4 right-4 bg-blue-100 dark:bg-blue-900/50 p-2 rounded-full">
+                            <Star className="w-6 h-6 text-blue-500" />
+                        </div>
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">MVP Assiduidade</p>
+                        <h4 className="text-2xl font-black text-slate-800 dark:text-white mt-1 mb-6 truncate">{topAssiduidade?.name || '---'}</h4>
+                        <div className="flex items-end gap-2">
+                            <span className="text-4xl font-black text-blue-500">{topAssiduidade?.presences || 0}</span>
+                            <span className="text-sm font-bold text-slate-500 pb-1">Jogos</span>
+                        </div>
+                    </GlassCard>
+
+                    {/* Rei dos Rebotes */}
+                    <GlassCard className="relative overflow-hidden border-t-4 border-t-emerald-500 bg-gradient-to-b from-white to-emerald-50 dark:from-slate-800 dark:to-emerald-950/20">
+                        <div className="absolute top-4 right-4 bg-emerald-100 dark:bg-emerald-900/50 p-2 rounded-full">
+                            <Award className="w-6 h-6 text-emerald-500" />
+                        </div>
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Rei do Garrafão</p>
+                        <h4 className="text-2xl font-black text-slate-800 dark:text-white mt-1 mb-6 truncate">{topRebotes?.name || '---'}</h4>
+                        <div className="flex items-end gap-2">
+                            <span className="text-4xl font-black text-emerald-500">{topRebotes?.totalReb || 0}</span>
+                            <span className="text-sm font-bold text-slate-500 pb-1">Rebotes</span>
+                        </div>
+                    </GlassCard>
+
+                    {/* Garçom */}
+                    <GlassCard className="relative overflow-hidden border-t-4 border-t-cyan-500 bg-gradient-to-b from-white to-cyan-50 dark:from-slate-800 dark:to-cyan-950/20 lg:col-start-1 lg:col-span-1">
+                        <div className="absolute top-4 right-4 bg-cyan-100 dark:bg-cyan-900/50 p-2 rounded-full">
+                            <Users className="w-6 h-6 text-cyan-500" />
+                        </div>
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">O Garçom</p>
+                        <h4 className="text-2xl font-black text-slate-800 dark:text-white mt-1 mb-6 truncate">{topAst?.name || '---'}</h4>
+                        <div className="flex items-end gap-2">
+                            <span className="text-4xl font-black text-cyan-500">{topAst?.totalAst || 0}</span>
+                            <span className="text-sm font-bold text-slate-500 pb-1">Assistências</span>
+                        </div>
+                    </GlassCard>
+
+                    {/* Muralha */}
+                    <GlassCard className="relative overflow-hidden border-t-4 border-t-purple-500 bg-gradient-to-b from-white to-purple-50 dark:from-slate-800 dark:to-purple-950/20">
+                        <div className="absolute top-4 right-4 bg-purple-100 dark:bg-purple-900/50 p-2 rounded-full">
+                            <Minus className="w-6 h-6 text-purple-500 rotate-90" />
+                        </div>
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">A Muralha</p>
+                        <h4 className="text-2xl font-black text-slate-800 dark:text-white mt-1 mb-6 truncate">{topBlk?.name || '---'}</h4>
+                        <div className="flex items-end gap-2">
+                            <span className="text-4xl font-black text-purple-500">{topBlk?.totalBlk || 0}</span>
+                            <span className="text-sm font-bold text-slate-500 pb-1">Tocos</span>
+                        </div>
+                    </GlassCard>
+                </div>
+            </div>
+
+            <div className="mt-12">
+                <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-6 flex items-center gap-2 border-b border-slate-200 dark:border-slate-700 pb-3">
+                    <BookOpen className="w-5 h-5 text-slate-500"/> Lendas Eternizadas (Mural)
+                </h3>
+                <GlassCard className="bg-slate-900 border border-slate-800 flex flex-col items-center justify-center p-12 text-center relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-slate-800 rounded-full blur-3xl pointer-events-none"></div>
+                    <Award className="w-16 h-16 text-slate-700 mb-4" />
+                    <p className="text-slate-400 font-medium text-lg max-w-lg">
+                        Este espaço está reservado para homenagear os fundadores e atletas que deixaram a sua marca na história do CBA. 
+                    </p>
+                    <p className="text-slate-600 font-bold text-sm mt-4 uppercase tracking-widest">
+                        Em breve: Cerimónia de Aposentação de Camisas
+                    </p>
+                </GlassCard>
+            </div>
+        </div>
+    );
+};
+
 // --- MAIN APP ---
 const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
     const [activeTab, setActiveTab] = useState('presenca');
@@ -2292,7 +2446,9 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
     );
     
     const isAdmin = user?.role?.toUpperCase() === 'ADMIN';
-    const TABS = useMemo(() => isAdmin ? ['presenca', 'relatorios', 'mesario', 'financas', 'jogos', 'eventos', 'sorteio', 'estatuto', 'notificacoes'] : ['presenca', 'relatorios', 'financas', 'jogos', 'eventos', 'sorteio', 'estatuto'], [isAdmin]);
+    
+    // Adicionada a aba Hall da Fama para todos os utilizadores
+    const TABS = useMemo(() => isAdmin ? ['presenca', 'relatorios', 'mesario', 'financas', 'jogos', 'eventos', 'sorteio', 'halldafama', 'estatuto', 'notificacoes'] : ['presenca', 'relatorios', 'financas', 'jogos', 'eventos', 'sorteio', 'halldafama', 'estatuto'], [isAdmin]);
 
     useEffect(() => {
         window.navigateToTab = (tabName) => { if (TABS.includes(tabName)) setActiveTab(tabName); };
@@ -2309,15 +2465,16 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
     };
 
     const TAB_CONFIG = {
-        presenca: { Icon: Activity, color: 'text-emerald-500 dark:text-emerald-400', activeBg: 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' },
-        jogos: { Icon: CalendarDays, color: 'text-orange-500 dark:text-orange-400', activeBg: 'bg-orange-500 text-white shadow-lg shadow-orange-500/30' },
-        estatuto: { Icon: BookOpen, color: 'text-teal-500 dark:text-teal-400', activeBg: 'bg-teal-500 text-white shadow-lg shadow-teal-500/30' },
-        financas: { Icon: DollarSign, color: 'text-rose-500 dark:text-rose-400', activeBg: 'bg-rose-500 text-white shadow-lg shadow-rose-500/30' },
-        sorteio: { Icon: Users, color: 'text-amber-500 dark:text-amber-400', activeBg: 'bg-amber-500 text-white shadow-lg shadow-amber-500/30' },
-        eventos: { Icon: PartyPopper, color: 'text-purple-500 dark:text-purple-400', activeBg: 'bg-purple-500 text-white shadow-lg shadow-purple-500/30' },
-        relatorios: { Icon: BarChart, color: 'text-blue-500 dark:text-blue-400', activeBg: 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' },
-        mesario: { Icon: ClipboardList, color: 'text-cyan-500 dark:text-cyan-400', activeBg: 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/30' },
-        notificacoes: { Icon: BellRing, color: 'text-pink-500 dark:text-pink-400', activeBg: 'bg-pink-500 text-white shadow-lg shadow-pink-500/30' },
+        presenca: { Icon: Activity, color: 'text-emerald-500 dark:text-emerald-400', activeBg: 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30', label: 'Presença' },
+        jogos: { Icon: CalendarDays, color: 'text-orange-500 dark:text-orange-400', activeBg: 'bg-orange-500 text-white shadow-lg shadow-orange-500/30', label: 'Jogos' },
+        estatuto: { Icon: BookOpen, color: 'text-teal-500 dark:text-teal-400', activeBg: 'bg-teal-500 text-white shadow-lg shadow-teal-500/30', label: 'Estatuto' },
+        financas: { Icon: DollarSign, color: 'text-rose-500 dark:text-rose-400', activeBg: 'bg-rose-500 text-white shadow-lg shadow-rose-500/30', label: 'Finanças' },
+        sorteio: { Icon: Users, color: 'text-amber-500 dark:text-amber-400', activeBg: 'bg-amber-500 text-white shadow-lg shadow-amber-500/30', label: 'Sorteio' },
+        eventos: { Icon: PartyPopper, color: 'text-purple-500 dark:text-purple-400', activeBg: 'bg-purple-500 text-white shadow-lg shadow-purple-500/30', label: 'Eventos' },
+        relatorios: { Icon: BarChart, color: 'text-blue-500 dark:text-blue-400', activeBg: 'bg-blue-600 text-white shadow-lg shadow-blue-500/30', label: 'Relatórios' },
+        mesario: { Icon: ClipboardList, color: 'text-cyan-500 dark:text-cyan-400', activeBg: 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/30', label: 'Mesário' },
+        halldafama: { Icon: Crown, color: 'text-yellow-500 dark:text-yellow-400', activeBg: 'bg-gradient-to-r from-yellow-500 to-amber-600 text-white shadow-lg shadow-yellow-500/30', label: 'Hall da Fama' },
+        notificacoes: { Icon: BellRing, color: 'text-pink-500 dark:text-pink-400', activeBg: 'bg-pink-500 text-white shadow-lg shadow-pink-500/30', label: 'Avisos' },
     };
 
     const renderContent = () => {
@@ -2344,6 +2501,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
                     {activeTab === 'jogos' && <JogosTab {...props} />}
                     {activeTab === 'eventos' && <EventosTab {...props} />}
                     {activeTab === 'sorteio' && <SorteioTab {...props} />}
+                    {activeTab === 'halldafama' && <HallDaFamaTab {...props} />}
                     {activeTab === 'estatuto' && <EstatutoTab />}
                     {activeTab === 'notificacoes' && <NotificacoesTab {...props} scriptUrl={SCRIPT_URL} />}
                 </motion.div>
@@ -2362,9 +2520,9 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
             <nav className={`fixed inset-y-0 left-0 z-50 md:relative transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-300 w-[72px] md:w-24 shrink-0 h-full flex flex-col items-center py-6 bg-white/90 dark:bg-slate-800/90 backdrop-blur-2xl border-r border-slate-200/50 dark:border-slate-700/50 shadow-2xl md:shadow-lg overflow-y-auto hide-scrollbar gap-4`}>
                 <img src="https://lh3.googleusercontent.com/d/131DvcfgiRLLp9irVnVY8m9qNuM-0y7f8" alt="Logo" className="w-12 h-12 rounded-full mb-4" />
                 {TABS.map(tab => {
-                    const { Icon, activeBg, color } = TAB_CONFIG[tab];
+                    const { Icon, activeBg, color, label } = TAB_CONFIG[tab];
                     return (
-                        <button key={tab} onClick={() => { setActiveTab(tab); setIsSidebarOpen(false); }} className={`flex items-center justify-center w-12 h-12 rounded-2xl transition-all duration-300 ${activeTab === tab ? `${activeBg} shadow-lg scale-110` : `${color} hover:bg-slate-100 dark:hover:bg-slate-800`}`}>
+                        <button key={tab} title={label} onClick={() => { setActiveTab(tab); setIsSidebarOpen(false); }} className={`flex items-center justify-center w-12 h-12 rounded-2xl transition-all duration-300 ${activeTab === tab ? `${activeBg} shadow-lg scale-110` : `${color} hover:bg-slate-100 dark:hover:bg-slate-800`}`}>
                             <Icon className="w-6 h-6 md:w-7 md:h-7 shrink-0" />
                         </button>
                     );
