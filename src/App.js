@@ -804,7 +804,7 @@ const RelatoriosTab = ({ allPlayersData, dates, financeData }) => {
 
         if (selectedPlayer === 'todos') {
             text += `🏆 *Ranking de Assiduidade* 🏆\n\n`;
-            reportData.sort((a,b)=>b.percentage - a.percentage || b.presences - a.presences).forEach((p, idx) => {
+            [...reportData].sort((a,b)=>b.percentage - a.percentage || b.presences - a.presences).forEach((p, idx) => {
                 let emoji = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '▪️';
                 text += `${emoji} *${p.name}* - ${p.percentage.toFixed(0)}% (${p.presences}/${p.totalGames})\n`;
                 if (p.faults > 0) text += `   ⚠️ Faltas (NJ): ${p.faults}\n`;
@@ -1022,7 +1022,7 @@ const RelatoriosTab = ({ allPlayersData, dates, financeData }) => {
                             <div className="mb-10 break-inside-avoid">
                                 <h2 className="text-xl font-bold text-slate-800 mb-6 border-b border-slate-200 pb-2 uppercase tracking-wide">2. Destaques de Assiduidade (Top 10)</h2>
                                 <div className="space-y-4 mt-4 px-2">
-                                    {reportData.slice(0, 10).map((p, idx) => (
+                                    {[...reportData].sort((a, b) => b.percentage - a.percentage || b.presences - a.presences).slice(0, 10).map((p, idx) => (
                                         <div key={p.name} className="flex items-center gap-4">
                                             <span className="w-8 font-bold text-slate-400 text-right">{idx+1}º</span>
                                             <span className="w-40 font-bold text-slate-800 truncate">{p.name}</span>
@@ -1090,11 +1090,29 @@ const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin, scri
         else setSelectedPlayer(financeData.paymentStatus.find(p => p.player.toLowerCase() === currentUser.name.toLowerCase())?.player || '');
     }, [financeData, isAdmin, currentUser.name]);
 
+    const getEnhancedStatus = (monthName, originalStatus) => {
+        const statusStr = String(originalStatus || '').trim().toLowerCase();
+        if (statusStr === 'isento') return { text: 'Isento', code: 'isento' };
+        if (statusStr === '20') return { text: 'Pago', code: 'pago' };
+        const monthMap = { "janeiro": 0, "fevereiro": 1, "março": 2, "abril": 3, "maio": 4, "junho": 5, "julho": 6, "agosto": 7, "setembro": 8, "outubro": 9, "novembro": 10, "dezembro": 11 };
+        if (monthMap[monthName.toLowerCase()] < new Date().getMonth()) return { text: 'Em Atraso', code: 'atraso' };
+        return { text: 'Pendente', code: 'pendente' };
+    };
+
+    const calculatePlayerDebt = (player) => {
+        if(!financeData?.paymentHeaders || !player) return 0;
+        let debt = 0;
+        financeData.paymentHeaders.forEach(m => {
+            if(getEnhancedStatus(m, player.statuses[m]).code === 'atraso') debt += 20;
+        });
+        return debt;
+    };
+
     const adminStats = useMemo(() => {
         if(!financeData?.paymentStatus) return { totalReceber: 0, inadimplentes: [] };
         let totalReceber = 0; let inadimplentes = [];
         financeData.paymentStatus.forEach(p => {
-            const debt = calculatePlayerDebt(p, financeData);
+            const debt = calculatePlayerDebt(p);
             if (debt > 0) { totalReceber += debt; inadimplentes.push({ name: p.player, debt }); }
         });
         inadimplentes.sort((a,b) => b.debt - a.debt);
@@ -1121,7 +1139,7 @@ const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin, scri
     if (!financeData) return <p className="text-center text-slate-500 py-8">Nenhum dado financeiro encontrado.</p>;
 
     const playerData = financeData.paymentStatus?.find(p => p.player === selectedPlayer);
-    const playerDebt = calculatePlayerDebt(playerData, financeData);
+    const playerDebt = calculatePlayerDebt(playerData);
 
     return (
         <div className="space-y-8">
@@ -1330,7 +1348,6 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, refreshKey }) => {
     const [editingEvent, setEditingEvent] = useState(null);
     const [confirmDelete, setConfirmDelete] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [infoModal, setInfoModal] = useState({ isOpen: false, title: '', message: '' });
 
     const formatCurrency = (val) => typeof val === 'number' ? val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ 0,00';
 
@@ -1352,7 +1369,7 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, refreshKey }) => {
             const res = await api.post(scriptUrl, payload);
             if (res.result === 'success') { setIsModalOpen(false); setEditingEvent(null); refetch(); }
             else throw new Error(res.message);
-        } catch (err) { setInfoModal({ isOpen: true, title: 'Erro', message: err.message }); } finally { setIsSubmitting(false); }
+        } catch (err) { alert(err.message); } finally { setIsSubmitting(false); }
     };
 
     const handleDeleteEvent = async () => {
@@ -1361,7 +1378,7 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, refreshKey }) => {
             const res = await api.post(scriptUrl, { action: 'deleteEvent', id: confirmDelete.id });
             if (res.result === 'success') { setConfirmDelete(null); refetch(); }
             else throw new Error(res.message);
-        } catch (err) { setInfoModal({ isOpen: true, title: 'Erro', message: err.message }); }
+        } catch (err) { alert(err.message); }
     };
 
     const handleAttendance = async (eventId, actionType) => {
@@ -1373,10 +1390,6 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, refreshKey }) => {
     
     return (
         <div className="space-y-8 animate-fade-in-up">
-            <Modal isOpen={infoModal.isOpen} onClose={() => setInfoModal({ isOpen: false, title: '', message: '' })} title={infoModal.title}>
-                <p>{infoModal.message}</p>
-            </Modal>
-            
             <div className="flex justify-between items-center">
                 <h2 className="text-3xl font-bold">Eventos & Confraternizações</h2>
                 {isAdmin && <button onClick={() => { setEditingEvent(null); setIsModalOpen(true); }} className="bg-indigo-600 text-white font-bold py-2 px-6 rounded-xl hover:bg-indigo-700 transition">Criar Evento</button>}
@@ -1635,109 +1648,134 @@ const EstatutoTab = () => {
     const [openAccordion, setOpenAccordion] = useState('Regulamento Geral do CBA');
     const toggleAccordion = (title) => setOpenAccordion(openAccordion === title ? null : title);
 
+    const estatutoItens = [
+        {
+            title: "Regulamento Geral do CBA",
+            content: (
+                <>
+                    <h3 className="font-bold text-lg">CBA – BASQUETE DOS APOSENTADOS</h3>
+                    <p><strong>PRESIDENTE:</strong> NEILOR</p>
+                    <p><strong>COMPOSIÇÃO DIRETORIA:</strong> ARCANJO, GONZAGA, NEILOR, PORTUGAL, VINICIUS, MILHO, ANDRE DIAS</p>
+                    <p className="mt-2 text-indigo-600 dark:text-indigo-400"><strong>CHAVE PIX PAGAMENTO CNPJ:</strong> 36.560.422/0001-69 (NEILOR – NUNBANK)</p>
+                    <p className="mb-4">COMPROVANTE DEVERÁ SER ENVIADO NO PRIVADO DE NEILOR.</p>
+
+                    <h4 className="font-bold mt-4">1- MENSALIDADE</h4>
+                    <ul className="list-disc list-inside">
+                        <li>VALOR R$ 20,00 até dia 10 de cada mês;</li>
+                        <li>Controle financeiro – Neilor;</li>
+                    </ul>
+
+                    <h4 className="font-bold mt-4 text-red-500">2- PENALIDADES</h4>
+                    <ul className="list-disc list-inside">
+                        <li>Briga – expulsão do basquete dos aposentados;</li>
+                        <li>Xingamentos direcionados – advertências verbal;</li>
+                        <li>Inclusão de nome na lista e não ir(falta injustificada) – 1 domingo suspenso;</li>
+                        <li>Falta grave intencional( NÃO PODE EXISTIR) – avaliar no dia, em caso de reincidência 1 domingo suspenso;</li>
+                        <li>Atraso não justificado(30 minutos tolerância) – Irá aguardar 2 “babas”;</li>
+                        <li>Obrigatório utilização de calçado(tênis) para jogar;</li>
+                        <li>Utilização de camisa e bermuda nas dependências da Vila Militar;</li>
+                    </ul>
+
+                    <h4 className="font-bold mt-4">3- CONFRATERNIZAÇÃO</h4>
+                    <ul className="list-disc list-inside">
+                        <li>A cada 2 meses conforme disponibilidade financeira;</li>
+                        <li>A mega festa do final ano, juntamente com o torneio;</li>
+                    </ul>
+
+                    <h4 className="font-bold mt-4">4- PADRÃO</h4>
+                    <ul className="list-disc list-inside">
+                        <li>Prazo de troca do padrão – 2 anos (data base setembro);</li>
+                        <li>Convidado irá utilizar colete (preto e vermelho). O responsável pelo convidado irá lavar.
+                            <ul className="list-disc list-inside ml-6 text-sm">
+                                <li>Na falta do colete, o convidado deverá estar de camisa preta ou vermelha;</li>
+                            </ul>
+                        </li>
+                        <li>Utilização de bermuda PRETA ou o mais escura possível;</li>
+                    </ul>
+
+                    <h4 className="font-bold mt-4">5- CONVIDADO</h4>
+                    <ul className="list-disc list-inside">
+                        <li>Limitado a 2 convites, após só com efetivação;</li>
+                        <li>Limitador na lista até sexta. Atingindo o quórum de 15 efetivos, não haverá convidado;</li>
+                        <li>Convidados deverão ter acima de 30 anos ou estar no perfil do CBA;</li>
+                        <li>Permissão de 2 convidados por domingo – Considerando taxa de manutenção paga pelo mensalista responsável de R$ 10,00;</li>
+                    </ul>
+
+                    <h4 className="font-bold mt-4">6- PARA PERMANENCIA NO CBA DEVERÁ:</h4>
+                    <ul className="list-disc list-inside">
+                        <li>Manter assiduidade. Exclusão do grupo irá ocorrer após 2 meses de inatividade;</li>
+                        <li>A inatividade poderá ser levada em conta no período de até 4 meses;</li>
+                        <li>Inadimplência por 3 meses, irá ocorrer a exclusão;</li>
+                    </ul>
+
+                    <h4 className="font-bold mt-4">7- EXCEÇÕES</h4>
+                    <ul className="list-disc list-inside">
+                        <li>Soldados e Oficiais da Policia Militar;</li>
+                        <li>Não atingindo o quórum mínimo (15 mensalistas) e os convidados estarem fora do padrão, será analisado caso a caso;</li>
+                        <li>Referente a assiduidade, irá ser analisado caso de impossibilidade real de presença.</li>
+                    </ul>
+                </>
+            )
+        },
+        {
+            title: "Ata de Reunião - 06/01/2025",
+            content: (
+                 <>
+                    <h3 className="font-bold">Ata de Reunião - CBA</h3>
+                    <p><strong>Data:</strong> 06/01/2025 | <strong>Local:</strong> Reunião Online</p>
+                    <p><strong>Presidente:</strong> Neilor Leite | <strong>Vice-presidente:</strong> Lucas Portugal</p>
+
+                    <h4 className="font-bold mt-4">Resoluções:</h4>
+                    <ol className="list-decimal list-inside space-y-2">
+                        <li><strong>Prestação de Contas:</strong> O Sr. Neilor será responsável por realizar a prestação de contas.</li>
+                        <li><strong>Verificação de Orçamento:</strong> Consulta ao fabricante para obtenção de um novo orçamento de uniformes atualizado.</li>
+                        <li><strong>Site do CBA:</strong> O site (www.basquetedosaposentados.com.br) foi criado. É necessário alimentar o cadastro.</li>
+                        <li><strong>Controle de Presença:</strong> Cumprir uma frequência mínima de 50% dos jogos a cada 60 dias.</li>
+                        <li><strong>Política de Cota:</strong> Cota especial (até 360 dias) para jogadores que comprovarem situação de desemprego.</li>
+                        <li><strong>Confraternização Periódica:</strong> Realizada a cada 90 dias com fundo do caixa do CBA.</li>
+                    </ol>
+                </>
+            )
+        },
+        {
+            title: "Ata de Reunião - 02/04/2025",
+            content: (
+                <>
+                    <h3 className="font-bold">Ata de Reunião - CBA</h3>
+                    <p>Reiteração e acompanhamento dos tópicos abordados em Janeiro/2025. Prazos e metas revistas pela diretoria.</p>
+                </>
+            )
+        },
+        {
+            title: "Ata de Reunião - 10/05/2025",
+            content: (
+                 <>
+                    <h3 className="font-bold">Ata de Reunião - CBA</h3>
+                    <p><strong>Data:</strong> 10/05/2025 | <strong>Local:</strong> Reunião Online</p>
+
+                    <h4 className="font-bold mt-4">Resoluções:</h4>
+                    <ol className="list-decimal list-inside space-y-2">
+                        <li><strong>Uniformes:</strong> A partir de 12/05/2025 será realizada a solicitação dos novos uniformes. Prazo estipulado para entrega é de 30 dias.</li>
+                        <li><strong>Assiduidade:</strong> Constatado que a maioria possui assiduidade inferior a 50%. A diretoria deliberou pela adição de 4 novos jogadores. Nenhum jogador será excluído neste momento.</li>
+                        <li><strong>Datas especiais:</strong> Mínimo de 12 jogadores confirmados até sexta-feira às 18h, caso contrário o domingo é cancelado.</li>
+                        <li><strong>Arbitragem:</strong> Partidas contarão com dois árbitros se o quórum for alcançado.</li>
+                        <li><strong>Tempo:</strong> Por ser amistoso, não será aplicada a contagem de tempo técnicos (8/24/3s). Lances livres permitidos em caso de falta que justifique.</li>
+                    </ol>
+                </>
+            )
+        }
+    ];
+
     return (
         <div className="space-y-8 animate-fade-in-up">
             <GlassCard>
                 <h2 className="text-3xl font-bold mb-6 text-center text-slate-800 dark:text-slate-100">Estatuto e Documentos Oficiais</h2>
                 <div className="space-y-2">
-                    <AccordionItem title="Regulamento Geral do CBA" isOpen={openAccordion === 'Regulamento Geral do CBA'} onClick={() => toggleAccordion('Regulamento Geral do CBA')}>
-                        <h3 className="font-bold text-lg">CBA – BASQUETE DOS APOSENTADOS</h3>
-                        <p><strong>PRESIDENTE:</strong> NEILOR</p>
-                        <p><strong>COMPOSIÇÃO DIRETORIA:</strong> ARCANJO, GONZAGA, NEILOR, PORTUGAL, VINICIUS, MILHO, ANDRE DIAS</p>
-                        <p className="mt-2 text-indigo-600 dark:text-indigo-400"><strong>CHAVE PIX PAGAMENTO CNPJ:</strong> 36.560.422/0001-69 (NEILOR – NUNBANK)</p>
-                        <p className="mb-4">COMPROVANTE DEVERÁ SER ENVIADO NO PRIVADO DE NEILOR.</p>
-
-                        <h4 className="font-bold mt-4">1- MENSALIDADE</h4>
-                        <ul className="list-disc list-inside">
-                            <li>VALOR R$ 20,00 até dia 10 de cada mês;</li>
-                            <li>Controle financeiro – Neilor;</li>
-                        </ul>
-
-                        <h4 className="font-bold mt-4 text-red-500">2- PENALIDADES</h4>
-                        <ul className="list-disc list-inside">
-                            <li>Briga – expulsão do basquete dos aposentados;</li>
-                            <li>Xingamentos direcionados – advertências verbal;</li>
-                            <li>Inclusão de nome na lista e não ir(falta injustificada) – 1 domingo suspenso;</li>
-                            <li>Falta grave intencional( NÃO PODE EXISTIR) – avaliar no dia, em caso de reincidência 1 domingo suspenso;</li>
-                            <li>Atraso não justificado(30 minutos tolerância) – Irá aguardar 2 “babas”;</li>
-                            <li>Obrigatório utilização de calçado(tênis) para jogar;</li>
-                            <li>Utilização de camisa e bermuda nas dependências da Vila Militar;</li>
-                        </ul>
-
-                        <h4 className="font-bold mt-4">3- CONFRATERNIZAÇÃO</h4>
-                        <ul className="list-disc list-inside">
-                            <li>A cada 2 meses conforme disponibilidade financeira;</li>
-                            <li>A mega festa do final ano, juntamente com o torneio;</li>
-                        </ul>
-
-                        <h4 className="font-bold mt-4">4- PADRÃO</h4>
-                        <ul className="list-disc list-inside">
-                            <li>Prazo de troca do padrão – 2 anos (data base setembro);</li>
-                            <li>Convidado irá utilizar colete (preto e vermelho). O responsável pelo convidado irá lavar.
-                                <ul className="list-disc list-inside ml-6 text-sm">
-                                    <li>Na falta do colete, o convidado deverá estar de camisa preta ou vermelha;</li>
-                                </ul>
-                            </li>
-                            <li>Utilização de bermuda PRETA ou o mais escura possível;</li>
-                        </ul>
-
-                        <h4 className="font-bold mt-4">5- CONVIDADO</h4>
-                        <ul className="list-disc list-inside">
-                            <li>Limitado a 2 convites, após só com efetivação;</li>
-                            <li>Limitador na lista até sexta. Atingindo o quórum de 15 efetivos, não haverá convidado;</li>
-                            <li>Convidados deverão ter acima de 30 anos ou estar no perfil do CBA;</li>
-                            <li>Permissão de 2 convidados por domingo – Considerando taxa de manutenção paga pelo mensalista responsável de R$ 10,00;</li>
-                        </ul>
-
-                        <h4 className="font-bold mt-4">6- PARA PERMANENCIA NO CBA DEVERÁ:</h4>
-                        <ul className="list-disc list-inside">
-                            <li>Manter assiduidade. Exclusão do grupo irá ocorrer após 2 meses de inatividade;</li>
-                            <li>A inatividade poderá ser levada em conta no período de até 4 meses;</li>
-                            <li>Inadimplência por 3 meses, irá ocorrer a exclusão;</li>
-                        </ul>
-
-                        <h4 className="font-bold mt-4">7- EXCEÇÕES</h4>
-                        <ul className="list-disc list-inside">
-                            <li>Soldados e Oficiais da Policia Militar;</li>
-                            <li>Não atingindo o quórum mínimo (15 mensalistas) e os convidados estarem fora do padrão, será analisado caso a caso;</li>
-                            <li>Referente a assiduidade, irá ser analisado caso de impossibilidade real de presença.</li>
-                        </ul>
-                    </AccordionItem>
-
-                    <AccordionItem title="Ata de Reunião - 06/01/2025" isOpen={openAccordion === 'Ata de Reunião - 06/01/2025'} onClick={() => toggleAccordion('Ata de Reunião - 06/01/2025')}>
-                        <h3 className="font-bold">Ata de Reunião - CBA</h3>
-                        <p><strong>Data:</strong> 06/01/2025 | <strong>Local:</strong> Reunião Online</p>
-                        <p><strong>Presidente:</strong> Neilor Leite | <strong>Vice-presidente:</strong> Lucas Portugal</p>
-
-                        <h4 className="font-bold mt-4">Resoluções:</h4>
-                        <ol className="list-decimal list-inside space-y-2">
-                            <li><strong>Prestação de Contas:</strong> O Sr. Neilor será responsável por realizar a prestação de contas.</li>
-                            <li><strong>Verificação de Orçamento:</strong> Consulta ao fabricante para obtenção de um novo orçamento de uniformes atualizado.</li>
-                            <li><strong>Site do CBA:</strong> O site (www.basquetedosaposentados.com.br) foi criado. É necessário alimentar o cadastro.</li>
-                            <li><strong>Controle de Presença:</strong> Cumprir uma frequência mínima de 50% dos jogos a cada 60 dias.</li>
-                            <li><strong>Política de Cota:</strong> Cota especial (até 360 dias) para jogadores que comprovarem situação de desemprego.</li>
-                            <li><strong>Confraternização Periódica:</strong> Realizada a cada 90 dias com fundo do caixa do CBA.</li>
-                        </ol>
-                    </AccordionItem>
-
-                    <AccordionItem title="Ata de Reunião - 02/04/2025" isOpen={openAccordion === 'Ata de Reunião - 02/04/2025'} onClick={() => toggleAccordion('Ata de Reunião - 02/04/2025')}>
-                        <h3 className="font-bold">Ata de Reunião - CBA</h3>
-                        <p>Reiteração e acompanhamento dos tópicos abordados em Janeiro/2025. Prazos e metas revistas pela diretoria.</p>
-                    </AccordionItem>
-
-                    <AccordionItem title="Ata de Reunião - 10/05/2025" isOpen={openAccordion === 'Ata de Reunião - 10/05/2025'} onClick={() => toggleAccordion('Ata de Reunião - 10/05/2025')}>
-                        <h3 className="font-bold">Ata de Reunião - CBA</h3>
-                        <p><strong>Data:</strong> 10/05/2025 | <strong>Local:</strong> Reunião Online</p>
-
-                        <h4 className="font-bold mt-4">Resoluções:</h4>
-                        <ol className="list-decimal list-inside space-y-2">
-                            <li><strong>Uniformes:</strong> A partir de 12/05/2025 será realizada a solicitação dos novos uniformes. Prazo estipulado para entrega é de 30 dias.</li>
-                            <li><strong>Assiduidade:</strong> Constatado que a maioria possui assiduidade inferior a 50%. A diretoria deliberou pela adição de 4 novos jogadores. Nenhum jogador será excluído neste momento.</li>
-                            <li><strong>Datas especiais:</strong> Mínimo de 12 jogadores confirmados até sexta-feira às 18h, caso contrário o domingo é cancelado.</li>
-                            <li><strong>Arbitragem:</strong> Partidas contarão com dois árbitros se o quórum for alcançado.</li>
-                            <li><strong>Tempo:</strong> Por ser amistoso, não será aplicada a contagem de tempo técnicos (8/24/3s). Lances livres permitidos em caso de falta que justifique.</li>
-                        </ol>
-                    </AccordionItem>
+                    {estatutoItens.map((item) => (
+                        <AccordionItem key={item.title} title={item.title} isOpen={openAccordion === item.title} onClick={() => toggleAccordion(item.title)}>
+                            {item.content}
+                        </AccordionItem>
+                    ))}
                 </div>
             </GlassCard>
         </div>
@@ -2233,7 +2271,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
     const renderContent = () => {
         if (isLoading) return <Loader message="Carregando dados na quadra..." />;
         
-        const appData = initialData?.data;
+        const appData = initialData?.data || initialData;
         
         const props = { 
             allPlayersData: appData?.dashboard?.players || [], 
