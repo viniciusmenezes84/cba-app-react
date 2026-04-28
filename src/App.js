@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback, useMemo, createContext, useCon
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Activity, CalendarDays, BookOpen, DollarSign, Users, PartyPopper, BarChart, BellRing, 
-    X, Menu, Copy, LogOut, RefreshCw, Trophy, Flame, MapPin, ChevronDown, CheckCircle, AlertCircle, Share2, ArrowLeft, Trash, Edit, ClipboardList, Minus, Award, Crown, Star
+    X, Menu, Copy, LogOut, RefreshCw, Trophy, Flame, MapPin, ChevronDown, CheckCircle, AlertCircle, Share2, ArrowLeft, Trash, Edit, ClipboardList, Minus, Award, Crown, Star,
+    Stethoscope, HeartPulse, PlusSquare
 } from 'lucide-react';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, 
@@ -16,7 +17,7 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarEleme
 // Constantes Globais
 const MONTHS_MAP = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
-// Funções puras de finanças extraídas do componente
+// Funções puras de finanças
 const getEnhancedStatus = (monthName, originalStatus) => {
     const statusStr = String(originalStatus || '').trim().toLowerCase();
     if (statusStr === 'isento') return { text: 'Isento', code: 'isento' };
@@ -412,7 +413,6 @@ const PresencaTab = ({ allPlayersData, dates, financeData, isLoading, error, nex
         }
     };
 
-
     if (isLoading) return <Loader message="Sincronizando quadra..." />;
     if (error) return <p className="text-red-500">{error}</p>;
 
@@ -491,7 +491,6 @@ const PresencaTab = ({ allPlayersData, dates, financeData, isLoading, error, nex
                         <Line data={yearlyComparisonData} options={lineChartOptions} />
                     </div>
                 </GlassCard>
-
             </div>
         </div>
     );
@@ -504,7 +503,7 @@ const RelatoriosTab = ({ allPlayersData, dates, financeData }) => {
     const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
     const [infoModal, setInfoModal] = useState({ isOpen: false, title: '', message: '' });
     const [statDate, setStatDate] = useState('media');
-    const [rankingTab, setRankingTab] = useState('presencas'); // presencas, pontos, rebotes, assistencias, tocos
+    const [rankingTab, setRankingTab] = useState('presencas');
 
     const availableYears = useMemo(() => {
         if (!dates || dates.length === 0) return [new Date().getFullYear().toString()];
@@ -645,21 +644,6 @@ const RelatoriosTab = ({ allPlayersData, dates, financeData }) => {
         if (maxPts.val === 0 && maxReb.val === 0 && maxAst.val === 0 && maxBlk.val === 0) return null;
         return { pts: maxPts, reb: maxReb, ast: maxAst, blk: maxBlk };
     }, [singlePlayer]);
-
-    const playerBadges = useMemo(() => {
-        if (!singlePlayer) return [];
-        const badges = [];
-        if (singlePlayer.percentage >= 80) {
-            const pFinance = financeData?.paymentStatus?.find(f => f.player.toLowerCase() === singlePlayer.name.toLowerCase());
-            if (pFinance && calculatePlayerDebt(pFinance, financeData) === 0) {
-                badges.push({ icon: '⭐', title: 'Atleta Padrão (80%+ Presença & Mensalidade em dia)' });
-            }
-        }
-        if (topCestinhaName === singlePlayer.name) {
-            badges.push({ icon: '🔥', title: 'Cestinha da Temporada' });
-        }
-        return badges;
-    }, [singlePlayer, financeData, topCestinhaName]);
 
     const doughnutData = {
         labels: ['Presença', 'Ausência'],
@@ -1182,7 +1166,7 @@ const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin, scri
     };
 
     if (isLoading) return <Loader message="Sincronizando cofre..." />;
-    if (error) return <p className="text-center text-red-500 py-8">{error}</p>;
+    if (error) return <p className="text-center text-red-500 py-8">{typeof error === 'object' ? error.message : error}</p>;
     if (!financeData) return <p className="text-center text-slate-500 py-8">Nenhum dado financeiro encontrado.</p>;
 
     const playerData = financeData.paymentStatus?.find(p => p.player === selectedPlayer);
@@ -1587,7 +1571,7 @@ const SorteioTab = ({ allPlayersData, scriptUrl }) => {
                     </div>
                     
                     <div className="mb-8 relative">
-                        <input type="text" placeholder="Buscar jogador..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full p-4 pl-12 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-2xl outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-medium" />
+                        <input type="text" placeholder="Buscar jogador..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full p-4 pl-12 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-2xl outline-none focus:ring-2 focus:ring-indigo-50 transition-all font-medium" />
                         <svg className="w-6 h-6 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                     </div>
 
@@ -1839,8 +1823,9 @@ const NotificacoesTab = ({ scriptUrl }) => {
     const { data: notifData, isLoading, error, refetch } = useDataQuery(() => api.post(scriptUrl, { action: 'getNotifications' }), [scriptUrl]);
 
     const notifications = useMemo(() => {
-        if (!notifData?.data) return [];
-        return [...notifData.data].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        if (!notifData?.data && !notifData) return [];
+        const dataArray = notifData?.data || notifData;
+        return [...dataArray].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     }, [notifData]);
 
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -1917,7 +1902,7 @@ const NotificacoesTab = ({ scriptUrl }) => {
 
             <GlassCard>
                 <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-6">Últimos Disparos</h2>
-                {isLoading ? <Loader /> : error ? <p className="text-red-500">{error}</p> : (
+                {isLoading ? <Loader /> : error ? <p className="text-center text-red-500 py-8">{typeof error === 'object' ? error.message : error}</p> : (
                     <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
                         {notifications.length === 0 ? (
                             <div className="text-center py-10 text-slate-500">
@@ -2280,7 +2265,154 @@ const MesarioTab = ({ allPlayersData, scriptUrl, onStatsSaved }) => {
     );
 };
 
-// 10. ABA HALL DA FAMA (NOVA)
+// 11. ABA DEPARTAMENTO MÉDICO (NOVA)
+const DmTab = ({ allPlayersData, isAdmin }) => {
+    // Mock data para demonstração inicial
+    const [injuries, setInjuries] = useState([
+        { id: 1, playerName: allPlayersData[0]?.name || 'Jogador Teste', injury: 'Entorse no Tornozelo Direito', date: '2026-04-10', expectedReturn: '2026-05-15', status: 'Fisioterapia' }
+    ]);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+
+    const handleAddInjury = (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.currentTarget);
+        const newInjury = {
+            id: Date.now(),
+            playerName: formData.get('playerName'),
+            injury: formData.get('injury'),
+            date: formData.get('date'),
+            expectedReturn: formData.get('expectedReturn'),
+            status: formData.get('status')
+        };
+        setInjuries([...injuries, newInjury]);
+        setIsModalOpen(false);
+    };
+
+    const handleAlta = (id) => {
+        setInjuries(injuries.filter(i => i.id !== id));
+    };
+
+    return (
+        <div className="space-y-8 animate-fade-in-up pb-10">
+            <div className="flex flex-col md:flex-row justify-between md:items-end mb-8 gap-4 border-b border-slate-200 dark:border-slate-700 pb-6">
+                <div>
+                    <h2 className="text-3xl font-extrabold text-slate-800 dark:text-slate-100 flex items-center gap-3">
+                        <Stethoscope className="w-8 h-8 text-red-500" /> Departamento Médico
+                    </h2>
+                    <p className="text-slate-500 mt-1 font-medium">Gestão de lesões e previsão de retorno ao elenco.</p>
+                </div>
+                {isAdmin && (
+                    <button onClick={() => setIsModalOpen(true)} className="bg-red-600 text-white font-bold py-3 px-6 rounded-xl hover:bg-red-700 transition shadow-md flex items-center gap-2 whitespace-nowrap">
+                        <PlusSquare className="w-5 h-5"/> Registrar Lesão
+                    </button>
+                )}
+            </div>
+
+            {injuries.length === 0 ? (
+                <GlassCard className="text-center py-16 border-t-4 border-t-emerald-500 bg-gradient-to-b from-white to-emerald-50/30 dark:from-slate-800 dark:to-emerald-900/10">
+                    <HeartPulse className="w-16 h-16 mx-auto mb-4 text-emerald-500 opacity-80" />
+                    <h3 className="text-2xl font-bold text-slate-800 dark:text-white">DM Vazio!</h3>
+                    <p className="text-slate-500 mt-2">Nenhum atleta lesionado no momento. Excelente notícia para a equipa!</p>
+                </GlassCard>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {injuries.map(inj => {
+                        const playerInfo = allPlayersData.find(p => p.name === inj.playerName);
+                        return (
+                            <GlassCard key={inj.id} className="relative overflow-hidden border-t-4 border-t-red-500">
+                                <div className="flex items-center gap-4 mb-4 pb-4 border-b border-slate-200 dark:border-slate-700/50">
+                                    {playerInfo?.fotoUrl ? (
+                                        <img src={playerInfo.fotoUrl} alt={inj.playerName} className="w-14 h-14 rounded-full object-cover shadow-sm ring-2 ring-red-100 dark:ring-red-900/30" crossOrigin="anonymous" />
+                                    ) : (
+                                        <div className="w-14 h-14 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-xl font-bold text-slate-400 border border-slate-200 dark:border-slate-600">{inj.playerName?.charAt(0)}</div>
+                                    )}
+                                    <div>
+                                        <h3 className="font-black text-lg text-slate-800 dark:text-white leading-tight">{inj.playerName}</h3>
+                                        <span className="text-[10px] uppercase font-bold text-red-600 bg-red-100 dark:bg-red-900/30 px-2 py-0.5 rounded-md mt-1 inline-block">Afastado</span>
+                                    </div>
+                                </div>
+                                
+                                <div className="space-y-4 mb-6">
+                                    <div>
+                                        <p className="text-[10px] uppercase font-bold text-slate-400">Diagnóstico / Lesão</p>
+                                        <p className="font-bold text-slate-700 dark:text-slate-200 text-sm">{inj.injury}</p>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg border border-slate-100 dark:border-slate-700 text-center">
+                                            <p className="text-[10px] uppercase font-bold text-slate-400">Data Lesão</p>
+                                            <p className="font-bold text-slate-800 dark:text-slate-200 text-sm mt-0.5">{new Date(inj.date).toLocaleDateString('pt-BR')}</p>
+                                        </div>
+                                        <div className="bg-emerald-50 dark:bg-emerald-900/20 p-2 rounded-lg border border-emerald-100 dark:border-emerald-800/50 text-center">
+                                            <p className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-500">Retorno Previsto</p>
+                                            <p className="font-black text-emerald-700 dark:text-emerald-400 text-sm mt-0.5">{new Date(inj.expectedReturn).toLocaleDateString('pt-BR')}</p>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] uppercase font-bold text-slate-400">Status do Tratamento</p>
+                                        <p className="font-bold text-amber-600 dark:text-amber-400 text-sm flex items-center gap-1.5 mt-0.5">
+                                            <Activity className="w-3.5 h-3.5" /> {inj.status}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {isAdmin && (
+                                    <button onClick={() => handleAlta(inj.id)} className="w-full bg-emerald-100 hover:bg-emerald-200 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 dark:hover:bg-emerald-800/60 font-bold py-3 rounded-xl transition-all flex justify-center items-center gap-2 border border-emerald-200 dark:border-emerald-800/50 hover:shadow-md">
+                                        <CheckCircle className="w-5 h-5"/> Dar Alta Médica
+                                    </button>
+                                )}
+                            </GlassCard>
+                        )
+                    })}
+                </div>
+            )}
+
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Registrar Nova Lesão">
+                <form onSubmit={handleAddInjury} className="space-y-4">
+                    <div>
+                        <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Atleta Lesionado</label>
+                        <select name="playerName" className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none font-bold text-slate-800 dark:text-white" required>
+                            {[...allPlayersData].sort((a,b)=>a.name.localeCompare(b.name)).map(p => (
+                                <option key={p.name} value={p.name}>{p.name}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Diagnóstico / Lesão</label>
+                        <input name="injury" type="text" placeholder="Ex: Estiramento no joelho direito" className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none text-slate-800 dark:text-white" required />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Data do Ocorrido</label>
+                            <input name="date" type="date" className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none text-slate-800 dark:text-white" required />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Previsão Retorno</label>
+                            <input name="expectedReturn" type="date" className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none text-slate-800 dark:text-white" required />
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Fase do Tratamento</label>
+                        <select name="status" className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none font-bold text-slate-800 dark:text-white" required>
+                            <option value="Aguardando Exames">Aguardando Exames</option>
+                            <option value="Repouso Absoluto">Repouso Absoluto</option>
+                            <option value="Fisioterapia">Fisioterapia</option>
+                            <option value="Transição Física">Transição Física</option>
+                            <option value="Afastado por Recomendação">Afastado por Recomendação</option>
+                        </select>
+                    </div>
+                    
+                    <div className="pt-4">
+                        <button type="submit" className="w-full bg-red-600 text-white font-bold py-4 rounded-xl hover:bg-red-700 shadow-lg shadow-red-600/30 transition-transform active:scale-95 flex justify-center items-center gap-2">
+                            <PlusSquare className="w-5 h-5"/> Adicionar ao DM
+                        </button>
+                    </div>
+                </form>
+            </Modal>
+        </div>
+    )
+};
+
+// 10. ABA HALL DA FAMA
 const HallDaFamaTab = ({ allPlayersData, dates }) => {
     
     // Cálculo dos líderes All-Time (Histórico Geral)
@@ -2447,8 +2579,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
     
     const isAdmin = user?.role?.toUpperCase() === 'ADMIN';
     
-    // Adicionada a aba Hall da Fama para todos os utilizadores
-    const TABS = useMemo(() => isAdmin ? ['presenca', 'relatorios', 'mesario', 'financas', 'jogos', 'eventos', 'sorteio', 'halldafama', 'estatuto', 'notificacoes'] : ['presenca', 'relatorios', 'financas', 'jogos', 'eventos', 'sorteio', 'halldafama', 'estatuto'], [isAdmin]);
+    const TABS = useMemo(() => isAdmin ? ['presenca', 'relatorios', 'mesario', 'financas', 'jogos', 'eventos', 'sorteio', 'dm', 'halldafama', 'estatuto', 'notificacoes'] : ['presenca', 'relatorios', 'financas', 'jogos', 'eventos', 'sorteio', 'dm', 'halldafama', 'estatuto'], [isAdmin]);
 
     useEffect(() => {
         window.navigateToTab = (tabName) => { if (TABS.includes(tabName)) setActiveTab(tabName); };
@@ -2473,6 +2604,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
         eventos: { Icon: PartyPopper, color: 'text-purple-500 dark:text-purple-400', activeBg: 'bg-purple-500 text-white shadow-lg shadow-purple-500/30', label: 'Eventos' },
         relatorios: { Icon: BarChart, color: 'text-blue-500 dark:text-blue-400', activeBg: 'bg-blue-600 text-white shadow-lg shadow-blue-500/30', label: 'Relatórios' },
         mesario: { Icon: ClipboardList, color: 'text-cyan-500 dark:text-cyan-400', activeBg: 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/30', label: 'Mesário' },
+        dm: { Icon: Stethoscope, color: 'text-red-500 dark:text-red-400', activeBg: 'bg-red-500 text-white shadow-lg shadow-red-500/30', label: 'Departamento Médico' },
         halldafama: { Icon: Crown, color: 'text-yellow-500 dark:text-yellow-400', activeBg: 'bg-gradient-to-r from-yellow-500 to-amber-600 text-white shadow-lg shadow-yellow-500/30', label: 'Hall da Fama' },
         notificacoes: { Icon: BellRing, color: 'text-pink-500 dark:text-pink-400', activeBg: 'bg-pink-500 text-white shadow-lg shadow-pink-500/30', label: 'Avisos' },
     };
@@ -2501,6 +2633,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
                     {activeTab === 'jogos' && <JogosTab {...props} />}
                     {activeTab === 'eventos' && <EventosTab {...props} />}
                     {activeTab === 'sorteio' && <SorteioTab {...props} />}
+                    {activeTab === 'dm' && <DmTab {...props} />}
                     {activeTab === 'halldafama' && <HallDaFamaTab {...props} />}
                     {activeTab === 'estatuto' && <EstatutoTab />}
                     {activeTab === 'notificacoes' && <NotificacoesTab {...props} scriptUrl={SCRIPT_URL} />}
@@ -2522,57 +2655,4 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
                 {TABS.map(tab => {
                     const { Icon, activeBg, color, label } = TAB_CONFIG[tab];
                     return (
-                        <button key={tab} title={label} onClick={() => { setActiveTab(tab); setIsSidebarOpen(false); }} className={`flex items-center justify-center w-12 h-12 rounded-2xl transition-all duration-300 ${activeTab === tab ? `${activeBg} shadow-lg scale-110` : `${color} hover:bg-slate-100 dark:hover:bg-slate-800`}`}>
-                            <Icon className="w-6 h-6 md:w-7 md:h-7 shrink-0" />
-                        </button>
-                    );
-                })}
-            </nav>
-
-            <div className="flex-1 flex flex-col h-full overflow-hidden w-full relative">
-                <header className="shrink-0 p-4 flex justify-between items-center bg-white/40 dark:bg-slate-800/30 backdrop-blur-md border-b border-slate-200/50 dark:border-slate-700/50 z-30">
-                    <div className="flex items-center gap-3">
-                        <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2 text-slate-600 dark:text-slate-300 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800"><Menu className="w-6 h-6" /></button>
-                        <img src={user.fotoUrl || 'https://placehold.co/100'} alt="Avatar" className="h-10 w-10 rounded-full object-cover shadow-sm ring-2 ring-white dark:ring-slate-700" crossOrigin="anonymous" />
-                        <div className="hidden sm:block"><h1 className="text-xl font-black leading-none">Portal CBA</h1><p className="text-indigo-600 dark:text-indigo-400 font-bold text-[10px] uppercase tracking-widest">{user.name}</p></div>
-                    </div>
-                    <div className="flex gap-2">
-                        <button onClick={handleForceRefresh} className="p-2 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl shadow-sm hover:shadow-md"><RefreshCw className="w-5 h-5" /></button>
-                        <button onClick={onLogout} className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-rose-500 font-bold text-sm rounded-xl hover:bg-rose-50 dark:hover:bg-rose-900/20 border border-slate-200 dark:border-slate-700 flex items-center gap-2"><LogOut className="w-4 h-4 hidden sm:block"/> Sair</button>
-                    </div>
-                </header>
-                <main className="flex-1 overflow-y-auto p-4 md:p-8"><div className="max-w-7xl mx-auto pb-20">{renderContent()}</div></main>
-            </div>
-        </div>
-    );
-};
-
-export default function App() {
-    const [auth, setAuth] = useState({ status: 'unauthenticated', user: null, error: null });
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwNXGI4Cc5qGBye-IfWW_qqUcJ04NfArulExPXE4jgX0SZhWAmeWCjjKg2U9FFfHkHE/exec";
-
-    useEffect(() => {
-        if (!window.html2pdf) {
-            const script = document.createElement('script');
-            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-            document.body.appendChild(script);
-        }
-    }, []);
-
-    const handleLogin = async (e) => {
-        e.preventDefault();
-        setAuth({ status: 'loading', user: null, error: null });
-        const formData = new FormData(e.currentTarget);
-        try {
-            const data = await api.post(SCRIPT_URL, { action: 'loginUser', email: formData.get('email'), password: formData.get('password') });
-            if (data.status === 'approved') setAuth({ status: 'authenticated', user: data, error: null });
-            else setAuth({ status: 'unauthenticated', user: null, error: data.message });
-        } catch (error) { setAuth({ status: 'unauthenticated', user: null, error: 'Falha no servidor.' }); }
-    };
-
-    return (
-        <ThemeProvider>
-            {auth.status === 'authenticated' ? <MainApp user={auth.user} onLogout={() => setAuth({ status: 'unauthenticated', user: null, error: null })} SCRIPT_URL={SCRIPT_URL} /> : <LoginScreen onLogin={handleLogin} isLoading={auth.status === 'loading'} error={auth.error} />}
-        </ThemeProvider>
-    );
-}
+                        <button key={tab} title={label} onClick={() => { setActiveTab(tab); setIsSidebarOpen(false); }} className={`flex items-center justify-center w-12 h-
