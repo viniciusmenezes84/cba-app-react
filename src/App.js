@@ -2655,4 +2655,57 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
                 {TABS.map(tab => {
                     const { Icon, activeBg, color, label } = TAB_CONFIG[tab];
                     return (
-                        <button key={tab} title={label} onClick={() => { setActiveTab(tab); setIsSidebarOpen(false); }} className={`flex items-center justify-center w-12 h-
+                        <button key={tab} title={label} onClick={() => { setActiveTab(tab); setIsSidebarOpen(false); }} className={`flex items-center justify-center w-12 h-12 rounded-2xl transition-all duration-300 ${activeTab === tab ? `${activeBg} shadow-lg scale-110` : `${color} hover:bg-slate-100 dark:hover:bg-slate-800`}`}>
+                            <Icon className="w-6 h-6 md:w-7 md:h-7 shrink-0" />
+                        </button>
+                    );
+                })}
+            </nav>
+
+            <div className="flex-1 flex flex-col h-full overflow-hidden w-full relative">
+                <header className="shrink-0 p-4 flex justify-between items-center bg-white/40 dark:bg-slate-800/30 backdrop-blur-md border-b border-slate-200/50 dark:border-slate-700/50 z-30">
+                    <div className="flex items-center gap-3">
+                        <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2 text-slate-600 dark:text-slate-300 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800"><Menu className="w-6 h-6" /></button>
+                        <img src={user.fotoUrl || 'https://placehold.co/100'} alt="Avatar" className="h-10 w-10 rounded-full object-cover shadow-sm ring-2 ring-white dark:ring-slate-700" crossOrigin="anonymous" />
+                        <div className="hidden sm:block"><h1 className="text-xl font-black leading-none">Portal CBA</h1><p className="text-indigo-600 dark:text-indigo-400 font-bold text-[10px] uppercase tracking-widest">{user.name}</p></div>
+                    </div>
+                    <div className="flex gap-2">
+                        <button onClick={handleForceRefresh} className="p-2 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl shadow-sm hover:shadow-md"><RefreshCw className="w-5 h-5" /></button>
+                        <button onClick={onLogout} className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-rose-500 font-bold text-sm rounded-xl hover:bg-rose-50 dark:hover:bg-rose-900/20 border border-slate-200 dark:border-slate-700 flex items-center gap-2"><LogOut className="w-4 h-4 hidden sm:block"/> Sair</button>
+                    </div>
+                </header>
+                <main className="flex-1 overflow-y-auto p-4 md:p-8"><div className="max-w-7xl mx-auto pb-20">{renderContent()}</div></main>
+            </div>
+        </div>
+    );
+};
+
+export default function App() {
+    const [auth, setAuth] = useState({ status: 'unauthenticated', user: null, error: null });
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwNXGI4Cc5qGBye-IfWW_qqUcJ04NfArulExPXE4jgX0SZhWAmeWCjjKg2U9FFfHkHE/exec";
+
+    useEffect(() => {
+        if (!window.html2pdf) {
+            const script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+            document.body.appendChild(script);
+        }
+    }, []);
+
+    const handleLogin = async (e) => {
+        e.preventDefault();
+        setAuth({ status: 'loading', user: null, error: null });
+        const formData = new FormData(e.currentTarget);
+        try {
+            const data = await api.post(SCRIPT_URL, { action: 'loginUser', email: formData.get('email'), password: formData.get('password') });
+            if (data.status === 'approved') setAuth({ status: 'authenticated', user: data, error: null });
+            else setAuth({ status: 'unauthenticated', user: null, error: data.message });
+        } catch (error) { setAuth({ status: 'unauthenticated', user: null, error: 'Falha no servidor.' }); }
+    };
+
+    return (
+        <ThemeProvider>
+            {auth.status === 'authenticated' ? <MainApp user={auth.user} onLogout={() => setAuth({ status: 'unauthenticated', user: null, error: null })} SCRIPT_URL={SCRIPT_URL} /> : <LoginScreen onLogin={handleLogin} isLoading={auth.status === 'loading'} error={auth.error} />}
+        </ThemeProvider>
+    );
+}
