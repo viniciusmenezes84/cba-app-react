@@ -497,9 +497,8 @@ const PresencaTab = ({ allPlayersData, dates, financeData, isLoading, error, nex
 };
 
 // 2. ABA RELATÓRIOS
-const RelatoriosTab = ({ allPlayersData, dates, financeData }) => {
+const RelatoriosTab = ({ allPlayersData, dates, financeData, currentUser }) => {
     const [selectedPlayer, setSelectedPlayer] = useState('todos');
-    const [sortConfig, setSortConfig] = useState({ key: 'percentage', direction: 'desc' });
     const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
     const [infoModal, setInfoModal] = useState({ isOpen: false, title: '', message: '' });
     const [statDate, setStatDate] = useState('media');
@@ -590,13 +589,29 @@ const RelatoriosTab = ({ allPlayersData, dates, financeData }) => {
         return data;
     }, [allPlayersData, playedDates, selectedYear]);
 
-    const topCestinhaName = useMemo(() => {
-        const sorted = [...reportData].sort((a, b) => b.yearlyPoints - a.yearlyPoints);
-        return sorted.length > 0 && sorted[0].yearlyPoints > 0 ? sorted[0].name : null;
+    const topStats = useMemo(() => {
+        if (!reportData || reportData.length === 0) return {};
+        const sortedPts = [...reportData].sort((a, b) => b.yearlyPoints - a.yearlyPoints);
+        const sortedReb = [...reportData].sort((a, b) => b.yearlyReb - a.yearlyReb);
+        const sortedAst = [...reportData].sort((a, b) => b.yearlyAst - a.yearlyAst);
+        const sortedBlk = [...reportData].sort((a, b) => b.yearlyBlk - a.yearlyBlk);
+        const sortedPres = [...reportData].sort((a, b) => (b.percentage - a.percentage) || (b.presences - a.presences));
+
+        return {
+            pts: sortedPts,
+            reb: sortedReb,
+            ast: sortedAst,
+            blk: sortedBlk,
+            pres: sortedPres
+        };
     }, [reportData]);
 
     const singlePlayer = useMemo(() => reportData.find(p => p.name === selectedPlayer), [reportData, selectedPlayer]);
     
+    // Calcula os valores maximos de PPJ e RPJ para criar as barras de progresso relativas do Infografico PDF
+    const maxPPJ = useMemo(() => Math.max(0, ...reportData.map(p => p.ppjYear)), [reportData]);
+    const maxRPJ = useMemo(() => Math.max(0, ...reportData.map(p => p.rpjYear)), [reportData]);
+
     const availableStatDates = useMemo(() => {
         if (!singlePlayer || !singlePlayer.dailyStats) return [];
         return Object.keys(singlePlayer.dailyStats).sort((a, b) => new Date(b) - new Date(a));
@@ -759,17 +774,29 @@ const RelatoriosTab = ({ allPlayersData, dates, financeData }) => {
                 return;
             }
 
+            // Configuração refinada para A4 perfeito. 717px de largura no HTML casa perfeitamente com A4 + 0.4in de margens.
             const opt = {
                 margin:       [0.4, 0.4, 0.4, 0.4], 
                 filename:     `Relatorio_CBA_${selectedYear}_${selectedPlayer === 'todos' ? 'Geral' : selectedPlayer.replace(/\s+/g, '_')}.pdf`,
-                image:        { type: 'jpeg', quality: 0.98 },
-                html2canvas:  { scale: 2, useCORS: true }, 
+                image:        { type: 'jpeg', quality: 1 },
+                html2canvas:  { scale: 2, useCORS: true, scrollX: 0, scrollY: 0 }, 
                 jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' },
                 pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
             };
 
             try {
-                window.html2pdf().set(opt).from(element).save().then(() => {
+                window.html2pdf().set(opt).from(element).toPdf().get('pdf').then((pdf) => {
+                    const totalPages = pdf.internal.getNumberOfPages();
+                    for (let i = 1; i <= totalPages; i++) {
+                        pdf.setPage(i);
+                        pdf.setFontSize(9);
+                        pdf.setTextColor(150);
+                        const text = `Basquete dos Aposentados - Relatório Confidencial | Página ${i} de ${totalPages}`;
+                        const textWidth = pdf.getStringUnitWidth(text) * pdf.internal.getFontSize();
+                        const x = (pdf.internal.pageSize.getWidth() - textWidth) / 2;
+                        pdf.text(text, x, pdf.internal.pageSize.getHeight() - 0.2);
+                    }
+                }).save().then(() => {
                     setIsGeneratingPDF(false);
                 }).catch((err) => {
                     console.error('Erro PDF:', err);
@@ -791,7 +818,7 @@ const RelatoriosTab = ({ allPlayersData, dates, financeData }) => {
             [...reportData].sort((a,b)=>b.percentage - a.percentage || b.presences - a.presences).forEach((p, idx) => {
                 let emoji = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '▪️';
                 text += `${emoji} *${p.name}* - ${p.percentage.toFixed(0)}% (${p.presences}/${p.totalGames})\n`;
-                if (p.faults > 0) text += `   ⚠️ Faltas (NJ): ${p.faults}\n`;
+                if (p.faults > 0) text += `    ⚠️ Faltas (NJ): ${p.faults}\n`;
             });
         } else if (singlePlayer) {
             text += `👤 *Atleta:* ${singlePlayer.name}\n`;
@@ -868,7 +895,7 @@ const RelatoriosTab = ({ allPlayersData, dates, financeData }) => {
                                     {singlePlayer.percentage >= 80 && financeData?.paymentStatus?.find(f => f.player.toLowerCase() === singlePlayer.name.toLowerCase()) && calculatePlayerDebt(financeData.paymentStatus.find(f => f.player.toLowerCase() === singlePlayer.name.toLowerCase()), financeData) === 0 && (
                                         <span title="Atleta Padrão (80%+ Presença & Mensalidade em dia)" className="text-xl cursor-help hover:scale-125 transition-transform">⭐</span>
                                     )}
-                                    {topCestinhaName === singlePlayer.name && (
+                                    {topStats?.pts?.[0]?.name === singlePlayer.name && (
                                         <span title="Cestinha da Temporada" className="text-xl cursor-help hover:scale-125 transition-transform">🔥</span>
                                     )}
                                 </h2>
@@ -964,113 +991,208 @@ const RelatoriosTab = ({ allPlayersData, dates, financeData }) => {
             )}
 
             {/* ========================================================= */}
-            {/* RELATÓRIO OCULTO PARA EXPORTAÇÃO EM PDF */}
+            {/* NOVO RELATÓRIO PDF CORPORATIVO (Layout Sólido e Limpo)    */}
             {/* ========================================================= */}
-            <div className="absolute opacity-0 pointer-events-none -z-50 left-[-9999px] top-[-9999px]">
-                <div id="pdf-corporate-report" style={{ width: '750px', backgroundColor: '#ffffff', boxSizing: 'border-box' }} className="p-8 mx-auto text-slate-800">
-                    <div className="flex justify-between items-end border-b-4 border-slate-900 pb-6 mb-8">
-                        <div className="flex items-center gap-6">
-                            <img src="https://lh3.googleusercontent.com/d/131DvcfgiRLLp9irVnVY8m9qNuM-0y7f8" alt="Logo CBA" className="w-24 h-24 rounded-full border-2 border-slate-200 shadow-sm" crossOrigin="anonymous" />
+            <div className="absolute top-0 left-0 -z-50 opacity-0 pointer-events-none">
+                {/* 717px é a largura exata de um A4 descontando margens de 0.4 polegadas. Garante alinhamento perfeito. */}
+                <div id="pdf-corporate-report" style={{ width: '717px', backgroundColor: '#ffffff', boxSizing: 'border-box' }} className="text-slate-800 font-sans p-4">
+                    
+                    {/* CAPA DO RELATÓRIO */}
+                    <div style={{ height: '950px', pageBreakAfter: 'always' }} className="flex flex-col justify-center items-center text-center p-12 bg-slate-50 border-8 border-indigo-900 mx-auto">
+                        <img src="https://lh3.googleusercontent.com/d/131DvcfgiRLLp9irVnVY8m9qNuM-0y7f8" alt="Logo CBA" className="w-48 h-48 rounded-full mb-8 shadow-sm border-4 border-white" crossOrigin="anonymous" />
+                        <h1 className="text-6xl font-black text-slate-900 uppercase tracking-tighter mb-4">Portal CBA</h1>
+                        <h2 className="text-3xl font-bold text-slate-500 uppercase tracking-widest mb-10">Relatório Executivo Anual</h2>
+                        <div className="w-24 h-2 bg-indigo-600 mb-10"></div>
+                        <p className="text-3xl font-medium text-slate-700">Temporada <strong className="text-indigo-700 font-black">{selectedYear}</strong></p>
+                        <div className="mt-auto">
+                            <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">Documento Oficial • Gerado por {currentUser?.name || 'Admin'}</p>
+                        </div>
+                    </div>
+
+                    {/* CABEÇALHO PADRÃO NAS PÁGINAS DE DADOS */}
+                    <div className="border-b-4 border-indigo-900 pb-4 mb-8 flex justify-between items-end">
+                        <div className="flex items-center gap-4">
+                            <img src="https://lh3.googleusercontent.com/d/131DvcfgiRLLp9irVnVY8m9qNuM-0y7f8" alt="Logo CBA" className="w-16 h-16 rounded-full border border-slate-200" crossOrigin="anonymous" />
                             <div>
-                                <h1 className="text-4xl font-black text-slate-900 tracking-tight uppercase">Portal CBA</h1>
-                                <p className="text-slate-500 font-bold uppercase tracking-widest text-sm mt-1">Relatório Executivo Oficial</p>
+                                <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tight">Portal CBA</h2>
+                                <p className="text-slate-500 font-bold uppercase text-[10px] mt-1">Relatório Oficial - {selectedYear}</p>
                             </div>
                         </div>
                         <div className="text-right">
-                            <p className="text-sm font-bold text-slate-500 uppercase">Período Referência</p>
-                            <p className="text-3xl font-black text-indigo-600">{selectedYear}</p>
-                            <p className="text-xs text-slate-400 mt-2 font-medium">Gerado em: {new Date().toLocaleDateString('pt-BR')}</p>
+                            <p className="text-xs text-slate-500 font-bold uppercase">Gerado Em</p>
+                            <p className="text-sm font-bold text-indigo-700">{new Date().toLocaleDateString('pt-BR')}</p>
                         </div>
                     </div>
 
                     {selectedPlayer === 'todos' ? (
                         <>
-                            <div className="mb-10">
-                                <h2 className="text-xl font-bold text-slate-800 mb-4 border-b border-slate-200 pb-2 uppercase tracking-wide">1. Resumo Operacional</h2>
-                                <div className="grid grid-cols-3 gap-6">
-                                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                            {/* 1. RESUMO OPERACIONAL */}
+                            <div className="mb-8">
+                                <h3 className="text-lg font-bold text-slate-800 mb-4 uppercase bg-slate-100 p-2 border-l-4 border-indigo-600">1. Resumo Operacional</h3>
+                                <div className="grid grid-cols-3 gap-4">
+                                    <div className="bg-white border-2 border-slate-200 p-4 rounded-lg text-center">
                                         <p className="text-xs text-slate-500 font-bold uppercase">Atletas Ativos</p>
-                                        <p className="text-3xl font-black text-slate-800">{reportData.length}</p>
+                                        <p className="text-3xl font-black text-slate-800 mt-1">{reportData.length}</p>
                                     </div>
-                                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                                    <div className="bg-white border-2 border-slate-200 p-4 rounded-lg text-center">
                                         <p className="text-xs text-slate-500 font-bold uppercase">Jogos Computados</p>
-                                        <p className="text-3xl font-black text-slate-800">{globalTotalGames}</p>
+                                        <p className="text-3xl font-black text-slate-800 mt-1">{globalTotalGames}</p>
                                     </div>
-                                    <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100">
-                                        <p className="text-xs text-indigo-500 font-bold uppercase">Média Global CBA</p>
-                                        <p className="text-3xl font-black text-indigo-600">{globalAveragePercentage.toFixed(0)}%</p>
+                                    <div className="bg-indigo-50 border-2 border-indigo-200 p-4 rounded-lg text-center">
+                                        <p className="text-xs text-indigo-600 font-bold uppercase">Média Global CBA</p>
+                                        <p className="text-3xl font-black text-indigo-700 mt-1">{globalAveragePercentage.toFixed(0)}%</p>
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="mb-10 break-inside-avoid">
-                                <h2 className="text-xl font-bold text-slate-800 mb-6 border-b border-slate-200 pb-2 uppercase tracking-wide">2. Destaques de Assiduidade (Top 10)</h2>
-                                <div className="space-y-4 mt-4 px-2">
+                            {/* 2. DESTAQUES DE ASSIDUIDADE (TOP 10) */}
+                            <div className="mb-8 break-inside-avoid">
+                                <h3 className="text-lg font-bold text-slate-800 mb-4 uppercase bg-slate-100 p-2 border-l-4 border-indigo-600">2. Destaques de Assiduidade (Top 10)</h3>
+                                <div className="space-y-3 mt-4 px-4">
                                     {[...reportData].sort((a, b) => b.percentage - a.percentage || b.presences - a.presences).slice(0, 10).map((p, idx) => (
-                                        <div key={p.name} className="flex items-center gap-4">
+                                        <div key={p.name} className="flex items-center gap-4 text-sm">
                                             <span className="w-8 font-bold text-slate-400 text-right">{idx+1}º</span>
-                                            <span className="w-40 font-bold text-slate-800 truncate">{p.name}</span>
-                                            <div className="flex-grow bg-slate-100 rounded-full h-5 overflow-hidden border border-slate-200">
+                                            <span className="w-48 font-bold text-slate-800 truncate">{p.name}</span>
+                                            <div className="flex-grow bg-slate-100 rounded-full h-4 overflow-hidden border border-slate-200">
                                                 <div className="bg-indigo-600 h-full rounded-r-full transition-all" style={{ width: `${p.percentage}%` }}></div>
                                             </div>
-                                            <span className="w-16 font-black text-right text-slate-800">{p.percentage.toFixed(0)}%</span>
+                                            <span className="w-12 font-black text-right text-slate-800">{p.percentage.toFixed(0)}%</span>
                                         </div>
                                     ))}
                                 </div>
                             </div>
 
-                            <div className="break-before-page">
-                                <h2 className="text-xl font-bold text-slate-800 mb-4 border-b border-slate-200 pb-2 uppercase tracking-wide">3. Desempenho Geral do Elenco</h2>
-                                <table className="w-full text-left border-collapse mt-4">
-                                    <thead>
-                                        <tr className="bg-slate-100 text-slate-600 text-xs uppercase tracking-wider border-y-2 border-slate-300">
-                                            <th className="py-3 px-4 font-bold w-16">Pos</th>
-                                            <th className="py-3 px-4 font-bold">Atleta</th>
-                                            <th className="py-3 px-4 font-bold text-center w-32">Presenças</th>
-                                            <th className="py-3 px-4 font-bold text-center w-32">Faltas (NJ)</th>
-                                            <th className="py-3 px-4 font-bold text-right w-32">Aproveit.</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="text-sm">
-                                        {reportData.map((p, idx) => (
-                                            <tr key={p.name} className={`border-b border-slate-200 break-inside-avoid ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}>
-                                                <td className="py-3 px-4 text-slate-500 font-bold text-center">{idx + 1}º</td>
-                                                <td className="py-3 px-4 font-bold text-slate-800">{p.name}</td>
-                                                <td className="py-3 px-4 text-center font-medium">{p.presences} / {p.totalGames}</td>
-                                                <td className="py-3 px-4 text-center">
-                                                    {p.faults > 0 ? <span className="text-red-600 font-bold">{p.faults}</span> : <span className="text-slate-300">-</span>}
-                                                </td>
-                                                <td className={`py-3 px-4 text-right font-black ${p.percentage >= 50 ? 'text-indigo-600' : 'text-red-600'}`}>
-                                                    {p.percentage.toFixed(0)}%
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                            {/* 3. TOP 3 FUNDAMENTOS */}
+                            <div className="mb-8 break-inside-avoid">
+                                <h3 className="text-lg font-bold text-slate-800 mb-4 uppercase bg-slate-100 p-2 border-l-4 border-indigo-600">3. Líderes por Fundamento (Top 3)</h3>
+                                <div className="grid grid-cols-4 gap-4">
+                                    <div className="border-2 border-slate-200 rounded-lg overflow-hidden">
+                                        <h4 className="bg-orange-100 text-orange-800 text-[10px] font-bold uppercase text-center py-2 border-b border-orange-200">Pontos</h4>
+                                        <table className="w-full text-[10px] text-left" style={{ tableLayout: 'fixed' }}>
+                                            <tbody>
+                                                {topStats.pts?.filter(p => p.yearlyGamesWithStats > 0).slice(0,3).map((p, i) => (
+                                                    <tr key={p.name} className="border-b border-slate-100 last:border-0"><td className="w-6 font-bold text-slate-400 py-2 px-1 text-center">{i+1}º</td><td className="font-bold py-2 px-1 text-slate-700 truncate">{p.name}</td><td className="text-right font-black text-orange-600 py-2 px-2 w-8">{p.yearlyPoints}</td></tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <div className="border-2 border-slate-200 rounded-lg overflow-hidden">
+                                        <h4 className="bg-emerald-100 text-emerald-800 text-[10px] font-bold uppercase text-center py-2 border-b border-emerald-200">Rebotes</h4>
+                                        <table className="w-full text-[10px] text-left" style={{ tableLayout: 'fixed' }}>
+                                            <tbody>
+                                                {topStats.reb?.filter(p => p.yearlyGamesWithStats > 0).slice(0,3).map((p, i) => (
+                                                    <tr key={p.name} className="border-b border-slate-100 last:border-0"><td className="w-6 font-bold text-slate-400 py-2 px-1 text-center">{i+1}º</td><td className="font-bold py-2 px-1 text-slate-700 truncate">{p.name}</td><td className="text-right font-black text-emerald-600 py-2 px-2 w-8">{p.yearlyReb}</td></tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <div className="border-2 border-slate-200 rounded-lg overflow-hidden">
+                                        <h4 className="bg-cyan-100 text-cyan-800 text-[10px] font-bold uppercase text-center py-2 border-b border-cyan-200">Assistências</h4>
+                                        <table className="w-full text-[10px] text-left" style={{ tableLayout: 'fixed' }}>
+                                            <tbody>
+                                                {topStats.ast?.filter(p => p.yearlyGamesWithStats > 0).slice(0,3).map((p, i) => (
+                                                    <tr key={p.name} className="border-b border-slate-100 last:border-0"><td className="w-6 font-bold text-slate-400 py-2 px-1 text-center">{i+1}º</td><td className="font-bold py-2 px-1 text-slate-700 truncate">{p.name}</td><td className="text-right font-black text-cyan-600 py-2 px-2 w-8">{p.yearlyAst}</td></tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <div className="border-2 border-slate-200 rounded-lg overflow-hidden">
+                                        <h4 className="bg-purple-100 text-purple-800 text-[10px] font-bold uppercase text-center py-2 border-b border-purple-200">Tocos</h4>
+                                        <table className="w-full text-[10px] text-left" style={{ tableLayout: 'fixed' }}>
+                                            <tbody>
+                                                {topStats.blk?.filter(p => p.yearlyGamesWithStats > 0).slice(0,3).map((p, i) => (
+                                                    <tr key={p.name} className="border-b border-slate-100 last:border-0"><td className="w-6 font-bold text-slate-400 py-2 px-1 text-center">{i+1}º</td><td className="font-bold py-2 px-1 text-slate-700 truncate">{p.name}</td><td className="text-right font-black text-purple-600 py-2 px-2 w-8">{p.yearlyBlk}</td></tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 4. DESEMPENHO GERAL DO ELENCO (INFOGRÁFICO VISUAL) */}
+                            <div className="break-inside-avoid">
+                                <h3 className="text-lg font-bold text-slate-800 mb-4 uppercase bg-slate-100 p-2 border-l-4 border-indigo-600">4. Desempenho Geral do Elenco</h3>
+                                
+                                {/* Header Row */}
+                                <div className="flex items-center text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b-2 border-slate-300 pb-2 mb-2 px-2">
+                                    <div className="w-[30%]">Atleta</div>
+                                    <div className="w-[15%] text-center">Jogos</div>
+                                    <div className="w-[20%]">Média Pontos</div>
+                                    <div className="w-[20%]">Média Rebotes</div>
+                                    <div className="w-[15%] text-right">Assiduidade</div>
+                                </div>
+
+                                {/* Player Rows */}
+                                <div className="space-y-1 mt-3">
+                                    {[...reportData].sort((a, b) => b.percentage - a.percentage || b.presences - a.presences).map((p, idx) => {
+                                        const ppjWidth = maxPPJ > 0 ? (p.ppjYear / maxPPJ) * 100 : 0;
+                                        const rpjWidth = maxRPJ > 0 ? (p.rpjYear / maxRPJ) * 100 : 0;
+
+                                        return (
+                                            <div key={p.name} className={`flex items-center text-xs py-2.5 px-2 rounded-xl break-inside-avoid border border-slate-100 ${idx % 2 === 0 ? 'bg-slate-50' : 'bg-white'}`}>
+                                                {/* Name & Rank */}
+                                                <div className="w-[30%] flex items-center gap-2 pr-2">
+                                                    <span className="w-5 text-right font-bold text-slate-400 text-[10px] shrink-0">{idx + 1}º</span>
+                                                    <span className="font-bold text-slate-800 truncate">{p.name}</span>
+                                                </div>
+                                                
+                                                {/* Presences */}
+                                                <div className="w-[15%] flex flex-col items-center justify-center border-l border-slate-200 pl-2">
+                                                    <span className="font-bold text-slate-700">{p.presences} <span className="text-[10px] text-slate-400">/ {p.totalGames}</span></span>
+                                                    {p.faults > 0 && <span className="text-[8px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-bold mt-0.5">{p.faults} Faltas NJ</span>}
+                                                </div>
+                                                
+                                                {/* PPJ Bar */}
+                                                <div className="w-[20%] flex items-center gap-2 px-3 border-l border-slate-200">
+                                                    <div className="flex-1 bg-orange-100 h-2.5 rounded-full overflow-hidden">
+                                                        <div className="bg-orange-500 h-full rounded-full" style={{ width: `${ppjWidth}%` }}></div>
+                                                    </div>
+                                                    <span className="font-black text-orange-600 w-6 text-right shrink-0">{p.ppjYear.toFixed(1)}</span>
+                                                </div>
+
+                                                {/* RPJ Bar */}
+                                                <div className="w-[20%] flex items-center gap-2 px-3 border-l border-slate-200">
+                                                    <div className="flex-1 bg-emerald-100 h-2.5 rounded-full overflow-hidden">
+                                                        <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${rpjWidth}%` }}></div>
+                                                    </div>
+                                                    <span className="font-black text-emerald-600 w-6 text-right shrink-0">{p.rpjYear.toFixed(1)}</span>
+                                                </div>
+
+                                                {/* Percentage */}
+                                                <div className="w-[15%] flex items-center justify-end gap-2 border-l border-slate-200 pl-3">
+                                                    <div className="flex-1 bg-slate-200 h-2.5 rounded-full overflow-hidden hidden sm:block">
+                                                        <div className={`${p.percentage >= 50 ? 'bg-indigo-600' : 'bg-red-500'} h-full rounded-full`} style={{ width: `${p.percentage}%` }}></div>
+                                                    </div>
+                                                    <span className={`font-black w-8 text-right shrink-0 ${p.percentage >= 50 ? 'text-indigo-700' : 'text-red-600'}`}>{p.percentage.toFixed(0)}%</span>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
                             </div>
                         </>
                     ) : singlePlayer && (
                         <div className="space-y-6">
                             <div className="flex gap-8 mb-8 border-b-2 border-slate-200 pb-6">
                                 {singlePlayer.fotoUrl ? (
-                                    <img src={singlePlayer.fotoUrl} className="w-32 h-32 rounded-2xl object-cover border border-slate-200 shadow-sm" crossOrigin="anonymous" alt="Player"/>
+                                    <img src={singlePlayer.fotoUrl} className="w-32 h-32 rounded-2xl object-cover border-4 border-slate-200 shadow-sm" crossOrigin="anonymous" alt="Player"/>
                                 ) : (
-                                     <div className="w-32 h-32 rounded-2xl bg-slate-100 flex items-center justify-center text-5xl font-black text-slate-300 border border-slate-200">{singlePlayer.name.charAt(0)}</div>
+                                     <div className="w-32 h-32 rounded-2xl bg-slate-100 flex items-center justify-center text-5xl font-black text-slate-300 border-4 border-slate-200">{singlePlayer.name.charAt(0)}</div>
                                 )}
                                 <div className="flex flex-col justify-center">
                                     <h2 className="text-4xl font-black uppercase text-slate-900">{singlePlayer.name}</h2>
                                     <p className="text-xl text-slate-500 font-bold mt-1">{singlePlayer.percentage.toFixed(0)}% de Assiduidade Anual</p>
                                     <div className="flex gap-4 mt-3">
-                                         <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-lg text-sm font-bold">✅ {singlePlayer.presences} Presenças</span>
-                                         <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-lg text-sm font-bold">❌ {singlePlayer.totalGames - singlePlayer.presences} Ausências</span>
-                                         {singlePlayer.faults > 0 && <span className="bg-red-100 text-red-700 px-3 py-1 rounded-lg text-sm font-bold">⚠️ {singlePlayer.faults} Faltas (NJ)</span>}
+                                         <span className="bg-emerald-100 text-emerald-700 border border-emerald-200 px-3 py-1 rounded-lg text-sm font-bold">✅ {singlePlayer.presences} Presenças</span>
+                                         <span className="bg-slate-100 text-slate-600 border border-slate-200 px-3 py-1 rounded-lg text-sm font-bold">❌ {singlePlayer.totalGames - singlePlayer.presences} Ausências</span>
+                                         {singlePlayer.faults > 0 && <span className="bg-red-100 text-red-700 border border-red-200 px-3 py-1 rounded-lg text-sm font-bold">⚠️ {singlePlayer.faults} Faltas (NJ)</span>}
                                     </div>
                                 </div>
                             </div>
 
                             <div>
-                                <h3 className="text-xl font-bold text-slate-800 mb-4 uppercase tracking-wide border-b border-slate-200 pb-2">Histórico de Presenças ({selectedYear})</h3>
-                                <div className="grid grid-cols-3 gap-4">
+                                <h3 className="text-lg font-bold text-slate-800 mb-4 uppercase bg-slate-100 p-2 border-l-4 border-indigo-600">Histórico de Presenças ({selectedYear})</h3>
+                                <div className="flex flex-wrap gap-3">
                                     {playedDates.sort((a,b) => new Date(a) - new Date(b)).map(date => {
                                         const statusRaw = singlePlayer.attendance[date]?.trim() || '';
                                         const isPresent = statusRaw.includes('✅');
@@ -1092,9 +1214,9 @@ const RelatoriosTab = ({ allPlayersData, dates, financeData }) => {
                                         }
 
                                         return (
-                                            <div key={date} className={`p-3 rounded-xl border flex justify-between items-center ${statusColor}`}>
-                                                <span className="font-bold">{date.split('-').reverse().join('/')}</span>
-                                                <span className="text-xs font-black uppercase">{statusText}</span>
+                                            <div key={date} className={`px-4 py-2 w-[31%] rounded-xl border flex justify-between items-center ${statusColor}`}>
+                                                <span className="font-bold text-sm">{date.split('-').reverse().join('/')}</span>
+                                                <span className="text-[10px] font-black uppercase">{statusText}</span>
                                             </div>
                                         );
                                     })}
