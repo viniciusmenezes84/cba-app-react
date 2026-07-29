@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, createContext, useContext } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, createContext, useContext, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Activity, CalendarDays, BookOpen, DollarSign, Users, PartyPopper, BarChart, BellRing, 
@@ -17,7 +17,18 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarEleme
 // Constantes Globais
 const MONTHS_MAP = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
-// Funções puras de finanças
+// --- UTILITÁRIO ÚNICO DE SHUFFLE (Fisher-Yates) ---
+// Usado em todo o app sempre que for necessário embaralhar uma lista de forma justa.
+const shuffleArray = (array) => {
+    const result = [...array];
+    for (let i = result.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [result[i], result[j]] = [result[j], result[i]];
+    }
+    return result;
+};
+
+// Funções puras de finanças (ÚNICA fonte de verdade - não duplicar em nenhum componente)
 const getEnhancedStatus = (monthName, originalStatus) => {
     const statusStr = String(originalStatus || '').trim().toLowerCase();
     if (statusStr === 'isento') return { text: 'Isento', code: 'isento' };
@@ -52,13 +63,16 @@ const ThemeProvider = ({ children }) => {
 const useTheme = () => useContext(ThemeContext);
 
 // --- UTILITÁRIOS DE API CENTRALIZADOS ---
+// Agora aceita um `signal` (AbortController) para permitir cancelar requisições
+// quando o componente que as originou é desmontado (ex: usuário troca de aba rápido).
 const api = {
-    post: async (baseUrl, params) => {
+    post: async (baseUrl, params, signal) => {
         try {
             const res = await fetch(baseUrl, {
                 method: 'POST', mode: 'cors', redirect: 'follow',
                 headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                 body: JSON.stringify(params),
+                signal,
             });
             if (!res.ok) {
                 const errorText = await res.text().catch(() => 'Erro desconhecido.');
@@ -69,6 +83,7 @@ const api = {
             }
             return res.json();
         } catch (error) {
+            if (error.name === 'AbortError') throw error;
             console.error('Fetch POST error:', error.message);
             throw error;
         }
@@ -76,26 +91,39 @@ const api = {
 };
 
 // --- CUSTOM HOOK PARA CACHE E DESEMPENHO ---
+// Agora cancela a requisição em andamento caso o componente desmonte antes dela terminar,
+// evitando "setState em componente desmontado" e condições de corrida entre fetches.
 function useDataQuery(queryFn, dependencies = []) {
     const [data, setData] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    const fetchData = useCallback(async () => {
+    const fetchData = useCallback(async (signal) => {
         setIsLoading(true);
         setError(null);
         try {
-            const result = await queryFn();
+            const result = await queryFn(signal);
             setData(result);
         } catch (err) {
+            if (err?.name === 'AbortError') return;
             setError(err.message || "Erro desconhecido ao buscar dados.");
         } finally {
             setIsLoading(false);
         }
     }, dependencies);
 
-    useEffect(() => { fetchData(); }, [fetchData]);
-    return { data, isLoading, error, refetch: fetchData };
+    useEffect(() => {
+        const controller = new AbortController();
+        fetchData(controller.signal);
+        return () => controller.abort();
+    }, [fetchData]);
+
+    const refetch = useCallback(() => {
+        const controller = new AbortController();
+        fetchData(controller.signal);
+    }, [fetchData]);
+
+    return { data, isLoading, error, refetch };
 }
 
 // --- UTILITÁRIO MODERNO DE CLIPBOARD ---
@@ -144,23 +172,60 @@ const Loader = ({ message }) => (
     </motion.div>
 );
 
+// --- MODAL ACESSÍVEL ---
+// Agora fecha com "Esc", prende o foco (focus trap) dentro do modal enquanto aberto,
+// e move o foco automaticamente para o primeiro elemento focável ao abrir.
 const Modal = ({ isOpen, onClose, title, children }) => {
+    const dialogRef = useRef(null);
+
+    useEffect(() => {
+        if (!isOpen) return;
+
+        const getFocusable = () =>
+            dialogRef.current?.querySelectorAll(
+                'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+            );
+
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape') { onClose(); return; }
+            if (e.key !== 'Tab') return;
+            const focusable = getFocusable();
+            if (!focusable || focusable.length === 0) return;
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            if (e.shiftKey && document.activeElement === first) {
+                e.preventDefault(); last.focus();
+            } else if (!e.shiftKey && document.activeElement === last) {
+                e.preventDefault(); first.focus();
+            }
+        };
+
+        document.addEventListener('keydown', handleKeyDown);
+        const focusTimer = setTimeout(() => getFocusable()?.[0]?.focus(), 50);
+
+        return () => {
+            document.removeEventListener('keydown', handleKeyDown);
+            clearTimeout(focusTimer);
+        };
+    }, [isOpen, onClose]);
+
     return (
         <AnimatePresence>
             {isOpen && (
-                <div className="fixed inset-0 z-[100] flex justify-center items-center p-4">
+                <div className="fixed inset-0 z-[100] flex justify-center items-center p-4" role="dialog" aria-modal="true" aria-labelledby="modal-title">
                     <motion.div 
                         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                         className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm"
                         onClick={onClose}
                     />
                     <motion.div 
+                        ref={dialogRef}
                         initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
                         className="relative bg-white dark:bg-slate-800 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-700 p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto z-10"
                     >
                         <div className="flex justify-between items-center pb-4 border-b border-slate-200 dark:border-slate-700 mb-5">
-                            <h2 className="text-2xl font-extrabold text-slate-800 dark:text-slate-100">{title}</h2>
-                            <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 bg-slate-100 dark:bg-slate-700 p-2 rounded-full transition-colors">
+                            <h2 id="modal-title" className="text-2xl font-extrabold text-slate-800 dark:text-slate-100">{title}</h2>
+                            <button onClick={onClose} aria-label="Fechar modal" className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 bg-slate-100 dark:bg-slate-700 p-2 rounded-full transition-colors">
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
@@ -200,8 +265,14 @@ const LoginScreen = ({ onLogin, isLoading, error }) => (
             <p className="text-slate-300 mb-8 font-medium">Basquete dos Aposentados</p>
             {error && <p className="bg-red-500/20 border border-red-500/50 text-red-200 p-3 rounded-xl mb-6 text-sm flex items-center justify-center gap-2"><AlertCircle className="w-4 h-4"/>{error}</p>}
             <form onSubmit={onLogin} className="space-y-5">
-                <input name="email" type="email" placeholder="Email" className="w-full p-4 bg-slate-800/50 border border-slate-600 text-white rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" required />
-                <input name="password" type="password" placeholder="Senha" className="w-full p-4 bg-slate-800/50 border border-slate-600 text-white rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" required />
+                <div>
+                    <label htmlFor="login-email" className="sr-only">Email</label>
+                    <input id="login-email" name="email" type="email" placeholder="Email" className="w-full p-4 bg-slate-800/50 border border-slate-600 text-white rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" required />
+                </div>
+                <div>
+                    <label htmlFor="login-password" className="sr-only">Senha</label>
+                    <input id="login-password" name="password" type="password" placeholder="Senha" className="w-full p-4 bg-slate-800/50 border border-slate-600 text-white rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" required />
+                </div>
                 <button type="submit" disabled={isLoading} className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-indigo-500/30 disabled:opacity-70 transition-transform active:scale-95">
                     {isLoading ? 'Autenticando...' : 'Entrar na Área Restrita'}
                 </button>
@@ -992,7 +1063,10 @@ const RelatoriosTab = ({ allPlayersData, dates, financeData, currentUser }) => {
 
             {/* ========================================================= */}
             {/* NOVO RELATÓRIO PDF CORPORATIVO (Layout Sólido e Limpo)    */}
+            {/* Só é montado no DOM quando um PDF está sendo gerado,      */}
+            {/* evitando manter esse bloco pesado sempre presente.        */}
             {/* ========================================================= */}
+            {isGeneratingPDF && (
             <div className="absolute top-0 left-0 -z-50 opacity-0 pointer-events-none">
                 {/* 717px é a largura exata de um A4 descontando margens de 0.4 polegadas. Garante alinhamento perfeito. */}
                 <div id="pdf-corporate-report" style={{ width: '717px', backgroundColor: '#ffffff', boxSizing: 'border-box' }} className="text-slate-800 font-sans p-4">
@@ -1226,6 +1300,7 @@ const RelatoriosTab = ({ allPlayersData, dates, financeData, currentUser }) => {
                     )}
                 </div>
             </div>
+            )}
         </div>
     );
 };
@@ -1243,29 +1318,15 @@ const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin, scri
         else setSelectedPlayer(financeData.paymentStatus.find(p => p.player.toLowerCase() === currentUser.name.toLowerCase())?.player || '');
     }, [financeData, isAdmin, currentUser.name]);
 
-    const getEnhancedStatus = (monthName, originalStatus) => {
-        const statusStr = String(originalStatus || '').trim().toLowerCase();
-        if (statusStr === 'isento') return { text: 'Isento', code: 'isento' };
-        if (statusStr === '20') return { text: 'Pago', code: 'pago' };
-        const monthMap = { "janeiro": 0, "fevereiro": 1, "março": 2, "abril": 3, "maio": 4, "junho": 5, "julho": 6, "agosto": 7, "setembro": 8, "outubro": 9, "novembro": 10, "dezembro": 11 };
-        if (monthMap[monthName.toLowerCase()] < new Date().getMonth()) return { text: 'Em Atraso', code: 'atraso' };
-        return { text: 'Pendente', code: 'pendente' };
-    };
-
-    const calculatePlayerDebt = (player) => {
-        if(!financeData?.paymentHeaders || !player) return 0;
-        let debt = 0;
-        financeData.paymentHeaders.forEach(m => {
-            if(getEnhancedStatus(m, player.statuses[m]).code === 'atraso') debt += 20;
-        });
-        return debt;
-    };
+    // NOTA: getEnhancedStatus e calculatePlayerDebt foram removidas daqui.
+    // Agora usamos as versões globais, definidas uma única vez no topo do arquivo,
+    // evitando lógica duplicada/divergente entre esta aba e o restante do app.
 
     const adminStats = useMemo(() => {
         if(!financeData?.paymentStatus) return { totalReceber: 0, inadimplentes: [] };
         let totalReceber = 0; let inadimplentes = [];
         financeData.paymentStatus.forEach(p => {
-            const debt = calculatePlayerDebt(p);
+            const debt = calculatePlayerDebt(p, financeData);
             if (debt > 0) { totalReceber += debt; inadimplentes.push({ name: p.player, debt }); }
         });
         inadimplentes.sort((a,b) => b.debt - a.debt);
@@ -1292,7 +1353,7 @@ const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin, scri
     if (!financeData) return <p className="text-center text-slate-500 py-8">Nenhum dado financeiro encontrado.</p>;
 
     const playerData = financeData.paymentStatus?.find(p => p.player === selectedPlayer);
-    const playerDebt = calculatePlayerDebt(playerData);
+    const playerDebt = calculatePlayerDebt(playerData, financeData);
 
     return (
         <div className="space-y-8">
@@ -1384,7 +1445,7 @@ const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin, scri
 
 // 4. ABA JOGOS
 const JogosTab = ({ currentUser, isAdmin, scriptUrl, refreshKey }) => {
-    const { data: gamesData, isLoading, refetch } = useDataQuery(() => api.post(scriptUrl, { action: 'getGames' }), [refreshKey, scriptUrl]);
+    const { data: gamesData, isLoading, refetch } = useDataQuery((signal) => api.post(scriptUrl, { action: 'getGames' }, signal), [refreshKey, scriptUrl]);
     const games = [...(gamesData?.data || [])].sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
     
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -1472,9 +1533,18 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, refreshKey }) => {
 
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingGame ? "Editar Jogo" : "Novo Jogo"}>
                 <form onSubmit={handleFormSubmit} className="space-y-4">
-                    <input name="data" type="date" defaultValue={editingGame?.data} className="w-full p-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" required />
-                    <input name="horario" type="time" defaultValue={editingGame?.horario} className="w-full p-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" required />
-                    <input name="local" type="text" placeholder="Local" defaultValue={editingGame?.local} className="w-full p-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" required />
+                    <div>
+                        <label htmlFor="game-data" className="sr-only">Data</label>
+                        <input id="game-data" name="data" type="date" defaultValue={editingGame?.data} className="w-full p-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" required />
+                    </div>
+                    <div>
+                        <label htmlFor="game-horario" className="sr-only">Horário</label>
+                        <input id="game-horario" name="horario" type="time" defaultValue={editingGame?.horario} className="w-full p-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" required />
+                    </div>
+                    <div>
+                        <label htmlFor="game-local" className="sr-only">Local</label>
+                        <input id="game-local" name="local" type="text" placeholder="Local" defaultValue={editingGame?.local} className="w-full p-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" required />
+                    </div>
                     <button type="submit" disabled={isSubmitting} className="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl hover:bg-indigo-700 disabled:opacity-50">{isSubmitting ? 'Salvando...' : 'Agendar'}</button>
                 </form>
             </Modal>
@@ -1494,7 +1564,7 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, refreshKey }) => {
 
 // 5. ABA EVENTOS
 const EventosTab = ({ scriptUrl, currentUser, isAdmin, refreshKey }) => {
-    const { data: eventsData, isLoading, refetch } = useDataQuery(() => api.post(scriptUrl, { action: 'getEvents' }), [refreshKey, scriptUrl]);
+    const { data: eventsData, isLoading, refetch } = useDataQuery((signal) => api.post(scriptUrl, { action: 'getEvents' }, signal), [refreshKey, scriptUrl]);
     const events = (eventsData?.data || []).map(e => ({ ...e, attendees: typeof e.attendees === 'string' ? e.attendees.split(',').filter(Boolean) : [] }));
     
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -1600,14 +1670,32 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, refreshKey }) => {
 
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingEvent ? "Editar Evento" : "Criar Evento"}>
                 <form onSubmit={handleFormSubmit} className="space-y-4">
-                    <input name="name" type="text" placeholder="Nome do Evento" defaultValue={editingEvent?.name} className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none" required />
-                    <div className="grid grid-cols-2 gap-4">
-                        <input name="date" type="datetime-local" defaultValue={editingEvent?.date ? new Date(editingEvent.date).toISOString().substring(0,16) : ''} className="w-full p-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none" required />
-                        <input name="deadline" type="date" defaultValue={editingEvent?.deadline} className="w-full p-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none" required />
+                    <div>
+                        <label htmlFor="event-name" className="sr-only">Nome do Evento</label>
+                        <input id="event-name" name="name" type="text" placeholder="Nome do Evento" defaultValue={editingEvent?.name} className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none" required />
                     </div>
-                    <input name="location" type="text" placeholder="Local" defaultValue={editingEvent?.location} className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none" required />
-                    <input name="value" type="number" step="0.01" placeholder="Valor (R$)" defaultValue={editingEvent?.value} className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none" required />
-                    <textarea name="description" placeholder="Detalhes..." defaultValue={editingEvent?.description} className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none" rows={3} required></textarea>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label htmlFor="event-date" className="sr-only">Data e Hora</label>
+                            <input id="event-date" name="date" type="datetime-local" defaultValue={editingEvent?.date ? new Date(editingEvent.date).toISOString().substring(0,16) : ''} className="w-full p-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none" required />
+                        </div>
+                        <div>
+                            <label htmlFor="event-deadline" className="sr-only">Prazo</label>
+                            <input id="event-deadline" name="deadline" type="date" defaultValue={editingEvent?.deadline} className="w-full p-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none" required />
+                        </div>
+                    </div>
+                    <div>
+                        <label htmlFor="event-location" className="sr-only">Local</label>
+                        <input id="event-location" name="location" type="text" placeholder="Local" defaultValue={editingEvent?.location} className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none" required />
+                    </div>
+                    <div>
+                        <label htmlFor="event-value" className="sr-only">Valor</label>
+                        <input id="event-value" name="value" type="number" step="0.01" placeholder="Valor (R$)" defaultValue={editingEvent?.value} className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none" required />
+                    </div>
+                    <div>
+                        <label htmlFor="event-description" className="sr-only">Descrição</label>
+                        <textarea id="event-description" name="description" placeholder="Detalhes..." defaultValue={editingEvent?.description} className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none" rows={3} required></textarea>
+                    </div>
                     <button type="submit" disabled={isSubmitting} className="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl hover:bg-indigo-700 disabled:opacity-50">{isSubmitting ? 'A salvar...' : 'Salvar Evento'}</button>
                 </form>
             </Modal>
@@ -1643,11 +1731,8 @@ const SorteioTab = ({ allPlayersData, scriptUrl }) => {
 
     const handleDrawTeams = () => {
         if (selectedPlayers.length < 10) { setModalInfo({ isOpen: true, title: 'Atenção', message: 'Selecione pelo menos 10 jogadores para formar dois times.' }); return; }
-        const playersToDraw = [...selectedPlayers].slice(0, 10);
-        for (let i = playersToDraw.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [playersToDraw[i], playersToDraw[j]] = [playersToDraw[j], playersToDraw[i]];
-        }
+        // Fisher-Yates via shuffleArray (função global no topo do arquivo) - embaralhamento estatisticamente correto
+        const playersToDraw = shuffleArray(selectedPlayers).slice(0, 10);
         setTeams({ teamBlack: playersToDraw.slice(0, 5), teamRed: playersToDraw.slice(5, 10) });
         setDrawMode('teams');
     };
@@ -1655,8 +1740,9 @@ const SorteioTab = ({ allPlayersData, scriptUrl }) => {
     const handleCustomDraw = () => {
         const num = Number(numToDraw);
         if (selectedPlayers.length < num) { setModalInfo({ isOpen: true, title: 'Atenção', message: `Selecione pelo menos ${num} jogador(es) para sortear.` }); return; }
-        const shuffled = [...selectedPlayers].sort(() => 0.5 - Math.random());
-        setDrawnPlayers(shuffled.slice(0, num));
+        // Fisher-Yates via shuffleArray (função global no topo do arquivo) - substitui o antigo
+        // `.sort(() => 0.5 - Math.random())`, que não produz um embaralhamento uniforme.
+        setDrawnPlayers(shuffleArray(selectedPlayers).slice(0, num));
         setDrawMode('custom');
     };
 
@@ -1693,7 +1779,8 @@ const SorteioTab = ({ allPlayersData, scriptUrl }) => {
                     </div>
                     
                     <div className="mb-8 relative">
-                        <input type="text" placeholder="Buscar jogador..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full p-4 pl-12 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-2xl outline-none focus:ring-2 focus:ring-indigo-50 transition-all font-medium" />
+                        <label htmlFor="sorteio-search" className="sr-only">Buscar jogador</label>
+                        <input id="sorteio-search" type="text" placeholder="Buscar jogador..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full p-4 pl-12 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-2xl outline-none focus:ring-2 focus:ring-indigo-50 transition-all font-medium" />
                         <svg className="w-6 h-6 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                     </div>
 
@@ -1726,7 +1813,8 @@ const SorteioTab = ({ allPlayersData, scriptUrl }) => {
                             <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-2">Sorteio Avulso</h3>
                             <p className="text-sm text-slate-500 mb-6">Escolha a quantidade para um sorteio rápido.</p>
                             <div className="flex gap-3 w-full">
-                                <select value={numToDraw} onChange={(e) => setNumToDraw(Number(e.target.value))} className="w-1/3 p-4 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 font-bold rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800 dark:text-white">
+                                <label htmlFor="sorteio-num" className="sr-only">Quantidade a sortear</label>
+                                <select id="sorteio-num" value={numToDraw} onChange={(e) => setNumToDraw(Number(e.target.value))} className="w-1/3 p-4 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 font-bold rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800 dark:text-white">
                                     {[1,2,3,4,5].map(n => <option key={n} value={n}>{n}</option>)}
                                 </select>
                                 <button onClick={handleCustomDraw} disabled={selectedPlayers.length === 0} className="w-2/3 bg-purple-600 text-white font-bold py-4 rounded-xl hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-purple-600/30">
@@ -1942,7 +2030,7 @@ const EstatutoTab = () => {
 
 // 8. ABA NOTIFICAÇÕES (COM HISTÓRICO RESTAURADO)
 const NotificacoesTab = ({ scriptUrl }) => {
-    const { data: notifData, isLoading, error, refetch } = useDataQuery(() => api.post(scriptUrl, { action: 'getNotifications' }), [scriptUrl]);
+    const { data: notifData, isLoading, error, refetch } = useDataQuery((signal) => api.post(scriptUrl, { action: 'getNotifications' }, signal), [scriptUrl]);
 
     const notifications = useMemo(() => {
         if (!notifData?.data && !notifData) return [];
@@ -1993,16 +2081,16 @@ const NotificacoesTab = ({ scriptUrl }) => {
                 </div>
                 <form onSubmit={handleFormSubmit} className="space-y-4">
                     <div>
-                        <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Título do Alerta</label>
-                        <input name="title" type="text" placeholder="Ex: Novo Jogo Confirmado!" className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-slate-800 dark:text-white" required />
+                        <label htmlFor="notif-title" className="block text-xs font-bold uppercase text-slate-500 mb-1">Título do Alerta</label>
+                        <input id="notif-title" name="title" type="text" placeholder="Ex: Novo Jogo Confirmado!" className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-slate-800 dark:text-white" required />
                     </div>
                     <div>
-                        <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Corpo da Mensagem</label>
-                        <textarea name="message" placeholder="Escreva a mensagem..." className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800 dark:text-white resize-none" rows={4} required></textarea>
+                        <label htmlFor="notif-message" className="block text-xs font-bold uppercase text-slate-500 mb-1">Corpo da Mensagem</label>
+                        <textarea id="notif-message" name="message" placeholder="Escreva a mensagem..." className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800 dark:text-white resize-none" rows={4} required></textarea>
                     </div>
                     <div>
-                        <label className="block text-xs font-bold uppercase text-slate-500 mb-2">Ao clicar, abrir na aba:</label>
-                        <select value={targetTab} onChange={(e) => setTargetTab(e.target.value)} className="w-full p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl font-bold text-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500">
+                        <label htmlFor="notif-target" className="block text-xs font-bold uppercase text-slate-500 mb-2">Ao clicar, abrir na aba:</label>
+                        <select id="notif-target" value={targetTab} onChange={(e) => setTargetTab(e.target.value)} className="w-full p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-xl font-bold text-slate-700 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500">
                             <option value="presenca">Presença</option>
                             <option value="jogos">Jogos</option>
                             <option value="eventos">Eventos</option>
@@ -2050,7 +2138,7 @@ const NotificacoesTab = ({ scriptUrl }) => {
     );
 };
 
-// 9. ABA MODO MESÁRIO (NOVA COM AUTO-SAVE)
+// 9. ABA MODO MESÁRIO (COM AUTO-SAVE)
 const MesarioTab = ({ allPlayersData, scriptUrl, onStatsSaved }) => {
     
     // Funcao para ler o backup (usada na inicialização do useState)
@@ -2247,8 +2335,8 @@ const MesarioTab = ({ allPlayersData, scriptUrl, onStatsSaved }) => {
                     </div>
                     
                     <div className="mb-6">
-                        <label className="font-bold text-sm text-slate-500 uppercase mb-2 block">Data da Partida</label>
-                        <input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full md:w-1/3 p-4 bg-slate-50 dark:bg-slate-700 font-bold text-slate-800 dark:text-white rounded-xl outline-none focus:ring-2 focus:ring-cyan-500 border border-slate-200 dark:border-slate-600" />
+                        <label htmlFor="mesario-date" className="font-bold text-sm text-slate-500 uppercase mb-2 block">Data da Partida</label>
+                        <input id="mesario-date" type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full md:w-1/3 p-4 bg-slate-50 dark:bg-slate-700 font-bold text-slate-800 dark:text-white rounded-xl outline-none focus:ring-2 focus:ring-cyan-500 border border-slate-200 dark:border-slate-600" />
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 max-h-[50vh] overflow-y-auto pr-2 mb-6">
@@ -2387,7 +2475,7 @@ const MesarioTab = ({ allPlayersData, scriptUrl, onStatsSaved }) => {
     );
 };
 
-// 11. ABA DEPARTAMENTO MÉDICO (NOVA)
+// 11. ABA DEPARTAMENTO MÉDICO
 const DmTab = ({ allPlayersData, isAdmin }) => {
     // Mock data para demonstração inicial
     const [injuries, setInjuries] = useState([
@@ -2491,30 +2579,30 @@ const DmTab = ({ allPlayersData, isAdmin }) => {
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Registrar Nova Lesão">
                 <form onSubmit={handleAddInjury} className="space-y-4">
                     <div>
-                        <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Atleta Lesionado</label>
-                        <select name="playerName" className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none font-bold text-slate-800 dark:text-white" required>
+                        <label htmlFor="dm-player" className="block text-xs font-bold uppercase text-slate-500 mb-1">Atleta Lesionado</label>
+                        <select id="dm-player" name="playerName" className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none font-bold text-slate-800 dark:text-white" required>
                             {[...allPlayersData].sort((a,b)=>a.name.localeCompare(b.name)).map(p => (
                                 <option key={p.name} value={p.name}>{p.name}</option>
                             ))}
                         </select>
                     </div>
                     <div>
-                        <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Diagnóstico / Lesão</label>
-                        <input name="injury" type="text" placeholder="Ex: Estiramento no joelho direito" className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none text-slate-800 dark:text-white" required />
+                        <label htmlFor="dm-injury" className="block text-xs font-bold uppercase text-slate-500 mb-1">Diagnóstico / Lesão</label>
+                        <input id="dm-injury" name="injury" type="text" placeholder="Ex: Estiramento no joelho direito" className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none text-slate-800 dark:text-white" required />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Data do Ocorrido</label>
-                            <input name="date" type="date" className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none text-slate-800 dark:text-white" required />
+                            <label htmlFor="dm-date" className="block text-xs font-bold uppercase text-slate-500 mb-1">Data do Ocorrido</label>
+                            <input id="dm-date" name="date" type="date" className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none text-slate-800 dark:text-white" required />
                         </div>
                         <div>
-                            <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Previsão Retorno</label>
-                            <input name="expectedReturn" type="date" className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none text-slate-800 dark:text-white" required />
+                            <label htmlFor="dm-return" className="block text-xs font-bold uppercase text-slate-500 mb-1">Previsão Retorno</label>
+                            <input id="dm-return" name="expectedReturn" type="date" className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none text-slate-800 dark:text-white" required />
                         </div>
                     </div>
                     <div>
-                        <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Fase do Tratamento</label>
-                        <select name="status" className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none font-bold text-slate-800 dark:text-white" required>
+                        <label htmlFor="dm-status" className="block text-xs font-bold uppercase text-slate-500 mb-1">Fase do Tratamento</label>
+                        <select id="dm-status" name="status" className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none font-bold text-slate-800 dark:text-white" required>
                             <option value="Aguardando Exames">Aguardando Exames</option>
                             <option value="Repouso Absoluto">Repouso Absoluto</option>
                             <option value="Fisioterapia">Fisioterapia</option>
@@ -2695,7 +2783,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
     const [refreshTrigger, setRefreshTrigger] = useState(0);
 
     const { data: initialData, isLoading, refetch } = useDataQuery(
-        () => api.post(SCRIPT_URL, { action: 'getInitialAppData' }), 
+        (signal) => api.post(SCRIPT_URL, { action: 'getInitialAppData' }, signal), 
         [refreshTrigger]
     );
     
