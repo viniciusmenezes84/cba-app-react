@@ -62,6 +62,54 @@ const ThemeProvider = ({ children }) => {
 
 const useTheme = () => useContext(ThemeContext);
 
+// --- ERROR BOUNDARY ---
+// Sem isso, qualquer exceção não tratada em qualquer componente (ex: RelatoriosTab)
+// derruba a árvore inteira do React e o usuário vê uma tela branca sem explicação.
+class ErrorBoundary extends React.Component {
+    constructor(props) {
+        super(props);
+        this.state = { hasError: false, error: null };
+    }
+
+    static getDerivedStateFromError(error) {
+        return { hasError: true, error };
+    }
+
+    componentDidCatch(error, errorInfo) {
+        // Mantém só um log de console (não há serviço de monitoramento configurado);
+        // se um dia integrar Sentry/LogRocket, é aqui que entra a chamada.
+        console.error('Erro não tratado capturado pelo ErrorBoundary:', error, errorInfo);
+    }
+
+    handleReload = () => {
+        this.setState({ hasError: false, error: null });
+        window.location.reload();
+    };
+
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white p-6">
+                    <div className="max-w-md w-full text-center bg-slate-800 rounded-2xl p-8 border border-slate-700 shadow-2xl">
+                        <AlertCircle className="w-14 h-14 text-rose-500 mx-auto mb-4" />
+                        <h1 className="text-xl font-black mb-2">Algo deu errado</h1>
+                        <p className="text-slate-400 text-sm mb-6">
+                            Ocorreu um erro inesperado nesta tela. Você pode tentar recarregar o app.
+                        </p>
+                        <button
+                            onClick={this.handleReload}
+                            className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl transition-colors"
+                        >
+                            Recarregar
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+        return this.props.children;
+    }
+}
+
 // --- UTILITÁRIOS DE API CENTRALIZADOS ---
 // Agora aceita um `signal` (AbortController) para permitir cancelar requisições
 // quando o componente que as originou é desmontado (ex: usuário troca de aba rápido).
@@ -88,6 +136,32 @@ const api = {
             throw error;
         }
     }
+};
+
+// --- CARREGADOR ÚNICO DO html2pdf.js ---
+// Antes: o script era injetado em dois lugares (App root + RelatoriosTab) sem
+// nenhuma trava, então duas montagens concorrentes podiam disparar dois <script>
+// simultâneos. Também não tinha carregado via bundler (fica de fora do controle
+// de versão do npm) e não tinha `crossOrigin`/`referrerPolicy`, então o navegador
+// não valida a origem da resposta do CDN antes de executar o JS.
+// OBS: SRI (atributo `integrity`) não foi adicionado aqui porque a Cloudflare
+// atualiza o arquivo dentro da mesma versão às vezes, o que quebraria o hash
+// silenciosamente. Se quiser SRI de verdade, o caminho certo é trazer o pacote
+// via `npm install html2pdf.js` e importar normalmente — fica fora do CDN.
+let html2pdfLoadPromise = null;
+const loadHtml2PdfScript = () => {
+    if (window.html2pdf) return Promise.resolve();
+    if (html2pdfLoadPromise) return html2pdfLoadPromise;
+    html2pdfLoadPromise = new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+        script.crossOrigin = 'anonymous';
+        script.referrerPolicy = 'no-referrer';
+        script.onload = () => resolve();
+        script.onerror = (err) => { html2pdfLoadPromise = null; reject(err); };
+        document.head.appendChild(script);
+    });
+    return html2pdfLoadPromise;
 };
 
 // --- CUSTOM HOOK PARA CACHE E DESEMPENHO ---
@@ -822,20 +896,12 @@ const RelatoriosTab = ({ allPlayersData, dates, financeData, currentUser }) => {
     const handleExportPDF = async () => {
         setIsGeneratingPDF(true);
 
-        if (!window.html2pdf) {
-            try {
-                await new Promise((resolve, reject) => {
-                    const script = document.createElement('script');
-                    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-                    script.onload = resolve;
-                    script.onerror = reject;
-                    document.head.appendChild(script);
-                });
-            } catch (err) {
-                setInfoModal({ isOpen: true, title: 'Erro', message: 'Erro ao carregar a biblioteca de PDF. Verifique a sua conexão.' });
-                setIsGeneratingPDF(false);
-                return;
-            }
+        try {
+            await loadHtml2PdfScript();
+        } catch (err) {
+            setInfoModal({ isOpen: true, title: 'Erro', message: 'Erro ao carregar a biblioteca de PDF. Verifique a sua conexão.' });
+            setIsGeneratingPDF(false);
+            return;
         }
 
         setTimeout(() => {
@@ -1433,7 +1499,7 @@ const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin, scri
                         <div className="bg-white p-3 rounded-2xl mb-6 shadow-2xl inline-block"><img src={`https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(pixCode)}&size=160x160`} alt="QR Code PIX" className="w-40 h-40 rounded-xl" /></div>
                         <div className="w-full bg-indigo-800/50 p-4 rounded-2xl flex gap-2 border border-indigo-500/30">
                             <input type="text" readOnly value={pixCode} className="w-full bg-transparent text-sm outline-none truncate" />
-                            <button onClick={handleCopyPix} className="p-2 bg-indigo-500 rounded-lg hover:bg-indigo-400 transition-colors"><Copy className="w-4 h-4"/></button>
+                            <button onClick={handleCopyPix} aria-label="Copiar código Pix" className="p-2 bg-indigo-500 rounded-lg hover:bg-indigo-400 transition-colors"><Copy className="w-4 h-4"/></button>
                         </div>
                         {copySuccess && <p className="text-emerald-400 text-xs font-bold mt-2">{copySuccess}</p>}
                     </div>
@@ -1512,8 +1578,8 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, refreshKey }) => {
                     <GlassCard key={game.id} className="flex flex-col border-t-4 border-t-indigo-500 relative">
                         {isAdmin && (
                             <div className="absolute top-2 right-2 flex gap-1 bg-white/50 dark:bg-slate-800/50 rounded-lg p-1 backdrop-blur-sm">
-                                <button onClick={() => { setEditingGame(game); setIsModalOpen(true); }} className="p-1.5 text-slate-500 hover:text-indigo-600"><Edit className="w-4 h-4"/></button>
-                                <button onClick={() => setConfirmDelete(game)} className="p-1.5 text-slate-500 hover:text-red-600"><Trash className="w-4 h-4"/></button>
+                                <button onClick={() => { setEditingGame(game); setIsModalOpen(true); }} aria-label="Editar jogo" className="p-1.5 text-slate-500 hover:text-indigo-600"><Edit className="w-4 h-4"/></button>
+                                <button onClick={() => setConfirmDelete(game)} aria-label="Excluir jogo" className="p-1.5 text-slate-500 hover:text-red-600"><Trash className="w-4 h-4"/></button>
                             </div>
                         )}
                         <div className="flex justify-between items-start mb-4 mt-2">
@@ -1633,8 +1699,8 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, refreshKey }) => {
                         <GlassCard key={event.id} className="flex flex-col relative">
                             {isAdmin && (
                                 <div className="absolute top-4 right-4 flex gap-1 bg-slate-100 dark:bg-slate-700 rounded-lg p-1">
-                                    <button onClick={() => { setEditingEvent(event); setIsModalOpen(true); }} className="p-1.5 text-slate-500 hover:text-indigo-600"><Edit className="w-4 h-4"/></button>
-                                    <button onClick={() => setConfirmDelete(event)} className="p-1.5 text-slate-500 hover:text-red-600"><Trash className="w-4 h-4"/></button>
+                                    <button onClick={() => { setEditingEvent(event); setIsModalOpen(true); }} aria-label="Editar evento" className="p-1.5 text-slate-500 hover:text-indigo-600"><Edit className="w-4 h-4"/></button>
+                                    <button onClick={() => setConfirmDelete(event)} aria-label="Excluir evento" className="p-1.5 text-slate-500 hover:text-red-600"><Trash className="w-4 h-4"/></button>
                                 </div>
                             )}
                             <h3 className="text-2xl font-black text-indigo-600 dark:text-indigo-400 w-3/4">{event.name}</h3>
@@ -2120,7 +2186,7 @@ const NotificacoesTab = ({ scriptUrl }) => {
                                 Nenhum envio registado no sistema.
                             </div>
                         ) : notifications.map((notif, idx) => (
-                            <div key={idx} className="p-5 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700 hover:shadow-md transition-shadow">
+                            <div key={notif.id ?? `${notif.timestamp}-${idx}`} className="p-5 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700 hover:shadow-md transition-shadow">
                                 <div className="flex justify-between items-start mb-2">
                                     <h3 className="font-black text-slate-800 dark:text-white text-lg leading-tight">{notif.title}</h3>
                                     <span className="text-[10px] uppercase font-bold text-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 px-2 py-1 rounded">Aba: {notif.targetTab || 'N/D'}</span>
@@ -2401,7 +2467,7 @@ const MesarioTab = ({ allPlayersData, scriptUrl, onStatsSaved }) => {
                             </div>
 
                             {/* O Ícone Fixo */}
-                            <button className="bg-slate-800 text-white p-3 rounded-full shadow-lg border border-slate-600 hover:bg-slate-700 transition-colors z-10 flex items-center justify-center">
+                            <button type="button" tabIndex={-1} aria-hidden="true" className="bg-slate-800 text-white p-3 rounded-full shadow-lg border border-slate-600 hover:bg-slate-700 transition-colors z-10 flex items-center justify-center pointer-events-none">
                                 <Trophy className="w-5 h-5 text-yellow-500" />
                             </button>
                         </div>
@@ -2875,12 +2941,12 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
             <div className="flex-1 flex flex-col h-full overflow-hidden w-full relative">
                 <header className="shrink-0 p-4 flex justify-between items-center bg-white/40 dark:bg-slate-800/30 backdrop-blur-md border-b border-slate-200/50 dark:border-slate-700/50 z-30">
                     <div className="flex items-center gap-3">
-                        <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2 text-slate-600 dark:text-slate-300 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800"><Menu className="w-6 h-6" /></button>
+                        <button onClick={() => setIsSidebarOpen(true)} aria-label="Abrir menu de navegação" className="md:hidden p-2 text-slate-600 dark:text-slate-300 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800"><Menu className="w-6 h-6" /></button>
                         <img src={user.fotoUrl || 'https://placehold.co/100'} alt="Avatar" className="h-10 w-10 rounded-full object-cover shadow-sm ring-2 ring-white dark:ring-slate-700" crossOrigin="anonymous" />
                         <div className="hidden sm:block"><h1 className="text-xl font-black leading-none">Portal CBA</h1><p className="text-indigo-600 dark:text-indigo-400 font-bold text-[10px] uppercase tracking-widest">{user.name}</p></div>
                     </div>
                     <div className="flex gap-2">
-                        <button onClick={handleForceRefresh} className="p-2 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl shadow-sm hover:shadow-md"><RefreshCw className="w-5 h-5" /></button>
+                        <button onClick={handleForceRefresh} aria-label="Atualizar dados" title="Atualizar dados" className="p-2 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl shadow-sm hover:shadow-md"><RefreshCw className="w-5 h-5" /></button>
                         <button onClick={onLogout} className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-rose-500 font-bold text-sm rounded-xl hover:bg-rose-50 dark:hover:bg-rose-900/20 border border-slate-200 dark:border-slate-700 flex items-center gap-2"><LogOut className="w-4 h-4 hidden sm:block"/> Sair</button>
                     </div>
                 </header>
@@ -2890,17 +2956,66 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
     );
 };
 
-export default function App() {
-    const [auth, setAuth] = useState({ status: 'unauthenticated', user: null, error: null });
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwNXGI4Cc5qGBye-IfWW_qqUcJ04NfArulExPXE4jgX0SZhWAmeWCjjKg2U9FFfHkHE/exec";
+// --- PERSISTÊNCIA DE SESSÃO (client-side apenas) ---
+// IMPORTANTE — leia antes de mexer:
+// O backend (Apps Script, ação `loginUser`) não emite nenhum token de sessão,
+// só devolve o objeto do usuário (incluindo `role`). Isso significa que:
+//   1. Esta persistência só evita o incômodo de logar de novo a cada F5 —
+//      ela NÃO é, e não pode ser, uma camada de segurança.
+//   2. `isAdmin` continua sendo decidido 100% no cliente a partir do `role`
+//      que veio (uma vez) do backend. Qualquer ação sensível (deletar jogo,
+//      editar finanças, marcar presença de outro sócio) TEM que ser
+//      revalidada no Apps Script antes de executar — o front nunca pode ser
+//      a única barreira. Se o backend ainda não faz isso, é o próximo passo
+//      crítico, não isso aqui.
+//   3. Sessão expira sozinha depois de SESSION_TTL_MS para reduzir a janela
+//      de uso de um localStorage roubado/copiado de outro dispositivo.
+const SESSION_STORAGE_KEY = 'cba_session_v1';
+const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 horas
 
-    useEffect(() => {
-        if (!window.html2pdf) {
-            const script = document.createElement('script');
-            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-            document.body.appendChild(script);
+const loadPersistedSession = () => {
+    try {
+        const raw = localStorage.getItem(SESSION_STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed?.user || !parsed?.savedAt) return null;
+        if (Date.now() - parsed.savedAt > SESSION_TTL_MS) {
+            localStorage.removeItem(SESSION_STORAGE_KEY);
+            return null;
         }
-    }, []);
+        return parsed.user;
+    } catch {
+        localStorage.removeItem(SESSION_STORAGE_KEY);
+        return null;
+    }
+};
+
+const persistSession = (user) => {
+    try {
+        localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({ user, savedAt: Date.now() }));
+    } catch {
+        // Ambiente sem localStorage disponível (modo privado, quota cheia, etc.) — ignora silenciosamente.
+    }
+};
+
+const clearPersistedSession = () => {
+    try { localStorage.removeItem(SESSION_STORAGE_KEY); } catch { /* noop */ }
+};
+
+function AppInner() {
+    const [auth, setAuth] = useState(() => {
+        const restoredUser = loadPersistedSession();
+        return restoredUser
+            ? { status: 'authenticated', user: restoredUser, error: null }
+            : { status: 'unauthenticated', user: null, error: null };
+    });
+    // TODO (backend): a URL do Web App do Apps Script fica visível no bundle JS de
+    // qualquer forma (é inerente ao Apps Script), mas o backend precisa, no mínimo:
+    //   - revalidar `role === 'ADMIN'` a cada ação administrativa recebida;
+    //   - ter algum rate limiting por e-mail/IP na ação `loginUser` (força bruta);
+    //   - nunca confiar em nenhum campo que vier do payload do cliente sem checar
+    //     contra o registro do usuário already autenticado na planilha/base.
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwNXGI4Cc5qGBye-IfWW_qqUcJ04NfArulExPXE4jgX0SZhWAmeWCjjKg2U9FFfHkHE/exec";
 
     const handleLogin = async (e) => {
         e.preventDefault();
@@ -2908,14 +3023,31 @@ export default function App() {
         const formData = new FormData(e.currentTarget);
         try {
             const data = await api.post(SCRIPT_URL, { action: 'loginUser', email: formData.get('email'), password: formData.get('password') });
-            if (data.status === 'approved') setAuth({ status: 'authenticated', user: data, error: null });
-            else setAuth({ status: 'unauthenticated', user: null, error: data.message });
+            if (data.status === 'approved') {
+                persistSession(data);
+                setAuth({ status: 'authenticated', user: data, error: null });
+            } else {
+                setAuth({ status: 'unauthenticated', user: null, error: data.message });
+            }
         } catch (error) { setAuth({ status: 'unauthenticated', user: null, error: 'Falha no servidor.' }); }
+    };
+
+    const handleLogout = () => {
+        clearPersistedSession();
+        setAuth({ status: 'unauthenticated', user: null, error: null });
     };
 
     return (
         <ThemeProvider>
-            {auth.status === 'authenticated' ? <MainApp user={auth.user} onLogout={() => setAuth({ status: 'unauthenticated', user: null, error: null })} SCRIPT_URL={SCRIPT_URL} /> : <LoginScreen onLogin={handleLogin} isLoading={auth.status === 'loading'} error={auth.error} />}
+            {auth.status === 'authenticated' ? <MainApp user={auth.user} onLogout={handleLogout} SCRIPT_URL={SCRIPT_URL} /> : <LoginScreen onLogin={handleLogin} isLoading={auth.status === 'loading'} error={auth.error} />}
         </ThemeProvider>
+    );
+}
+
+export default function App() {
+    return (
+        <ErrorBoundary>
+            <AppInner />
+        </ErrorBoundary>
     );
 }
