@@ -18,7 +18,6 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarEleme
 const MONTHS_MAP = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
 // --- UTILITÁRIO ÚNICO DE SHUFFLE (Fisher-Yates) ---
-// Usado em todo o app sempre que for necessário embaralhar uma lista de forma justa.
 const shuffleArray = (array) => {
     const result = [...array];
     for (let i = result.length - 1; i > 0; i--) {
@@ -28,7 +27,7 @@ const shuffleArray = (array) => {
     return result;
 };
 
-// Funções puras de finanças (ÚNICA fonte de verdade - não duplicar em nenhum componente)
+// Funções puras de finanças
 const getEnhancedStatus = (monthName, originalStatus) => {
     const statusStr = String(originalStatus || '').trim().toLowerCase();
     if (statusStr === 'isento') return { text: 'Isento', code: 'isento' };
@@ -63,8 +62,6 @@ const ThemeProvider = ({ children }) => {
 const useTheme = () => useContext(ThemeContext);
 
 // --- ERROR BOUNDARY ---
-// Sem isso, qualquer exceção não tratada em qualquer componente (ex: RelatoriosTab)
-// derruba a árvore inteira do React e o usuário vê uma tela branca sem explicação.
 class ErrorBoundary extends React.Component {
     constructor(props) {
         super(props);
@@ -76,8 +73,6 @@ class ErrorBoundary extends React.Component {
     }
 
     componentDidCatch(error, errorInfo) {
-        // Mantém só um log de console (não há serviço de monitoramento configurado);
-        // se um dia integrar Sentry/LogRocket, é aqui que entra a chamada.
         console.error('Erro não tratado capturado pelo ErrorBoundary:', error, errorInfo);
     }
 
@@ -93,13 +88,8 @@ class ErrorBoundary extends React.Component {
                     <div className="max-w-md w-full text-center bg-slate-800 rounded-2xl p-8 border border-slate-700 shadow-2xl">
                         <AlertCircle className="w-14 h-14 text-rose-500 mx-auto mb-4" />
                         <h1 className="text-xl font-black mb-2">Algo deu errado</h1>
-                        <p className="text-slate-400 text-sm mb-6">
-                            Ocorreu um erro inesperado nesta tela. Você pode tentar recarregar o app.
-                        </p>
-                        <button
-                            onClick={this.handleReload}
-                            className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl transition-colors"
-                        >
+                        <p className="text-slate-400 text-sm mb-6">Ocorreu um erro inesperado nesta tela. Você pode tentar recarregar o app.</p>
+                        <button onClick={this.handleReload} className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl transition-colors">
                             Recarregar
                         </button>
                     </div>
@@ -111,8 +101,6 @@ class ErrorBoundary extends React.Component {
 }
 
 // --- UTILITÁRIOS DE API CENTRALIZADOS ---
-// Agora aceita um `signal` (AbortController) para permitir cancelar requisições
-// quando o componente que as originou é desmontado (ex: usuário troca de aba rápido).
 const api = {
     post: async (baseUrl, params, signal) => {
         try {
@@ -138,16 +126,6 @@ const api = {
     }
 };
 
-// --- CARREGADOR ÚNICO DO html2pdf.js ---
-// Antes: o script era injetado em dois lugares (App root + RelatoriosTab) sem
-// nenhuma trava, então duas montagens concorrentes podiam disparar dois <script>
-// simultâneos. Também não tinha carregado via bundler (fica de fora do controle
-// de versão do npm) e não tinha `crossOrigin`/`referrerPolicy`, então o navegador
-// não valida a origem da resposta do CDN antes de executar o JS.
-// OBS: SRI (atributo `integrity`) não foi adicionado aqui porque a Cloudflare
-// atualiza o arquivo dentro da mesma versão às vezes, o que quebraria o hash
-// silenciosamente. Se quiser SRI de verdade, o caminho certo é trazer o pacote
-// via `npm install html2pdf.js` e importar normalmente — fica fora do CDN.
 let html2pdfLoadPromise = null;
 const loadHtml2PdfScript = () => {
     if (window.html2pdf) return Promise.resolve();
@@ -165,8 +143,6 @@ const loadHtml2PdfScript = () => {
 };
 
 // --- CUSTOM HOOK PARA CACHE E DESEMPENHO ---
-// Agora cancela a requisição em andamento caso o componente desmonte antes dela terminar,
-// evitando "setState em componente desmontado" e condições de corrida entre fetches.
 function useDataQuery(queryFn, dependencies = []) {
     const [data, setData] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -246,20 +222,12 @@ const Loader = ({ message }) => (
     </motion.div>
 );
 
-// --- MODAL ACESSÍVEL ---
-// Agora fecha com "Esc", prende o foco (focus trap) dentro do modal enquanto aberto,
-// e move o foco automaticamente para o primeiro elemento focável ao abrir.
 const Modal = ({ isOpen, onClose, title, children }) => {
     const dialogRef = useRef(null);
 
     useEffect(() => {
         if (!isOpen) return;
-
-        const getFocusable = () =>
-            dialogRef.current?.querySelectorAll(
-                'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-            );
-
+        const getFocusable = () => dialogRef.current?.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
         const handleKeyDown = (e) => {
             if (e.key === 'Escape') { onClose(); return; }
             if (e.key !== 'Tab') return;
@@ -645,6 +613,7 @@ const PresencaTab = ({ allPlayersData, dates, financeData, isLoading, error, nex
 const RelatoriosTab = ({ allPlayersData, dates, financeData, currentUser }) => {
     const [selectedPlayer, setSelectedPlayer] = useState('todos');
     const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+    const [isGeneratingMonthlyPDF, setIsGeneratingMonthlyPDF] = useState(false);
     const [infoModal, setInfoModal] = useState({ isOpen: false, title: '', message: '' });
     const [statDate, setStatDate] = useState('media');
     const [rankingTab, setRankingTab] = useState('presencas');
@@ -734,6 +703,11 @@ const RelatoriosTab = ({ allPlayersData, dates, financeData, currentUser }) => {
         return data;
     }, [allPlayersData, playedDates, selectedYear]);
 
+    const topCestinhaName = useMemo(() => {
+        const sorted = [...reportData].sort((a, b) => b.yearlyPoints - a.yearlyPoints);
+        return sorted.length > 0 && sorted[0].yearlyPoints > 0 ? sorted[0].name : null;
+    }, [reportData]);
+
     const topStats = useMemo(() => {
         if (!reportData || reportData.length === 0) return {};
         const sortedPts = [...reportData].sort((a, b) => b.yearlyPoints - a.yearlyPoints);
@@ -753,7 +727,6 @@ const RelatoriosTab = ({ allPlayersData, dates, financeData, currentUser }) => {
 
     const singlePlayer = useMemo(() => reportData.find(p => p.name === selectedPlayer), [reportData, selectedPlayer]);
     
-    // Calcula os valores maximos de PPJ e RPJ para criar as barras de progresso relativas do Infografico PDF
     const maxPPJ = useMemo(() => Math.max(0, ...reportData.map(p => p.ppjYear)), [reportData]);
     const maxRPJ = useMemo(() => Math.max(0, ...reportData.map(p => p.rpjYear)), [reportData]);
 
@@ -895,23 +868,18 @@ const RelatoriosTab = ({ allPlayersData, dates, financeData, currentUser }) => {
 
     const handleExportPDF = async () => {
         setIsGeneratingPDF(true);
-
         try {
             await loadHtml2PdfScript();
         } catch (err) {
-            setInfoModal({ isOpen: true, title: 'Erro', message: 'Erro ao carregar a biblioteca de PDF. Verifique a sua conexão.' });
+            setInfoModal({ isOpen: true, title: 'Erro', message: 'Erro ao carregar a biblioteca de PDF.' });
             setIsGeneratingPDF(false);
             return;
         }
 
         setTimeout(() => {
             const element = document.getElementById('pdf-corporate-report');
-            if (!element) {
-                setIsGeneratingPDF(false);
-                return;
-            }
+            if (!element) { setIsGeneratingPDF(false); return; }
 
-            // Configuração refinada para A4 perfeito. 717px de largura no HTML casa perfeitamente com A4 + 0.4in de margens.
             const opt = {
                 margin:       [0.4, 0.4, 0.4, 0.4], 
                 filename:     `Relatorio_CBA_${selectedYear}_${selectedPlayer === 'todos' ? 'Geral' : selectedPlayer.replace(/\s+/g, '_')}.pdf`,
@@ -921,29 +889,47 @@ const RelatoriosTab = ({ allPlayersData, dates, financeData, currentUser }) => {
                 pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
             };
 
-            try {
-                window.html2pdf().set(opt).from(element).toPdf().get('pdf').then((pdf) => {
-                    const totalPages = pdf.internal.getNumberOfPages();
-                    for (let i = 1; i <= totalPages; i++) {
-                        pdf.setPage(i);
-                        pdf.setFontSize(9);
-                        pdf.setTextColor(150);
-                        const text = `Basquete dos Aposentados - Relatório Confidencial | Página ${i} de ${totalPages}`;
-                        const textWidth = pdf.getStringUnitWidth(text) * pdf.internal.getFontSize();
-                        const x = (pdf.internal.pageSize.getWidth() - textWidth) / 2;
-                        pdf.text(text, x, pdf.internal.pageSize.getHeight() - 0.2);
-                    }
-                }).save().then(() => {
-                    setIsGeneratingPDF(false);
-                }).catch((err) => {
-                    console.error('Erro PDF:', err);
-                    setIsGeneratingPDF(false);
-                });
-            } catch (err) {
-                console.error('Erro Fatal PDF:', err);
-                setIsGeneratingPDF(false);
-            }
+            window.html2pdf().set(opt).from(element).toPdf().get('pdf').then((pdf) => {
+                const totalPages = pdf.internal.getNumberOfPages();
+                for (let i = 1; i <= totalPages; i++) {
+                    pdf.setPage(i);
+                    pdf.setFontSize(9);
+                    pdf.setTextColor(150);
+                    const text = `Basquete dos Aposentados - Relatório Confidencial | Página ${i} de ${totalPages}`;
+                    const textWidth = pdf.getStringUnitWidth(text) * pdf.internal.getFontSize();
+                    const x = (pdf.internal.pageSize.getWidth() - textWidth) / 2;
+                    pdf.text(text, x, pdf.internal.pageSize.getHeight() - 0.2);
+                }
+            }).save().then(() => setIsGeneratingPDF(false)).catch(() => setIsGeneratingPDF(false));
         }, 500); 
+    };
+
+    const handleExportMonthlyPDF = async () => {
+        setIsGeneratingMonthlyPDF(true);
+        try {
+            await loadHtml2PdfScript();
+        } catch (err) {
+            setInfoModal({ isOpen: true, title: 'Erro', message: 'Erro ao carregar a biblioteca de PDF.' });
+            setIsGeneratingMonthlyPDF(false);
+            return;
+        }
+
+        setTimeout(() => {
+            const element = document.getElementById('pdf-monthly-report');
+            if (!element) { setIsGeneratingMonthlyPDF(false); return; }
+
+            // Modo paisagem (landscape) para acomodar perfeitamente todas as colunas mensais
+            const opt = {
+                margin:       [0.3, 0.3, 0.3, 0.3], 
+                filename:     `Resumo_Mensal_Assiduidade_${selectedYear}.pdf`,
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2, useCORS: true, scrollX: 0, scrollY: 0 }, 
+                jsPDF:        { unit: 'in', format: 'a4', orientation: 'landscape' },
+                pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
+            };
+
+            window.html2pdf().set(opt).from(element).save().then(() => setIsGeneratingMonthlyPDF(false)).catch(() => setIsGeneratingMonthlyPDF(false));
+        }, 500);
     };
 
     const handleShareWhatsApp = () => {
@@ -992,14 +978,20 @@ const RelatoriosTab = ({ allPlayersData, dates, financeData, currentUser }) => {
                             {[...allPlayersData].sort((a,b)=>a.name.localeCompare(b.name)).map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
                         </select>
                     </div>
-                    <div className="flex gap-2 mt-2 md:mt-0">
-                        <button onClick={handleShareWhatsApp} className="flex-1 md:flex-none p-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md" title="Enviar resumo por WhatsApp">
+                    <div className="flex gap-2 mt-2 md:mt-0 flex-wrap">
+                        <button onClick={handleShareWhatsApp} className="p-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md" title="Enviar resumo por WhatsApp">
                             <Share2 className="h-5 w-5" />
                             <span className="hidden sm:block">Partilhar</span>
                         </button>
-                        <button onClick={handleExportPDF} disabled={isGeneratingPDF} className="flex-1 md:flex-none p-3 bg-rose-500 hover:bg-rose-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md disabled:opacity-50" title="Gerar PDF corporativo">
+                        
+                        <button onClick={handleExportMonthlyPDF} disabled={isGeneratingMonthlyPDF} className="p-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md disabled:opacity-50" title="Relatório de Assiduidade Mensal">
+                            {isGeneratingMonthlyPDF ? <RefreshCw className="animate-spin h-5 w-5 text-white" /> : <CalendarDays className="h-5 w-5 text-white" />}
+                            <span>{isGeneratingMonthlyPDF ? 'Gerando...' : 'Resumo Mensal'}</span>
+                        </button>
+
+                        <button onClick={handleExportPDF} disabled={isGeneratingPDF} className="p-3 bg-rose-500 hover:bg-rose-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md disabled:opacity-50" title="Gerar PDF corporativo">
                             {isGeneratingPDF ? <RefreshCw className="animate-spin h-5 w-5 text-white" /> : <BookOpen className="h-5 w-5 text-white" />}
-                            <span className="hidden sm:block">{isGeneratingPDF ? 'Gerando...' : 'Exportar PDF'}</span>
+                            <span>{isGeneratingPDF ? 'Gerando...' : 'Relatório Anual'}</span>
                         </button>
                     </div>
                 </div>
@@ -1032,7 +1024,7 @@ const RelatoriosTab = ({ allPlayersData, dates, financeData, currentUser }) => {
                                     {singlePlayer.percentage >= 80 && financeData?.paymentStatus?.find(f => f.player.toLowerCase() === singlePlayer.name.toLowerCase()) && calculatePlayerDebt(financeData.paymentStatus.find(f => f.player.toLowerCase() === singlePlayer.name.toLowerCase()), financeData) === 0 && (
                                         <span title="Atleta Padrão (80%+ Presença & Mensalidade em dia)" className="text-xl cursor-help hover:scale-125 transition-transform">⭐</span>
                                     )}
-                                    {topStats?.pts?.[0]?.name === singlePlayer.name && (
+                                    {topCestinhaName === singlePlayer.name && (
                                         <span title="Cestinha da Temporada" className="text-xl cursor-help hover:scale-125 transition-transform">🔥</span>
                                     )}
                                 </h2>
@@ -1128,16 +1120,11 @@ const RelatoriosTab = ({ allPlayersData, dates, financeData, currentUser }) => {
             )}
 
             {/* ========================================================= */}
-            {/* NOVO RELATÓRIO PDF CORPORATIVO (Layout Sólido e Limpo)    */}
-            {/* Só é montado no DOM quando um PDF está sendo gerado,      */}
-            {/* evitando manter esse bloco pesado sempre presente.        */}
+            {/* RELATÓRIO ANUAL CORPORATIVO (PDF)                         */}
             {/* ========================================================= */}
             {isGeneratingPDF && (
             <div className="absolute top-0 left-0 -z-50 opacity-0 pointer-events-none">
-                {/* 717px é a largura exata de um A4 descontando margens de 0.4 polegadas. Garante alinhamento perfeito. */}
                 <div id="pdf-corporate-report" style={{ width: '717px', backgroundColor: '#ffffff', boxSizing: 'border-box' }} className="text-slate-800 font-sans p-4">
-                    
-                    {/* CAPA DO RELATÓRIO */}
                     <div style={{ height: '950px', pageBreakAfter: 'always' }} className="flex flex-col justify-center items-center text-center p-12 bg-slate-50 border-8 border-indigo-900 mx-auto">
                         <img src="https://lh3.googleusercontent.com/d/131DvcfgiRLLp9irVnVY8m9qNuM-0y7f8" alt="Logo CBA" className="w-48 h-48 rounded-full mb-8 shadow-sm border-4 border-white" crossOrigin="anonymous" />
                         <h1 className="text-6xl font-black text-slate-900 uppercase tracking-tighter mb-4">Portal CBA</h1>
@@ -1149,7 +1136,6 @@ const RelatoriosTab = ({ allPlayersData, dates, financeData, currentUser }) => {
                         </div>
                     </div>
 
-                    {/* CABEÇALHO PADRÃO NAS PÁGINAS DE DADOS */}
                     <div className="border-b-4 border-indigo-900 pb-4 mb-8 flex justify-between items-end">
                         <div className="flex items-center gap-4">
                             <img src="https://lh3.googleusercontent.com/d/131DvcfgiRLLp9irVnVY8m9qNuM-0y7f8" alt="Logo CBA" className="w-16 h-16 rounded-full border border-slate-200" crossOrigin="anonymous" />
@@ -1166,7 +1152,6 @@ const RelatoriosTab = ({ allPlayersData, dates, financeData, currentUser }) => {
 
                     {selectedPlayer === 'todos' ? (
                         <>
-                            {/* 1. RESUMO OPERACIONAL */}
                             <div className="mb-8">
                                 <h3 className="text-lg font-bold text-slate-800 mb-4 uppercase bg-slate-100 p-2 border-l-4 border-indigo-600">1. Resumo Operacional</h3>
                                 <div className="grid grid-cols-3 gap-4">
@@ -1185,7 +1170,6 @@ const RelatoriosTab = ({ allPlayersData, dates, financeData, currentUser }) => {
                                 </div>
                             </div>
 
-                            {/* 2. DESTAQUES DE ASSIDUIDADE (TOP 10) */}
                             <div className="mb-8 break-inside-avoid">
                                 <h3 className="text-lg font-bold text-slate-800 mb-4 uppercase bg-slate-100 p-2 border-l-4 border-indigo-600">2. Destaques de Assiduidade (Top 10)</h3>
                                 <div className="space-y-3 mt-4 px-4">
@@ -1202,7 +1186,6 @@ const RelatoriosTab = ({ allPlayersData, dates, financeData, currentUser }) => {
                                 </div>
                             </div>
 
-                            {/* 3. TOP 3 FUNDAMENTOS */}
                             <div className="mb-8 break-inside-avoid">
                                 <h3 className="text-lg font-bold text-slate-800 mb-4 uppercase bg-slate-100 p-2 border-l-4 border-indigo-600">3. Líderes por Fundamento (Top 3)</h3>
                                 <div className="grid grid-cols-4 gap-4">
@@ -1249,11 +1232,8 @@ const RelatoriosTab = ({ allPlayersData, dates, financeData, currentUser }) => {
                                 </div>
                             </div>
 
-                            {/* 4. DESEMPENHO GERAL DO ELENCO (INFOGRÁFICO VISUAL) */}
                             <div className="break-inside-avoid">
                                 <h3 className="text-lg font-bold text-slate-800 mb-4 uppercase bg-slate-100 p-2 border-l-4 border-indigo-600">4. Desempenho Geral do Elenco</h3>
-                                
-                                {/* Header Row */}
                                 <div className="flex items-center text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b-2 border-slate-300 pb-2 mb-2 px-2">
                                     <div className="w-[30%]">Atleta</div>
                                     <div className="w-[15%] text-center">Jogos</div>
@@ -1261,44 +1241,32 @@ const RelatoriosTab = ({ allPlayersData, dates, financeData, currentUser }) => {
                                     <div className="w-[20%]">Média Rebotes</div>
                                     <div className="w-[15%] text-right">Assiduidade</div>
                                 </div>
-
-                                {/* Player Rows */}
                                 <div className="space-y-1 mt-3">
                                     {[...reportData].sort((a, b) => b.percentage - a.percentage || b.presences - a.presences).map((p, idx) => {
                                         const ppjWidth = maxPPJ > 0 ? (p.ppjYear / maxPPJ) * 100 : 0;
                                         const rpjWidth = maxRPJ > 0 ? (p.rpjYear / maxRPJ) * 100 : 0;
-
                                         return (
                                             <div key={p.name} className={`flex items-center text-xs py-2.5 px-2 rounded-xl break-inside-avoid border border-slate-100 ${idx % 2 === 0 ? 'bg-slate-50' : 'bg-white'}`}>
-                                                {/* Name & Rank */}
                                                 <div className="w-[30%] flex items-center gap-2 pr-2">
                                                     <span className="w-5 text-right font-bold text-slate-400 text-[10px] shrink-0">{idx + 1}º</span>
                                                     <span className="font-bold text-slate-800 truncate">{p.name}</span>
                                                 </div>
-                                                
-                                                {/* Presences */}
                                                 <div className="w-[15%] flex flex-col items-center justify-center border-l border-slate-200 pl-2">
                                                     <span className="font-bold text-slate-700">{p.presences} <span className="text-[10px] text-slate-400">/ {p.totalGames}</span></span>
                                                     {p.faults > 0 && <span className="text-[8px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-bold mt-0.5">{p.faults} Faltas NJ</span>}
                                                 </div>
-                                                
-                                                {/* PPJ Bar */}
                                                 <div className="w-[20%] flex items-center gap-2 px-3 border-l border-slate-200">
                                                     <div className="flex-1 bg-orange-100 h-2.5 rounded-full overflow-hidden">
                                                         <div className="bg-orange-500 h-full rounded-full" style={{ width: `${ppjWidth}%` }}></div>
                                                     </div>
                                                     <span className="font-black text-orange-600 w-6 text-right shrink-0">{p.ppjYear.toFixed(1)}</span>
                                                 </div>
-
-                                                {/* RPJ Bar */}
                                                 <div className="w-[20%] flex items-center gap-2 px-3 border-l border-slate-200">
                                                     <div className="flex-1 bg-emerald-100 h-2.5 rounded-full overflow-hidden">
                                                         <div className="bg-emerald-500 h-full rounded-full" style={{ width: `${rpjWidth}%` }}></div>
                                                     </div>
                                                     <span className="font-black text-emerald-600 w-6 text-right shrink-0">{p.rpjYear.toFixed(1)}</span>
                                                 </div>
-
-                                                {/* Percentage */}
                                                 <div className="w-[15%] flex items-center justify-end gap-2 border-l border-slate-200 pl-3">
                                                     <div className="flex-1 bg-slate-200 h-2.5 rounded-full overflow-hidden hidden sm:block">
                                                         <div className={`${p.percentage >= 50 ? 'bg-indigo-600' : 'bg-red-500'} h-full rounded-full`} style={{ width: `${p.percentage}%` }}></div>
@@ -1311,61 +1279,153 @@ const RelatoriosTab = ({ allPlayersData, dates, financeData, currentUser }) => {
                                 </div>
                             </div>
                         </>
-                    ) : singlePlayer && (
-                        <div className="space-y-6">
-                            <div className="flex gap-8 mb-8 border-b-2 border-slate-200 pb-6">
-                                {singlePlayer.fotoUrl ? (
-                                    <img src={singlePlayer.fotoUrl} className="w-32 h-32 rounded-2xl object-cover border-4 border-slate-200 shadow-sm" crossOrigin="anonymous" alt="Player"/>
-                                ) : (
-                                     <div className="w-32 h-32 rounded-2xl bg-slate-100 flex items-center justify-center text-5xl font-black text-slate-300 border-4 border-slate-200">{singlePlayer.name.charAt(0)}</div>
-                                )}
-                                <div className="flex flex-col justify-center">
-                                    <h2 className="text-4xl font-black uppercase text-slate-900">{singlePlayer.name}</h2>
-                                    <p className="text-xl text-slate-500 font-bold mt-1">{singlePlayer.percentage.toFixed(0)}% de Assiduidade Anual</p>
-                                    <div className="flex gap-4 mt-3">
-                                         <span className="bg-emerald-100 text-emerald-700 border border-emerald-200 px-3 py-1 rounded-lg text-sm font-bold">✅ {singlePlayer.presences} Presenças</span>
-                                         <span className="bg-slate-100 text-slate-600 border border-slate-200 px-3 py-1 rounded-lg text-sm font-bold">❌ {singlePlayer.totalGames - singlePlayer.presences} Ausências</span>
-                                         {singlePlayer.faults > 0 && <span className="bg-red-100 text-red-700 border border-red-200 px-3 py-1 rounded-lg text-sm font-bold">⚠️ {singlePlayer.faults} Faltas (NJ)</span>}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div>
-                                <h3 className="text-lg font-bold text-slate-800 mb-4 uppercase bg-slate-100 p-2 border-l-4 border-indigo-600">Histórico de Presenças ({selectedYear})</h3>
-                                <div className="flex flex-wrap gap-3">
-                                    {playedDates.sort((a,b) => new Date(a) - new Date(b)).map(date => {
-                                        const statusRaw = singlePlayer.attendance[date]?.trim() || '';
-                                        const isPresent = statusRaw.includes('✅');
-                                        const isJustified = statusRaw.toUpperCase() === 'JUSTIFICOU';
-                                        const isUnjustified = statusRaw.toUpperCase() === 'NÃO JUSTIFICOU';
-                                        
-                                        let statusText = "Ausente";
-                                        let statusColor = "text-slate-500 bg-slate-50 border-slate-200";
-                                        
-                                        if (isPresent) {
-                                            statusText = "Presente";
-                                            statusColor = "text-emerald-700 bg-emerald-50 border-emerald-200";
-                                        } else if (isUnjustified) {
-                                            statusText = "Falta (NJ)";
-                                            statusColor = "text-red-700 bg-red-50 border-red-200";
-                                        } else if (isJustified) {
-                                            statusText = "Justificado";
-                                            statusColor = "text-amber-700 bg-amber-50 border-amber-200";
-                                        }
-
-                                        return (
-                                            <div key={date} className={`px-4 py-2 w-[31%] rounded-xl border flex justify-between items-center ${statusColor}`}>
-                                                <span className="font-bold text-sm">{date.split('-').reverse().join('/')}</span>
-                                                <span className="text-[10px] font-black uppercase">{statusText}</span>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        </div>
-                    )}
+                    ) : null}
                 </div>
             </div>
+            )}
+
+            {/* ========================================================= */}
+            {/* RESUMO MENSAL DE ASSIDUIDADE (PDF - LANDSCAPE)            }
+            {/* ========================================================= */}
+            {isGeneratingMonthlyPDF && (
+                <div className="absolute top-0 left-0 -z-50 opacity-0 pointer-events-none">
+                    <div id="pdf-monthly-report" style={{ width: '1080px', backgroundColor: '#ffffff', boxSizing: 'border-box' }} className="text-slate-800 font-sans p-8">
+                        
+                        {/* CABEÇALHO DO RELATÓRIO MENSAL */}
+                        <div className="border-b-4 border-indigo-900 pb-4 mb-6 flex justify-between items-end">
+                            <div className="flex items-center gap-4">
+                                <img src="https://lh3.googleusercontent.com/d/131DvcfgiRLLp9irVnVY8m9qNuM-0y7f8" alt="Logo CBA" className="w-16 h-16 rounded-full border border-slate-200" crossOrigin="anonymous" />
+                                <div>
+                                    <h2 className="text-3xl font-black text-slate-900 uppercase tracking-tight">Portal CBA</h2>
+                                    <p className="text-slate-500 font-bold uppercase tracking-widest mt-1">Resumo Mensal de Assiduidade - {selectedYear}</p>
+                                </div>
+                            </div>
+                            <div className="text-right">
+                                <p className="text-xs text-slate-400 font-bold uppercase">Gerado em: {new Date().toLocaleDateString('pt-BR')}</p>
+                            </div>
+                        </div>
+
+                        {/* TABELA DE RESUMO MENSAL PROFISSIONAL E PRECISA */}
+                        <div className="overflow-x-auto">
+                            <table className="w-full border-collapse text-xs" style={{ tableLayout: 'fixed' }}>
+                                <thead>
+                                    <tr className="bg-slate-900 text-white border-y-2 border-slate-900">
+                                        <th className="py-3 px-3 text-left font-black w-48 border-r border-slate-700">Atleta</th>
+                                        <th className="py-3 px-2 text-center font-black w-16 border-r border-slate-700">% Ano</th>
+                                        {MONTHS_MAP.map(month => (
+                                            <th key={month} className="py-3 px-1 text-center font-bold border-r border-slate-700 uppercase tracking-wider">
+                                                {month}
+                                            </th>
+                                        ))}
+                                        <th className="py-3 px-1 text-center font-black w-14 border-r border-slate-700" title="Total Presenças">Pres.</th>
+                                        <th className="py-3 px-1 text-center font-black w-14 border-r border-slate-700" title="Total Ausências">Aus.</th>
+                                        <th className="py-3 px-2 text-center font-black w-16" title="Assiduidade Anual">Assid.</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {[...reportData]
+                                        .sort((a, b) => b.percentage - a.percentage || b.presences - a.presences)
+                                        .map((p, idx) => {
+                                            // Recálculo rigoroso e matemático dos totais anuais reais do jogador
+                                            let totalPresYear = 0;
+                                            let totalAbsYear = 0;
+
+                                            MONTHS_MAP.forEach((_, monthIndex) => {
+                                                const monthDates = playedDates.filter(d => {
+                                                    const m = parseInt(d.substring(5, 7), 10) - 1;
+                                                    return m === monthIndex;
+                                                });
+                                                monthDates.forEach(date => {
+                                                    const st = p.attendance[date]?.trim() || '';
+                                                    if (st !== '' && st !== 'N/A') {
+                                                        if (st.includes('✅')) totalPresYear++;
+                                                        else totalAbsYear++;
+                                                    }
+                                                });
+                                            });
+
+                                            const trueTotalGames = totalPresYear + totalAbsYear;
+                                            const truePercentage = trueTotalGames > 0 ? (totalPresYear / trueTotalGames) * 100 : 0;
+                                            const colorBadge = truePercentage >= 80 ? 'text-emerald-700 bg-emerald-50' : truePercentage >= 60 ? 'text-amber-700 bg-amber-50' : 'text-rose-700 bg-rose-50';
+
+                                            return (
+                                                <tr key={p.name} className={`border-b border-slate-200 break-inside-avoid ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}`}>
+                                                    <td className="py-2.5 px-3 font-bold text-slate-800 border-r border-slate-200 truncate">
+                                                        <span className="text-slate-400 text-[10px] mr-1.5">{idx + 1}º</span> {p.name}
+                                                    </td>
+                                                    <td className={`py-2.5 px-2 text-center font-black border-r border-slate-200 ${p.percentage >= 50 ? 'text-indigo-600' : 'text-rose-600'}`}>
+                                                        {p.percentage.toFixed(0)}%
+                                                    </td>
+                                                    
+                                                    {MONTHS_MAP.map((_, monthIndex) => {
+                                                        const monthDates = playedDates.filter(d => {
+                                                            const m = parseInt(d.substring(5, 7), 10) - 1;
+                                                            return m === monthIndex;
+                                                        });
+                                                        
+                                                        if (monthDates.length === 0) {
+                                                            return <td key={monthIndex} className="py-2 px-1 text-center text-slate-300 border-r border-slate-200">—</td>;
+                                                        }
+
+                                                        let presences = 0;
+                                                        let absences = 0;
+
+                                                        monthDates.forEach(date => {
+                                                            const statusRaw = p.attendance[date]?.trim() || '';
+                                                            if (statusRaw !== '' && statusRaw !== 'N/A') {
+                                                                if (statusRaw.includes('✅')) presences++;
+                                                                else absences++;
+                                                            }
+                                                        });
+
+                                                        const hasData = presences > 0 || absences > 0;
+
+                                                        return (
+                                                            <td key={monthIndex} className="py-2 px-1 text-center border-r border-slate-200 align-middle">
+                                                                {hasData ? (
+                                                                    <div className="flex flex-col gap-0.5 items-center justify-center text-[10px]">
+                                                                        {presences > 0 && (
+                                                                            <span className="text-emerald-700 font-bold bg-emerald-50 px-1 rounded border border-emerald-200">
+                                                                                ✓ {presences}
+                                                                            </span>
+                                                                        )}
+                                                                        {absences > 0 && (
+                                                                            <span className="text-rose-700 font-bold bg-rose-50 px-1 rounded border border-rose-200">
+                                                                                ✕ {absences}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                ) : (
+                                                                    <span className="text-slate-300">—</span>
+                                                                )}
+                                                            </td>
+                                                        );
+                                                    })}
+
+                                                    <td className="py-2.5 px-1 text-center font-black text-emerald-700 border-r border-slate-200 bg-emerald-50/40">
+                                                        {totalPresYear}
+                                                    </td>
+                                                    <td className="py-2.5 px-1 text-center font-black text-rose-700 border-r border-slate-200 bg-rose-50/40">
+                                                        {totalAbsYear}
+                                                    </td>
+                                                    <td className={`py-2.5 px-2 text-center font-black ${colorBadge}`}>
+                                                        {truePercentage.toFixed(0)}%
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* LEGENDA INFORMATIVA NO RODAPÉ DO RELATÓRIO MENSAL */}
+                        <div className="mt-6 pt-4 border-t border-slate-200 text-xs font-bold text-slate-600 uppercase flex gap-8 justify-center items-center">
+                            <span className="flex items-center gap-1.5"><span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-bold">✓ X</span> Quantidade de Presenças no Mês</span>
+                            <span className="flex items-center gap-1.5"><span className="text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 font-bold">✕ Y</span> Quantidade de Ausências no Mês</span>
+                            <span className="flex items-center gap-1.5"><span className="text-slate-400">—</span> Sem Jogos Registrados</span>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );
@@ -1383,10 +1443,6 @@ const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin, scri
         if (isAdmin) setSelectedPlayer(financeData.paymentStatus[0].player);
         else setSelectedPlayer(financeData.paymentStatus.find(p => p.player.toLowerCase() === currentUser.name.toLowerCase())?.player || '');
     }, [financeData, isAdmin, currentUser.name]);
-
-    // NOTA: getEnhancedStatus e calculatePlayerDebt foram removidas daqui.
-    // Agora usamos as versões globais, definidas uma única vez no topo do arquivo,
-    // evitando lógica duplicada/divergente entre esta aba e o restante do app.
 
     const adminStats = useMemo(() => {
         if(!financeData?.paymentStatus) return { totalReceber: 0, inadimplentes: [] };
@@ -1797,7 +1853,6 @@ const SorteioTab = ({ allPlayersData, scriptUrl }) => {
 
     const handleDrawTeams = () => {
         if (selectedPlayers.length < 10) { setModalInfo({ isOpen: true, title: 'Atenção', message: 'Selecione pelo menos 10 jogadores para formar dois times.' }); return; }
-        // Fisher-Yates via shuffleArray (função global no topo do arquivo) - embaralhamento estatisticamente correto
         const playersToDraw = shuffleArray(selectedPlayers).slice(0, 10);
         setTeams({ teamBlack: playersToDraw.slice(0, 5), teamRed: playersToDraw.slice(5, 10) });
         setDrawMode('teams');
@@ -1806,8 +1861,6 @@ const SorteioTab = ({ allPlayersData, scriptUrl }) => {
     const handleCustomDraw = () => {
         const num = Number(numToDraw);
         if (selectedPlayers.length < num) { setModalInfo({ isOpen: true, title: 'Atenção', message: `Selecione pelo menos ${num} jogador(es) para sortear.` }); return; }
-        // Fisher-Yates via shuffleArray (função global no topo do arquivo) - substitui o antigo
-        // `.sort(() => 0.5 - Math.random())`, que não produz um embaralhamento uniforme.
         setDrawnPlayers(shuffleArray(selectedPlayers).slice(0, num));
         setDrawMode('custom');
     };
@@ -2956,22 +3009,8 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
     );
 };
 
-// --- PERSISTÊNCIA DE SESSÃO (client-side apenas) ---
-// IMPORTANTE — leia antes de mexer:
-// O backend (Apps Script, ação `loginUser`) não emite nenhum token de sessão,
-// só devolve o objeto do usuário (incluindo `role`). Isso significa que:
-//   1. Esta persistência só evita o incômodo de logar de novo a cada F5 —
-//      ela NÃO é, e não pode ser, uma camada de segurança.
-//   2. `isAdmin` continua sendo decidido 100% no cliente a partir do `role`
-//      que veio (uma vez) do backend. Qualquer ação sensível (deletar jogo,
-//      editar finanças, marcar presença de outro sócio) TEM que ser
-//      revalidada no Apps Script antes de executar — o front nunca pode ser
-//      a única barreira. Se o backend ainda não faz isso, é o próximo passo
-//      crítico, não isso aqui.
-//   3. Sessão expira sozinha depois de SESSION_TTL_MS para reduzir a janela
-//      de uso de um localStorage roubado/copiado de outro dispositivo.
 const SESSION_STORAGE_KEY = 'cba_session_v1';
-const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 horas
+const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 
 const loadPersistedSession = () => {
     try {
@@ -2993,13 +3032,11 @@ const loadPersistedSession = () => {
 const persistSession = (user) => {
     try {
         localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({ user, savedAt: Date.now() }));
-    } catch {
-        // Ambiente sem localStorage disponível (modo privado, quota cheia, etc.) — ignora silenciosamente.
-    }
+    } catch { }
 };
 
 const clearPersistedSession = () => {
-    try { localStorage.removeItem(SESSION_STORAGE_KEY); } catch { /* noop */ }
+    try { localStorage.removeItem(SESSION_STORAGE_KEY); } catch { }
 };
 
 function AppInner() {
@@ -3009,12 +3046,7 @@ function AppInner() {
             ? { status: 'authenticated', user: restoredUser, error: null }
             : { status: 'unauthenticated', user: null, error: null };
     });
-    // TODO (backend): a URL do Web App do Apps Script fica visível no bundle JS de
-    // qualquer forma (é inerente ao Apps Script), mas o backend precisa, no mínimo:
-    //   - revalidar `role === 'ADMIN'` a cada ação administrativa recebida;
-    //   - ter algum rate limiting por e-mail/IP na ação `loginUser` (força bruta);
-    //   - nunca confiar em nenhum campo que vier do payload do cliente sem checar
-    //     contra o registro do usuário already autenticado na planilha/base.
+
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwNXGI4Cc5qGBye-IfWW_qqUcJ04NfArulExPXE4jgX0SZhWAmeWCjjKg2U9FFfHkHE/exec";
 
     const handleLogin = async (e) => {
