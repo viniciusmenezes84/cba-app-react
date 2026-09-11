@@ -1,0 +1,1290 @@
+/**************************************************************************************************************************************************
+ * SCRIPT COMPLETO PARA O PORTAL DO CBA
+ *
+ * ABAS E COLUNAS NECESSÁRIAS NA SUA PLANILHA:
+ * - Users: (colunas: Name, Email, Password, Status, Role, Altura, Posicao, Numero, Especialidade, Data de Entrada, PPJ, RPJ, Foto URL, PushToken)
+ * - Presenca: (colunas: Nome, e depois as datas dos jogos ex: 01/01/2025)
+ * - Sorteios: (colunas: Data, TimePreto, TimeVermelho)
+ * - Eventos: (colunas: ID, Name, Date, Location, Description, Attendees, Value, Deadline)
+ * - Jogos: (colunas: ID, Data, Horario, Local, Confirmados)
+ * - Notificacoes: (colunas: Timestamp, Title, Message)
+ * - Logs: (colunas: Timestamp, ResponseCode, ResponseBody)
+ * - Estatisticas_Diarias: (colunas: Data, Jogador, Pontos 2, Pontos 3, Rebotes, Assistencias, Tocos)
+ * - DM: (colunas: ID, Jogador, Lesão, DataLesao, RetornoPrevisto, Status)
+ * - _app_state: (criada automaticamente, colunas: key, value)
+ **************************************************************************************************************************************************/
+const SPREADSHEET_ID = "1GXgMWO7OZdF3dM9BuvPRGRGW-FONBDti8Io8ktomLIs";
+const FINANCE_SPREADSHEET_ID = "1G2sv1DXNp_pWEAiyYLtnIYYtJqbIRScwrDR2gUwBw-I";
+const CACHE_EXPIRATION_SECONDS = 300;
+const PIX_QR_CODE_STRING = "00020126580014BR.GOV.BCB.PIX0136a1088d36-345c-47fd-9d00-465850268df2520400005303986540520.005802BR592536.560.422 NEILOR DE PAIV6009SAO PAULO610805409000622505213Mk09tVC9si5PFZdoyion63046456";
+
+const MAX_LOGIN_ATTEMPTS = 5; 
+const LOCKOUT_DURATION_SECONDS = 600; 
+
+function clearCache() {
+  try {
+    CacheService.getScriptCache().remove('initial_app_data');
+    Logger.log('Cache de dados limpo com sucesso.');
+  } catch (e) {
+    Logger.log(`Falha ao limpar o cache: ${e.toString()}`);
+  }
+}
+
+function doGet(e) {
+  try {
+    const params = e.parameter;
+    const action = params.action ? params.action.trim() : null;
+
+    if (!action) {
+      return createJsonResponse({ 
+        status: 'success', 
+        message: 'Servidor do CBA está ativo e pronto para receber dados.' 
+      });
+    }
+
+    let responseData;
+    switch (action) {
+      case 'getInitialAppData': responseData = getInitialAppData(); break;
+      case 'getGames': responseData = getGames(); break;
+      case 'getEvents': responseData = getEvents(); break;
+      case 'getLastUpdate': responseData = getLastUpdate(); break;
+      case 'getNotifications': responseData = getNotifications(); break;
+      case 'getInjuries': responseData = getInjuries(); break; // ROTA DM
+      default:
+        responseData = { result: 'error', message: `Ação GET inválida: '${action}'` };
+    }
+    return createJsonResponse(responseData);
+
+  } catch (error) {
+    Logger.log(`ERRO FATAL em doGet: ${error.toString()} - Stack: ${error.stack}`);
+    return createJsonResponse({ result: 'error', message: `Erro fatal no servidor: ${error.toString()}` });
+  }
+}
+
+function doPost(e) {
+  try {
+    let params;
+    if (e.postData && e.postData.contents) {
+      params = JSON.parse(e.postData.contents);
+    } else {
+      params = e.parameter;
+    }
+    
+    const action = params.action ? params.action.trim() : null;
+    if (!action) return createJsonResponse({ result: 'error', message: 'Ação POST não especificada.' });
+
+    let responseData;
+    switch (action) {
+      case 'getInitialAppData': responseData = getInitialAppData(); break;
+      case 'getGames': responseData = getGames(); break;
+      case 'getEvents': responseData = getEvents(); break;
+      case 'getLastUpdate': responseData = getLastUpdate(); break;
+      case 'getNotifications': responseData = getNotifications(); break;
+      case 'loginUser': responseData = loginUser(params); break;
+      case 'savePushToken': responseData = savePushToken(params); break; 
+      case 'resetPassword': responseData = resetPassword(params); clearCache(); updateTimestamp(); break;
+      case 'saveTeams': responseData = saveTeams(params); clearCache(); updateTimestamp(); break;
+      case 'createEvent': responseData = createOrUpdateEvent(params); clearCache(); updateTimestamp(); break;
+      case 'updateEvent': responseData = createOrUpdateEvent(params, true); clearCache(); updateTimestamp(); break;
+      case 'deleteEvent': responseData = deleteEvent(params); clearCache(); updateTimestamp(); break;
+      case 'createGame': responseData = createGame(params); clearCache(); updateTimestamp(); break;
+      case 'updateGame': responseData = updateGame(params); clearCache(); updateTimestamp(); break;
+      case 'deleteGame': responseData = deleteGame(params); clearCache(); updateTimestamp(); break;
+      case 'handleAttendanceUpdate': responseData = handleAttendanceUpdate(params); clearCache(); updateTimestamp(); break;
+      case 'saveMatchStats': responseData = saveMatchStats(params); clearCache(); updateTimestamp(); break;
+      case 'sendPushNotificationToAll': responseData = sendPushNotificationToAll(params); updateTimestamp(); break;
+      case 'sendFinanceReports': responseData = sendFinanceReportEmails(); break;
+      case 'clearCache': clearCache(); responseData = { result: 'success', message: 'Cache limpo.' }; break;
+      
+      // NOVAS ROTAS DO DEPARTAMENTO MÉDICO (DM)
+      case 'getInjuries': responseData = getInjuries(); break;
+      case 'createInjury': responseData = createInjury(params); clearCache(); updateTimestamp(); break;
+      case 'deleteInjury': responseData = deleteInjury(params); clearCache(); updateTimestamp(); break;
+
+      default:
+        responseData = { result: 'error', message: `Ação POST inválida recebida: '${action}'` };
+    }
+    return createJsonResponse(responseData);
+  } catch (error) {
+    Logger.log(`ERRO FATAL em doPost: ${error.toString()} - Stack: ${error.stack}`);
+    return createJsonResponse({ result: 'error', message: `Erro fatal no servidor: ${error.toString()}` });
+  }
+}
+
+function getInitialAppData() {
+  const cache = CacheService.getScriptCache();
+  const cachedData = cache.get('initial_app_data');
+
+  if (cachedData != null) {
+    Logger.log('Dados retornados do cache.');
+    return JSON.parse(cachedData);
+  }
+
+  Logger.log('Cache vazio. Lendo dados da planilha...');
+  const dashboardData = getDashboardDataObject();
+  const financeData = getFinanceDataObject();
+  const nextGameData = getNextGame();
+  const injuriesData = getInjuriesInternal(); // OBTÉM AS LESÕES AQUI
+
+  const response = {
+    result: 'success',
+    data: {
+      dashboard: dashboardData.data,
+      finance: financeData.data,
+      nextGame: nextGameData.data,
+      injuries: injuriesData, // INCLUÍDO NO PAYLOAD INICIAL
+      pixCode: PIX_QR_CODE_STRING
+    }
+  };
+
+  cache.put('initial_app_data', JSON.stringify(response), CACHE_EXPIRATION_SECONDS);
+  Logger.log('Dados armazenados no cache.');
+  
+  return response;
+}
+
+function getAppStateSheet() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sheet = ss.getSheetByName('_app_state');
+  if (!sheet) {
+    sheet = ss.insertSheet('_app_state');
+    sheet.appendRow(['key', 'value']);
+    sheet.getRange('A2').setValue('last_update');
+    sheet.getRange('B2').setValue(new Date().toISOString());
+  }
+  return sheet;
+}
+
+function updateTimestamp() {
+  try {
+    const sheet = getAppStateSheet();
+    sheet.getRange("B2").setValue(new Date().toISOString());
+  } catch (e) {
+    Logger.log(`Não foi possível atualizar o timestamp: ${e.toString()}`);
+  }
+}
+
+function getLastUpdate() {
+  try {
+    const sheet = getAppStateSheet();
+    let lastUpdate = sheet.getRange("B2").getValue();
+    
+    if (!lastUpdate) {
+        updateTimestamp();
+        lastUpdate = sheet.getRange("B2").getValue();
+    }
+
+    return { result: 'success', timestamp: lastUpdate };
+  } catch (e) {
+    Logger.log(`Não foi possível obter o último timestamp: ${e.toString()}`);
+    return { result: 'error', message: e.toString() };
+  }
+}
+
+function getNextGame() {
+  try {
+    const allGamesData = getGames();
+    if (allGamesData.result !== 'success' || !allGamesData.data) {
+      return { result: 'success', data: null };
+    }
+
+    const todayString = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+
+    const upcomingGames = allGamesData.data
+      .filter(game => game.data >= todayString)
+      .sort((a, b) => {
+        if (a.data > b.data) return 1;
+        if (a.data < b.data) return -1;
+        if (a.horario > b.horario) return 1;
+        if (a.horario < b.horario) return -1;
+        return 0;
+      });
+
+    return { result: 'success', data: upcomingGames.length > 0 ? upcomingGames[0] : null };
+  } catch (e) {
+    Logger.log(`ERRO em getNextGame: ${e.toString()}`);
+    return { result: 'error', data: null, message: e.toString() };
+  }
+}
+
+function getNotifications() {
+  try {
+    const sheet = getSheet("Notificacoes");
+    const { data, headers } = getSheetData(sheet);
+
+    const timestampIndex = headers.indexOf('timestamp');
+    const titleIndex = headers.indexOf('title');
+    const messageIndex = headers.indexOf('message');
+
+    if ([timestampIndex, titleIndex, messageIndex].includes(-1)) {
+      throw new Error("Colunas necessárias (Timestamp, Title, Message) não encontradas na aba 'Notificacoes'.");
+    }
+
+    const notifications = data.map(row => ({
+      timestamp: row[timestampIndex],
+      title: row[titleIndex],
+      message: row[messageIndex]
+    })).filter(n => n.timestamp);
+
+    return { result: 'success', data: notifications };
+  } catch (e) {
+    Logger.log(`ERRO em getNotifications: ${e.toString()}`);
+    return { result: 'error', message: e.toString() };
+  }
+}
+
+function sendPushNotificationToAll(params) {
+  const { title, message, targetTab } = params;
+  if (!title || !message) {
+    return { result: 'error', message: 'Título e mensagem são obrigatórios.' };
+  }
+
+  const sheet = getSheet("Users");
+  const { data, headers } = getSheetData(sheet);
+  const tokenIndex = headers.indexOf("pushtoken");
+  const statusIndex = headers.indexOf("status");
+
+  if (tokenIndex === -1) {
+    throw new Error('A coluna "PushToken" não foi encontrada na folha "Users".');
+  }
+
+  const pushTokens = data
+    .map(row => ({ token: row[tokenIndex], status: row[statusIndex] }))
+    .filter(user => 
+      user.token && 
+      String(user.token).startsWith('ExponentPushToken[') && 
+      user.status === 'approved'
+    )
+    .map(user => user.token);
+
+  if (pushTokens.length === 0) {
+    return { result: 'success', message: 'Nenhum jogador encontrado com um token de notificação válido.' };
+  }
+
+  const messages = pushTokens.map(token => ({
+    to: token,
+    sound: 'default',
+    title: title,
+    body: message,
+    data: { targetTab: targetTab || 'presenca' }, 
+  }));
+
+  try {
+    const response = UrlFetchApp.fetch('https://api.expo.dev/v2/push/send', {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify(messages),
+      muteHttpExceptions: true,
+    });
+    
+    const responseCode = response.getResponseCode();
+    const responseBody = response.getContentText();
+
+    try {
+      const logsSheet = getSheet("Logs");
+      logsSheet.appendRow([new Date(), responseCode, responseBody]);
+    } catch (e) {
+      Logger.log(`Falha ao escrever na aba de Logs: ${e.toString()}`);
+    }
+
+    if (responseCode === 200) {
+      Logger.log(`Notificações enviadas com sucesso. Resposta: ${responseBody}`);
+      
+      try {
+        const notificationsSheet = getSheet("Notificacoes");
+        notificationsSheet.appendRow([new Date(), title, message]);
+      } catch (e) {
+        Logger.log(`Falha ao guardar notificação no histórico: ${e.toString()}`);
+      }
+
+      return { result: 'success', message: `Notificações enviadas para ${pushTokens.length} jogadores.` };
+    } else {
+      Logger.log(`Erro ao enviar notificações. Código: ${responseCode}. Resposta: ${responseBody}`);
+      throw new Error(`Falha ao comunicar com o servidor de notificações: ${responseBody}`);
+    }
+
+  } catch (e) {
+    Logger.log(`ERRO FATAL em sendPushNotificationToAll: ${e.toString()}`);
+    try {
+      const logsSheet = getSheet("Logs");
+      logsSheet.appendRow([new Date(), "FATAL_ERROR", e.toString()]);
+    } catch (logError) {
+      // Ignora se não conseguir escrever o log do erro
+    }
+    return { result: 'error', message: e.toString() };
+  }
+}
+
+function createGame(params) {
+  const { data, horario, local } = params;
+  if (!data || !horario || !local) {
+    return { result: 'error', message: 'Dados insuficientes para criar o jogo.' };
+  }
+  const sheet = getSheet("Jogos");
+  const newId = new Date().getTime().toString();
+  
+  const [year, month, day] = data.split('-');
+  const formattedDate = `${day}/${month}/${year}`;
+
+  sheet.appendRow([newId, formattedDate, horario, local, ""]);
+  
+  try {
+    const usersSheet = getSheet("Users");
+    const {data: usersData, headers: usersHeaders} = getSheetData(usersSheet);
+    const nameIndex = usersHeaders.indexOf("name");
+    const emailIndex = usersHeaders.indexOf("email");
+    const statusIndex = usersHeaders.indexOf("status");
+
+    if (emailIndex === -1 || nameIndex === -1 || statusIndex === -1) {
+        throw new Error("Colunas 'Name', 'Email' ou 'Status' não foram encontradas na aba 'Users'.");
+    }
+    
+    let emailsSent = 0;
+    usersData.forEach(userRow => {
+      const userStatus = String(userRow[statusIndex]).trim().toLowerCase();
+      const userEmail = String(userRow[emailIndex]).trim();
+      if(userEmail && userStatus === 'approved') {
+        const userName = String(userRow[nameIndex]).trim();
+        const emailBody = buildGameAnnouncementEmailTemplate({
+          nome_jogador: userName,
+          data: formattedDate,
+          horario: horario,
+          local: local
+        });
+        GmailApp.sendEmail(userEmail, "🏀 Novo Jogo Agendado! - CBA", "", { htmlBody: emailBody });
+        emailsSent++;
+      }
+    });
+    Logger.log(`${emailsSent} e-mails de novo jogo enviados.`);
+
+  } catch(e) {
+    Logger.log(`ERRO ao enviar e-mails de novo jogo: ${e.toString()}`);
+  }
+
+  return { result: 'success', message: 'Jogo criado com sucesso!' };
+}
+
+function updateGame(params) {
+    const { id, data, horario, local } = params;
+    if (!id || !data || !horario || !local) {
+        return { result: 'error', message: 'Dados insuficientes para atualizar o jogo.' };
+    }
+
+    const sheet = getSheet("Jogos");
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+
+    try {
+        const { data: sheetData, headers } = getSheetData(sheet);
+        const idIndex = headers.indexOf('id');
+        if (idIndex === -1) {
+            throw new Error("Coluna 'ID' não encontrada na aba 'Jogos'.");
+        }
+
+        const gameRowIndex = sheetData.findIndex(row => String(row[idIndex]).trim() === String(id).trim());
+        if (gameRowIndex === -1) {
+            return { result: 'error', message: 'Jogo não encontrado para atualização.' };
+        }
+
+        const [year, month, day] = data.split('-');
+        const formattedDate = `${day}/${month}/${year}`;
+        
+        sheet.getRange(gameRowIndex + 2, headers.indexOf('data') + 1).setValue(formattedDate);
+        sheet.getRange(gameRowIndex + 2, headers.indexOf('horario') + 1).setValue(horario);
+        sheet.getRange(gameRowIndex + 2, headers.indexOf('local') + 1).setValue(local);
+
+        return { result: 'success', message: 'Jogo atualizado com sucesso!' };
+    } finally {
+        lock.releaseLock();
+    }
+}
+
+function deleteGame(params) {
+    const sheet = getSheet("Jogos");
+    const { data, headers } = getSheetData(sheet);
+    const idIndex = headers.indexOf("id");
+    const dataIndex = headers.indexOf('data');
+    const horarioIndex = headers.indexOf('horario');
+    const localIndex = headers.indexOf('local');
+
+    if (idIndex === -1) throw new Error("Coluna 'ID' não encontrada para apagar.");
+
+    const gameRowIndex = data.findIndex(row => String(row[idIndex]) === String(params.id));
+    if (gameRowIndex === -1) throw new Error("Jogo para apagar não encontrado.");
+
+    const gameData = data[gameRowIndex];
+    const gameDetails = {
+      data: gameData[dataIndex],
+      horario: gameData[horarioIndex],
+      local: gameData[localIndex]
+    };
+
+    sheet.deleteRow(gameRowIndex + 2);
+
+    try {
+      const usersSheet = getSheet("Users");
+      const {data: usersData, headers: usersHeaders} = getSheetData(usersSheet);
+      const nameIndex = usersHeaders.indexOf("name");
+      const emailIndex = usersHeaders.indexOf("email");
+      const statusIndex = usersHeaders.indexOf("status");
+
+      if (emailIndex === -1 || nameIndex === -1 || statusIndex === -1) {
+          throw new Error("Colunas 'Name', 'Email' ou 'Status' não foram encontradas na aba 'Users'.");
+      }
+      
+      let emailsSent = 0;
+      usersData.forEach(userRow => {
+        const userStatus = String(userRow[statusIndex]).trim().toLowerCase();
+        const userEmail = String(userRow[emailIndex]).trim();
+        if(userEmail && userStatus === 'approved') {
+          const userName = String(userRow[nameIndex]).trim();
+          const emailBody = buildGameCancellationEmailTemplate({
+            nome_jogador: userName,
+            ...gameDetails
+          });
+          GmailApp.sendEmail(userEmail, "❌ Jogo Cancelado - CBA", "", { htmlBody: emailBody });
+          emailsSent++;
+        }
+      });
+      Logger.log(`${emailsSent} e-mails de cancelamento de jogo enviados.`);
+
+    } catch(e) {
+      Logger.log(`ERRO ao enviar e-mails de cancelamento de jogo: ${e.toString()}`);
+    }
+
+    return { result: 'success', message: 'Jogo apagado com sucesso!' };
+}
+
+function getGames() {
+  const sheet = getSheet("Jogos");
+  const data = sheet.getDataRange().getDisplayValues();
+  const headers = data.shift().map(h => String(h).trim().toLowerCase());
+  
+  const idIndex = headers.indexOf('id');
+  const dataIndex = headers.indexOf('data');
+  const horarioIndex = headers.indexOf('horario');
+  const localIndex = headers.indexOf('local');
+  const confirmadosIndex = headers.indexOf('confirmados');
+
+  if ([idIndex, dataIndex, horarioIndex, localIndex, confirmadosIndex].includes(-1)) {
+    throw new Error("Colunas necessárias (ID, Data, Horario, Local, Confirmados) não encontradas na aba 'Jogos'.");
+  }
+  
+  const games = data.map(row => {
+    const confirmadosString = row[confirmadosIndex] || "";
+    const gameDate = parseDate(row[dataIndex]);
+    return {
+      id: row[idIndex],
+      data: gameDate ? Utilities.formatDate(gameDate, Session.getScriptTimeZone(), 'yyyy-MM-dd') : row[dataIndex],
+      horario: row[horarioIndex],
+      local: row[localIndex],
+      confirmados: confirmadosString ? confirmadosString.split(',').map(name => name.trim()).filter(name => name) : []
+    };
+  }).filter(game => game.id);
+
+  return { result: 'success', data: games };
+}
+
+function getEvents() {
+    const sheet = getSheet("Eventos");
+    const { data, headers } = getSheetData(sheet);
+    
+    const events = data.map(row => {
+        const eventObject = {};
+        headers.forEach((header, index) => {
+            let value = row[index];
+            if ((header === 'date' || header === 'deadline') && value) {
+                value = Utilities.formatDate(new Date(value), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+            }
+            eventObject[header] = value;
+        });
+        return eventObject;
+    }).filter(event => event.id);
+
+    return { result: 'success', data: events };
+}
+
+function handleAttendanceUpdate(params) {
+    const { itemId, playerName, actionType, type } = params;
+    if (!itemId || !playerName || !actionType || !type) {
+        return { result: 'error', message: 'Parâmetros insuficientes para a ação de presença.' };
+    }
+
+    const sheetName = type === 'game' ? 'Jogos' : 'Eventos';
+    const attendeesColumnName = type === 'game' ? 'confirmados' : 'attendees';
+    const sheet = getSheet(sheetName);
+    
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+
+    try {
+        const { data, headers } = getSheetData(sheet);
+        const idIndex = headers.indexOf('id');
+        const attendeesIndex = headers.indexOf(attendeesColumnName);
+
+        if (idIndex === -1 || attendeesIndex === -1) {
+            throw new Error(`Colunas 'id' ou '${attendeesColumnName}' não encontradas na aba '${sheetName}'.`);
+        }
+
+        const itemRowIndex = data.findIndex(row => String(row[idIndex]).trim() === String(itemId).trim());
+        if (itemRowIndex === -1) {
+            return { result: 'error', message: `${type === 'game' ? 'Jogo' : 'Evento'} não encontrado.` };
+        }
+
+        const currentAttendeesString = data[itemRowIndex][attendeesIndex] || "";
+        let attendeesList = currentAttendeesString ? currentAttendeesString.split(',').map(name => name.trim()).filter(Boolean) : [];
+
+        const normalizedPlayerName = playerName.trim();
+
+        if (actionType === 'confirm') {
+            if (!attendeesList.some(name => name.trim() === normalizedPlayerName)) {
+                attendeesList.push(normalizedPlayerName);
+            }
+        } else if (actionType === 'withdraw') {
+            attendeesList = attendeesList.filter(name => name.trim() !== normalizedPlayerName);
+        }
+
+        const updatedAttendeesString = attendeesList.join(', ');
+        sheet.getRange(itemRowIndex + 2, attendeesIndex + 1).setValue(updatedAttendeesString);
+
+        return { result: 'success', message: 'Presença atualizada com sucesso!' };
+
+    } finally {
+        lock.releaseLock();
+    }
+}
+
+function getDashboardDataObject() {
+  const usersSheet = getSheet("Users");
+  const usersValues = usersSheet.getDataRange().getValues();
+  const usersHeaders = usersValues.shift().map(h => String(h).trim().toLowerCase());
+  const playerStats = {};
+  const scriptTimeZone = Session.getScriptTimeZone();
+  
+  const nameIndex = usersHeaders.indexOf("name");
+  const dataEntradaIndex = usersHeaders.indexOf("data de entrada");
+  const fotoUrlIndex = usersHeaders.indexOf("foto url");
+  
+  const hofCutoffDate = parseDate("01/07/2025");
+  if (hofCutoffDate) hofCutoffDate.setHours(0, 0, 0, 0);
+
+  usersValues.forEach(row => {
+    const name = String(row[nameIndex] || '').trim();
+    if (name) {
+      let entryDate = null;
+      const entryDateValue = row[dataEntradaIndex];
+      if (entryDateValue instanceof Date) {
+        entryDate = entryDateValue;
+      } else if (typeof entryDateValue === 'string' && entryDateValue.trim() !== '') {
+        entryDate = parseDate(entryDateValue.trim());
+      }
+      
+      const entryDateNumber = entryDate ? parseInt(Utilities.formatDate(entryDate, "GMT", 'yyyyMMdd')) : null;
+
+      playerStats[name.toLowerCase()] = {
+        name: name,
+        altura: row[usersHeaders.indexOf("altura")] || 'N/A',
+        posicao: row[usersHeaders.indexOf("posicao")] || 'N/A',
+        numero: (row[usersHeaders.indexOf("numero")] !== null && row[usersHeaders.indexOf("numero")] !== '') ? row[usersHeaders.indexOf("numero")].toString() : 'N/A',
+        especialidade: row[usersHeaders.indexOf("especialidade")] || 'N/A',
+        dataEntrada: entryDate ? Utilities.formatDate(entryDate, scriptTimeZone, 'yyyy-MM-dd') : 'N/A',
+        entryDateNumber: entryDateNumber,
+        ppj_static: row[usersHeaders.indexOf("ppj")] || 0, 
+        rpj_static: row[usersHeaders.indexOf("rpj")] || 0, 
+        fotoUrl: fotoUrlIndex > -1 ? row[fotoUrlIndex] || null : null,
+        isEligibleForHoF: !entryDateNumber || (hofCutoffDate && entryDateNumber <= parseInt(Utilities.formatDate(hofCutoffDate, "GMT", 'yyyyMMdd')))
+      };
+    }
+  });
+
+  // --- NOVA LÓGICA: Ler e agregar as Estatísticas Diárias Reais ---
+  const aggregatedStats = {};
+  try {
+    const statsSheet = getSheet("Estatisticas_Diarias");
+    const statsValues = statsSheet.getDataRange().getValues();
+    if (statsValues.length > 1) {
+      const statsHeaders = statsValues.shift().map(h => String(h).trim().toLowerCase());
+      
+      const getIdx = (possibleNames) => statsHeaders.findIndex(h => possibleNames.includes(h.replace(/[_ ]/g, '')));
+      const idxData = getIdx(['data', 'date']);
+      const idxJogador = getIdx(['jogador', 'nome', 'atleta', 'player']);
+      const idxPts2 = getIdx(['pontos2', 'pts2']);
+      const idxPts3 = getIdx(['pontos3', 'pts3']);
+      const idxReb = getIdx(['rebotes', 'rebote', 'reb']);
+      const idxAst = getIdx(['assistencias', 'assistencia', 'ast']);
+      const idxBlk = getIdx(['tocos', 'toco', 'blk']);
+
+      statsValues.forEach(row => {
+        const pDate = idxData !== -1 ? String(row[idxData] || '').trim() : '';
+        const pName = idxJogador !== -1 ? String(row[idxJogador] || '').trim().toLowerCase() : '';
+        if (!pName || !pDate) return;
+        
+        if (!aggregatedStats[pName]) {
+          aggregatedStats[pName] = { gamesWithStats: 0, pts2: 0, pts3: 0, reb: 0, ast: 0, blk: 0, dailyStats: {} };
+        }
+        
+        const pts2 = idxPts2 !== -1 ? Number(row[idxPts2]) || 0 : 0;
+        const pts3 = idxPts3 !== -1 ? Number(row[idxPts3]) || 0 : 0;
+        const reb = idxReb !== -1 ? Number(row[idxReb]) || 0 : 0;
+        const ast = idxAst !== -1 ? Number(row[idxAst]) || 0 : 0;
+        const blk = idxBlk !== -1 ? Number(row[idxBlk]) || 0 : 0;
+
+        aggregatedStats[pName].gamesWithStats += 1;
+        aggregatedStats[pName].pts2 += pts2;
+        aggregatedStats[pName].pts3 += pts3;
+        aggregatedStats[pName].reb += reb;
+        aggregatedStats[pName].ast += ast;
+        aggregatedStats[pName].blk += blk;
+
+        // Formata a data corretamente para padronizar yyyy-MM-dd
+        let formattedDate = pDate;
+        if (row[idxData] instanceof Date) {
+           formattedDate = Utilities.formatDate(row[idxData], Session.getScriptTimeZone(), 'yyyy-MM-dd');
+        } else if (pDate.includes('/')) {
+           const parts = pDate.split('/');
+           if(parts.length === 3) formattedDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+        }
+        
+        // Verifica se a data é válida antes de adicionar no objeto (Evita que o Frontend quebre o sort)
+        if (formattedDate && formattedDate.length >= 8) {
+             aggregatedStats[pName].dailyStats[formattedDate] = { pts2, pts3, reb, ast, blk };
+        }
+      });
+    }
+  } catch (e) {
+    Logger.log("Aba 'Estatisticas_Diarias' não encontrada ou vazia. O sistema usará os dados estáticos do cadastro.");
+  }
+  // ---------------------------------------------------------------
+
+  const presencaSheet = getSheet("Presenca");
+  const presencaDataRange = presencaSheet.getDataRange();
+  const presencaValues = presencaDataRange.getValues(); 
+  
+  const presencaHeaders = presencaValues[0];
+  const presencaData = presencaValues.slice(1);
+
+  const allDates = presencaHeaders.slice(1)
+    .map(headerValue => {
+      if (!headerValue) return null;
+      let dateObj;
+      if (headerValue instanceof Date) {
+        dateObj = headerValue;
+      } else {
+        dateObj = parseDate(String(headerValue).trim());
+      }
+      return dateObj ? Utilities.formatDate(dateObj, scriptTimeZone, 'yyyy-MM-dd') : null;
+    })
+    .filter(dateString => dateString);
+
+  const processedData = presencaData.map(row => {
+    const name = String(row[0] || '').trim();
+    if (!name) return null;
+    
+    const stats = playerStats[name.toLowerCase()] || {};
+    const playerEntryDateNumber = stats.entryDateNumber;
+
+    const attendance = {};
+    let presences = 0;
+    let unjustifiedAbsences = 0;
+    let unjustifiedAbsenceDates = [];
+    let relevantGames = 0;
+    
+    allDates.forEach((dateString, index) => {
+      const gameDateNumber = parseInt(dateString.replace(/-/g, ''));
+      const status = String(row[index + 1] || '').trim();
+      attendance[dateString] = status;
+
+      if (!playerEntryDateNumber || gameDateNumber >= playerEntryDateNumber) {
+        relevantGames++;
+        
+        if (status.includes('✅')) {
+            presences++;
+        } else if (status.toUpperCase() === 'NÃO JUSTIFICOU') {
+            unjustifiedAbsences++;
+            unjustifiedAbsenceDates.push(dateString);
+        }
+      }
+    });
+    
+    const average = relevantGames > 0 ? parseFloat(((presences / relevantGames) * 100).toFixed(1)) : 0;
+    
+    // Calcula as médias baseadas nas estatísticas reais (se existirem)
+    const pStats = aggregatedStats[name.toLowerCase()];
+    let ppj = stats.ppj_static;
+    let rpj = stats.rpj_static;
+    let apj = 0; // Assistências por jogo
+    let tpj = 0; // Tocos por jogo
+    let totalPoints = 0;
+    
+    if (pStats && pStats.gamesWithStats > 0) {
+        totalPoints = (pStats.pts2 * 2) + (pStats.pts3 * 3);
+        ppj = parseFloat((totalPoints / pStats.gamesWithStats).toFixed(1));
+        rpj = parseFloat((pStats.reb / pStats.gamesWithStats).toFixed(1));
+        apj = parseFloat((pStats.ast / pStats.gamesWithStats).toFixed(1));
+        tpj = parseFloat((pStats.blk / pStats.gamesWithStats).toFixed(1));
+    }
+
+    return { 
+      name, 
+      presences, 
+      totalGames: relevantGames,
+      average, 
+      unjustifiedAbsences, 
+      unjustifiedAbsenceDates, 
+      attendance,
+      ppj: ppj, 
+      rpj: rpj,
+      apj: apj,
+      tpj: tpj,
+      totalPoints: totalPoints,
+      dailyStats: pStats ? pStats.dailyStats : {},
+      ...stats
+    };
+  }).filter(Boolean);
+
+  return { result: 'success', data: { players: processedData, dates: allDates } };
+}
+
+function saveMatchStats(params) {
+    const { date, stats } = params;
+    
+    if (!date || !stats || !Array.isArray(stats)) {
+        return { result: 'error', message: 'Data e estatísticas válidas são obrigatórias.' };
+    }
+
+    const sheet = getSheet("Estatisticas_Diarias");
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+
+    try {
+        const data = sheet.getDataRange().getValues();
+        const headers = data.length > 0 ? data[0].map(h => String(h).trim().toLowerCase()) : [];
+        
+        if (headers.length === 0) {
+           return { result: 'error', message: 'Aba Estatisticas_Diarias não possui cabeçalhos.' };
+        }
+
+        const getIdx = (possibleNames) => headers.findIndex(h => possibleNames.includes(h.replace(/[_ ]/g, '')));
+        const dateIndex = getIdx(['data', 'date']);
+        
+        // Remove linhas existentes com a mesma data para permitir edição/re-salvamento sem duplicar
+        if (dateIndex !== -1 && data.length > 1) {
+            for (let i = data.length - 1; i >= 1; i--) {
+                let rowDate = data[i][dateIndex];
+                let rowDateStr = "";
+                if (rowDate instanceof Date) {
+                    rowDateStr = Utilities.formatDate(rowDate, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+                } else {
+                    rowDateStr = String(rowDate).trim();
+                }
+                
+                if (rowDateStr === date) {
+                    sheet.deleteRow(i + 1); 
+                }
+            }
+        }
+
+        // Insere os novos dados computados
+        stats.forEach(playerStat => {
+            const newRow = [];
+            headers.forEach(h => {
+                const cleanH = h.replace(/[_ ]/g, '');
+                if (['data', 'date'].includes(cleanH)) newRow.push(date);
+                else if (['jogador', 'nome', 'atleta'].includes(cleanH)) newRow.push(playerStat.playerName);
+                else if (['pontos2', 'pts2'].includes(cleanH)) newRow.push(playerStat.pts2 || 0);
+                else if (['pontos3', 'pts3'].includes(cleanH)) newRow.push(playerStat.pts3 || 0);
+                else if (['rebotes', 'rebote', 'reb'].includes(cleanH)) newRow.push(playerStat.reb || 0);
+                else if (['assistencias', 'assistencia', 'ast'].includes(cleanH)) newRow.push(playerStat.ast || 0);
+                else if (['tocos', 'toco', 'blk'].includes(cleanH)) newRow.push(playerStat.blk || 0);
+                else newRow.push(""); 
+            });
+            sheet.appendRow(newRow);
+        });
+
+        return { result: 'success', message: 'Estatísticas da partida salvas com sucesso!' };
+    } catch (e) {
+        Logger.log(`ERRO ao salvar estatísticas: ${e.toString()}`);
+        return { result: 'error', message: `Erro ao salvar: ${e.toString()}` };
+    } finally {
+        lock.releaseLock();
+    }
+}
+// ---------------------------------------------------
+
+function getFinanceDataObject() {
+  const ss = SpreadsheetApp.openById(FINANCE_SPREADSHEET_ID);
+  const sheet = ss.getSheets()[0]; 
+  const data = sheet.getDataRange().getValues();
+
+  const PLAYER_START_ROW = 5; 
+  const PLAYER_END_ROW = 45;   
+  const MONTH_START_COL = 4;   
+  const MONTH_END_COL = 15;     
+
+  const paymentHeaders = data[PLAYER_START_ROW - 2].slice(MONTH_START_COL - 1, MONTH_END_COL);
+  const paymentStatus = [];
+
+  for (let i = PLAYER_START_ROW - 1; i < PLAYER_END_ROW; i++) {
+    const playerName = String(data[i][0] || '').trim();
+    if (playerName) {
+      const playerPayment = { player: playerName, statuses: {} };
+      paymentHeaders.forEach((month, index) => {
+        const colIndex = (MONTH_START_COL - 1) + index;
+        playerPayment.statuses[month] = data[i][colIndex] || '';
+      });
+      paymentStatus.push(playerPayment);
+    }
+  }
+
+  const parseCurrency = (value) => {
+    if (!value || typeof value !== 'string') return 0;
+    const cleanStr = value.replace('R$', '').replace(/\s/g, '').replace(/\./g, '').replace(',', '.');
+    return parseFloat(cleanStr) || 0;
+  };
+
+  const summary = { 
+    revenue: parseCurrency(sheet.getRange("P46").getDisplayValue()),
+    expense: parseCurrency(sheet.getRange("P62").getDisplayValue()),
+    balance: parseCurrency(sheet.getRange("P64").getDisplayValue())
+  };
+
+  return {
+    result: 'success',
+    data: {
+      summary: summary,
+      paymentStatus: paymentStatus,
+      paymentHeaders: paymentHeaders
+    }
+  };
+}
+
+function sendFinanceReportEmails() {
+  try {
+    const usersSheet = getSheet("Users");
+    const {data: usersData, headers: usersHeaders} = getSheetData(usersSheet);
+    const nameIndex = usersHeaders.indexOf("name");
+    const emailIndex = usersHeaders.indexOf("email");
+
+    if (nameIndex === -1 || emailIndex === -1) {
+        throw new Error("As colunas 'Name' ou 'Email' não foram encontradas na aba 'Users'.");
+    }
+
+    const initialData = getInitialAppData();
+    if (initialData.result !== 'success') {
+      throw new Error("Não foi possível obter os dados para enviar os e-mails.");
+    }
+    
+    const dashboardData = initialData.data.dashboard;
+    const financeData = initialData.data.finance;
+    
+    const mediaGeralCBA = (dashboardData.players.reduce((acc, p) => acc + p.average, 0) / dashboardData.players.length);
+
+    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(PIX_QR_CODE_STRING)}&size=150x150&margin=10`;
+
+    let emailsSent = 0;
+    
+    financeData.paymentStatus.forEach(playerFinance => {
+      const playerName = playerFinance.player.trim();
+      const userRow = usersData.find(row => String(row[nameIndex]).trim().toLowerCase() === playerName.toLowerCase());
+      const playerPresence = dashboardData.players.find(p => p.name.trim().toLowerCase() === playerName.toLowerCase());
+
+      if (userRow && userRow[emailIndex] && playerPresence) {
+        const playerEmail = userRow[emailIndex];
+        
+        const financialStatus = processFinancialStatus(playerFinance, financeData.paymentHeaders);
+        const presenceStatus = processPresenceStatus(playerPresence);
+        const chartData = generatePresenceChartData(playerPresence.average, mediaGeralCBA);
+        
+        const htmlBody = buildEmailTemplate({
+            nome_jogador: playerName,
+            ...financialStatus,
+            ...presenceStatus,
+            ...chartData,
+            media_presenca_cba: mediaGeralCBA.toFixed(1) + '%',
+            mes_atual_nome: new Date().toLocaleString('pt-BR', { month: 'long' }),
+            payment_statuses: playerFinance.statuses,
+            qr_code_url: qrCodeUrl,
+            pix_copia_cola: PIX_QR_CODE_STRING
+        });
+        
+        GmailApp.sendEmail(playerEmail, `Seu Relatório Mensal - CBA`, "", { htmlBody: htmlBody });
+        emailsSent++;
+      }
+    });
+
+    return { result: 'success', message: `${emailsSent} relatórios enviados com sucesso!` };
+
+  } catch (e) {
+    Logger.log(`ERRO em sendFinanceReportEmails: ${e.toString()} - Stack: ${e.stack}`);
+    return { result: 'error', message: `Erro ao enviar e-mails: ${e.toString()}` };
+  }
+}
+
+// =================================================================================================
+// FUNÇÕES AUXILIARES E DE TEMPLATE
+// =================================================================================================
+
+function getSheet(sheetName, spreadsheetId = SPREADSHEET_ID) {
+    const ss = SpreadsheetApp.openById(spreadsheetId);
+    if (!ss) throw new Error(`Planilha com ID "${spreadsheetId}" não encontrada.`);
+    
+    let sheet = ss.getSheetByName(sheetName);
+    
+    if (!sheet && sheetName.toLowerCase() === 'presenca') {
+        sheet = ss.getSheetByName('Presença');
+    }
+    if (!sheet) throw new Error(`Aba "${sheetName}" (ou variações) não encontrada na planilha.`);
+    return sheet;
+}
+
+function getSheetData(sheet) {
+    const data = sheet.getDataRange().getValues();
+    const originalHeaders = data.length > 0 ? data.shift() : [];
+    const lowerCaseHeaders = originalHeaders.map(h => String(h).trim().toLowerCase());
+    return { data, headers: lowerCaseHeaders, originalHeaders };
+}
+
+function parseDate(dateString) {
+    if (!dateString || typeof dateString !== 'string') return null;
+    const parts = dateString.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (parts) {
+        return new Date(parts[3], parts[2] - 1, parts[1]);
+    }
+    return null;
+}
+
+function loginUser(params) {
+    const { email, password } = params;
+    const inputEmail = (email || '').trim().toLowerCase();
+    const inputPassword = (password || '').trim();
+    const cache = CacheService.getScriptCache();
+
+    const lockoutKey = `lockout_${inputEmail}`;
+    const attemptsKey = `attempts_${inputEmail}`;
+
+    if (cache.get(lockoutKey)) {
+        Logger.log(`Tentativa de login bloqueada para: ${inputEmail}`);
+        return { status: 'error', message: 'Conta temporariamente bloqueada. Por favor, tente novamente mais tarde.' };
+    }
+
+    const sheet = getSheet("Users");
+    const { data, headers } = getSheetData(sheet);
+
+    const emailIndex = headers.indexOf("email");
+    const passwordIndex = headers.indexOf("password");
+    const statusIndex = headers.indexOf("status");
+    const nameIndex = headers.indexOf("name");
+    const roleIndex = headers.indexOf("role");
+    const fotoUrlIndex = headers.indexOf("foto url");
+
+    if ([emailIndex, passwordIndex, statusIndex, nameIndex, roleIndex].includes(-1)) {
+        throw new Error('Colunas essenciais (Name, Email, Password, Status, Role) não encontradas na aba "Users".');
+    }
+
+    let userFound = false;
+    for (const row of data) {
+        const sheetEmail = String(row[emailIndex] || '').trim().toLowerCase();
+        
+        if (sheetEmail === inputEmail) {
+            userFound = true;
+            const sheetPassword = String(row[passwordIndex] || '').trim();
+            const sheetStatus = String(row[statusIndex] || '').trim().toLowerCase();
+
+            if (sheetPassword === inputPassword) {
+                cache.remove(attemptsKey);
+                Logger.log(`Login bem-sucedido para: ${inputEmail}. Contador de falhas reiniciado.`);
+
+                if (sheetStatus === 'approved') {
+                    return { 
+                        status: 'approved', 
+                        name: String(row[nameIndex]).trim(), 
+                        email: sheetEmail, 
+                        role: row[roleIndex],
+                        fotoUrl: fotoUrlIndex !== -1 ? row[fotoUrlIndex] || null : null
+                    };
+                } else {
+                    return { status: 'pending', message: 'Seu acesso está pendente de aprovação.' };
+                }
+            }
+            break; 
+        }
+    }
+
+    let attempts = parseInt(cache.get(attemptsKey) || '0') + 1;
+    Logger.log(`Tentativa de login falhada nº ${attempts} para: ${inputEmail}`);
+
+    if (attempts >= MAX_LOGIN_ATTEMPTS) {
+        cache.put(lockoutKey, 'locked', LOCKOUT_DURATION_SECONDS);
+        cache.remove(attemptsKey);
+        Logger.log(`CONTA BLOQUEADA por ${LOCKOUT_DURATION_SECONDS} segundos para: ${inputEmail}`);
+        return { status: 'error', message: 'Conta temporariamente bloqueada devido a múltiplas tentativas falhadas.' };
+    } else {
+        cache.put(attemptsKey, attempts.toString(), 600); 
+    }
+
+    return { status: 'error', message: 'Email ou senha inválidos.' };
+}
+
+function savePushToken(params) {
+  const { email, token } = params;
+  if (!email || !token) {
+    return { result: 'error', message: 'Email ou token em falta.' };
+  }
+
+  const sheet = getSheet("Users");
+  const { data, headers } = getSheetData(sheet);
+
+  const emailIndex = headers.indexOf("email");
+  const tokenIndex = headers.indexOf("pushtoken");
+
+  if (emailIndex === -1 || tokenIndex === -1) {
+    throw new Error('As colunas "Email" ou "PushToken" não foram encontradas na folha "Users".');
+  }
+
+  const userRowIndex = data.findIndex(row => String(row[emailIndex]).trim().toLowerCase() === email.trim().toLowerCase());
+
+  if (userRowIndex === -1) {
+    return { result: 'error', message: 'Utilizador não encontrado para guardar o token.' };
+  }
+  
+  sheet.getRange(userRowIndex + 2, tokenIndex + 1).setValue(token);
+
+  return { result: 'success', message: 'Token guardado com sucesso!' };
+}
+
+function resetPassword(params) {
+    const { email, newPassword } = params;
+    const inputEmail = (email || '').trim().toLowerCase();
+
+    const sheet = getSheet("Users");
+    const { data, headers } = getSheetData(sheet);
+
+    const emailIndex = headers.indexOf("email");
+    const passwordIndex = headers.indexOf("password");
+
+    if (emailIndex === -1 || passwordIndex === -1) {
+        throw new Error('Colunas "Email" ou "Password" não encontradas.');
+    }
+
+    const userRowIndex = data.findIndex(row => String(row[emailIndex]).trim().toLowerCase() === inputEmail);
+
+    if (userRowIndex === -1) {
+        return { result: 'error', message: 'Utilizador não encontrado.' };
+    }
+    
+    sheet.getRange(userRowIndex + 2, passwordIndex + 1).setValue(newPassword);
+
+    return { result: 'success', message: 'Senha alterada com sucesso!' };
+}
+
+function saveTeams(params) {
+    const { teamBlack, teamRed } = params;
+    const sheet = getSheet("Sorteios");
+    sheet.appendRow([new Date(), teamBlack, teamRed]);
+    return { result: 'success', message: 'Times salvos com sucesso!' };
+}
+
+function createOrUpdateEvent(params, isUpdate = false) {
+    const sheet = getSheet("Eventos");
+    const { data, headers } = getSheetData(sheet);
+    const idIndex = headers.indexOf("id");
+
+    const eventData = {
+        name: params.name,
+        date: new Date(params.date),
+        location: params.location,
+        description: params.description,
+        value: params.value,
+        deadline: new Date(params.deadline)
+    };
+
+    if (isUpdate) {
+        if (idIndex === -1) throw new Error("Coluna 'ID' não encontrada para atualização.");
+        const eventRowIndex = data.findIndex(row => String(row[idIndex]) === String(params.id));
+        if (eventRowIndex === -1) throw new Error("Evento para atualizar não encontrado.");
+        
+        headers.forEach((header, index) => {
+            if (eventData[header] !== undefined) {
+                sheet.getRange(eventRowIndex + 2, index + 1).setValue(eventData[header]);
+            }
+        });
+    } else {
+        const newId = new Date().getTime().toString();
+        const newRow = headers.map(header => {
+            if (header === 'id') return newId;
+            if (header === 'attendees') return ""; // Inicia vazio
+            return eventData[header] || "";
+        });
+        sheet.appendRow(newRow);
+    }
+    
+    return { result: 'success', message: `Evento ${isUpdate ? 'atualizado' : 'criado'} com sucesso!` };
+}
+
+function deleteEvent(params) {
+    const sheet = getSheet("Eventos");
+    const { data, headers } = getSheetData(sheet);
+    const idIndex = headers.indexOf("id");
+
+    if (idIndex === -1) throw new Error("Coluna 'ID' não encontrada para apagar.");
+
+    const eventRowIndex = data.findIndex(row => String(row[idIndex]) === String(params.id));
+    if (eventRowIndex === -1) throw new Error("Evento para apagar não encontrado.");
+
+    sheet.deleteRow(eventRowIndex + 2);
+    return { result: 'success', message: 'Evento apagado com sucesso!' };
+}
+
+// ----------------------------------------------------------------------------
+// GESTÃO DE DEPARTAMENTO MÉDICO (DM) - INTEGRAÇÃO FINAL
+// ----------------------------------------------------------------------------
+
+function getInjuriesInternal() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let sheet = ss.getSheetByName("DM");
+  if (!sheet) return [];
+  
+  const data = sheet.getDataRange().getValues();
+  const injuries = [];
+  
+  for (let i = 1; i < data.length; i++) {
+    if(data[i][0]) {
+        let dateLesao = data[i][3];
+        let dateRetorno = data[i][4];
+        
+        if (dateLesao instanceof Date) dateLesao = Utilities.formatDate(dateLesao, Session.getScriptTimeZone(), "yyyy-MM-dd");
+        if (dateRetorno instanceof Date) dateRetorno = Utilities.formatDate(dateRetorno, Session.getScriptTimeZone(), "yyyy-MM-dd");
+        
+        injuries.push({
+          id: data[i][0],
+          playerName: data[i][1],
+          injury: data[i][2],
+          date: dateLesao,
+          expectedReturn: dateRetorno,
+          status: data[i][5]
+        });
+    }
+  }
+  return injuries;
+}
+
+function getInjuries() {
+  try {
+    const injuries = getInjuriesInternal();
+    return { result: 'success', data: injuries };
+  } catch (e) {
+    return { result: 'error', message: e.toString() };
+  }
+}
+
+function createInjury(params) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    let sheet = ss.getSheetByName("DM");
+    if (!sheet) {
+      sheet = ss.insertSheet("DM");
+      sheet.appendRow(["ID", "Jogador", "Lesão", "DataLesao", "RetornoPrevisto", "Status"]);
+    }
+    const newId = new Date().getTime().toString();
+    sheet.appendRow([newId, params.playerName, params.injury, params.date, params.expectedReturn, params.status]);
+    return { result: 'success', message: 'Lesão registrada com sucesso no DM!' };
+  } catch (e) {
+    return { result: 'error', message: e.toString() };
+  }
+}
+
+function deleteInjury(params) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName("DM");
+    if (!sheet) throw new Error("Aba 'DM' não encontrada.");
+    const data = sheet.getDataRange().getValues();
+    const rowIndex = data.findIndex(row => String(row[0]) === String(params.id));
+    if (rowIndex === -1) throw new Error("Registro médico não encontrado.");
+    sheet.deleteRow(rowIndex + 1);
+    return { result: 'success', message: 'Alta médica concedida e registro apagado!' };
+  } catch (e) {
+    return { result: 'error', message: e.toString() };
+  }
+}
+
+// ----------------------------------------------------------------------------
+
+function createJsonResponse(data) {
+  return ContentService
+    .createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function buildGameCancellationEmailTemplate(data) {
+  return `<!DOCTYPE html><html lang="pt-br"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet"><style>body{margin:0;padding:0;background-color:#f3f4f6;font-family:'Inter',Arial,sans-serif;}.wrapper{width:100%;table-layout:fixed;background-color:#f3f4f6;padding:20px 0;}.main{background-color:#ffffff;margin:0 auto;width:100%;max-width:600px;border-spacing:0;color:#374151;border-radius:12px;overflow:hidden;box-shadow:0 10px 25px rgba(0,0,0,0.1);}.header{background-image:linear-gradient(45deg, #b91c1c, #ef4444);color:#ffffff;padding:30px;text-align:center;}.content{padding:30px;}.section-title{font-size:18px;font-weight:700;color:#111827;padding-bottom:8px;margin-bottom:16px;border-bottom:2px solid #e5e7eb;}.card{background-color:#ffffff;border:1px solid #e5e7eb;border-radius:8px;padding:20px;}.footer{background-color:#111827;color:#9ca3af;text-align:center;padding:20px;font-size:12px;}</style></head><body><div class="wrapper"><table class="main" width="100%"><tr><td class="header"><img src="https://i.ibb.co/pGnycLc/ICONE-CBA.jpg" alt="Logo CBA" style="width:90px;height:90px;border-radius:50%;border:3px solid #ffffff;"><h1 style="font-size:26px;font-weight:700;margin:15px 0 5px 0;">❌ Jogo Cancelado ❌</h1><p style="font-size:16px;margin:0;color:#fee2e2;">Olá, ${data.nome_jogador}! Infelizmente, o jogo agendado foi cancelado.</p></td></tr><tr><td class="content"><table width="100%" style="border-spacing:0;"><tr><td class="card"><h2 class="section-title">Detalhes do Jogo Cancelado</h2><table width="100%" style="border-spacing:0;font-size:15px;"><tr><td style="padding-bottom:15px;font-weight:500;">Data:</td><td style="text-align:right;font-weight:700;">${data.data}</td></tr><tr><td style="padding-bottom:15px;font-weight:500;">Horário:</td><td style="text-align:right;font-weight:700;">${data.horario}</td></tr><tr style="border-top:1px solid #e5e7eb;"><td style="padding-top:15px;font-weight:500;">Local:</td><td style="text-align:right;font-weight:700;">${data.local}</td></tr></table></td></tr><tr><td style="height:20px;"></td></tr><tr><td class="card" style="background-color: #fffbeb; border-left: 4px solid #f59e0b;"><p style="margin:0; color: #b45309; font-size: 15px; line-height: 1.5;">Pedimos desculpas por qualquer inconveniente. Manteremos todos informados sobre os próximos jogos. Fique atento às novas convocações!</p></td></tr></table></td></tr><tr><td class="footer"><p><strong>CBA - Basquete dos Aposentados</strong></p><p>Este é um e-mail automático. Por favor, não responda.</p></td></tr></table></div></body></html>`;
+}
+
+function buildGameAnnouncementEmailTemplate(data) {
+  return `<!DOCTYPE html><html lang="pt-br"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet"><style>body{margin:0;padding:0;background-color:#f3f4f6;font-family:'Inter',Arial,sans-serif;}.wrapper{width:100%;table-layout:fixed;background-color:#f3f4f6;padding:20px 0;}.main{background-color:#ffffff;margin:0 auto;width:100%;max-width:600px;border-spacing:0;color:#374151;border-radius:12px;overflow:hidden;box-shadow:0 10px 25px rgba(0,0,0,0.1);}.header{background-image:linear-gradient(45deg, #1e3a8a, #3b82f6);color:#ffffff;padding:30px;text-align:center;}.content{padding:30px;}.section-title{font-size:18px;font-weight:700;color:#111827;padding-bottom:8px;margin-bottom:16px;border-bottom:2px solid #e5e7eb;}.card{background-color:#ffffff;border:1px solid #e5e7eb;border-radius:8px;padding:20px;}.footer{background-color:#111827;color:#9ca3af;text-align:center;padding:20px;font-size:12px;}</style></head><body><div class="wrapper"><table class="main" width="100%"><tr><td class="header"><img src="https://i.ibb.co/pGnycLc/ICONE-CBA.jpg" alt="Logo CBA" style="width:90px;height:90px;border-radius:50%;border:3px solid #ffffff;"><h1 style="font-size:26px;font-weight:700;margin:15px 0 5px 0;">🏀 Novo Jogo Agendado! 🏀</h1><p style="font-size:16px;margin:0;color:#dbeafe;">Olá, ${data.nome_jogador}! Temos um novo jogo marcado.</p></td></tr><tr><td class="content"><table width="100%" style="border-spacing:0;"><tr><td class="card"><h2 class="section-title">Detalhes do Jogo</h2><table width="100%" style="border-spacing:0;font-size:15px;"><tr><td style="padding-bottom:15px;font-weight:500;">Data:</td><td style="text-align:right;font-weight:700;">${data.data}</td></tr><tr><td style="padding-bottom:15px;font-weight:500;">Horário:</td><td style="text-align:right;font-weight:700;">${data.horario}</td></tr><tr style="border-top:1px solid #e5e7eb;"><td style="padding-top:15px;font-weight:500;">Local:</td><td style="text-align:right;font-weight:700;">${data.local}</td></tr></table></td></tr><tr><td style="height:20px;"></td></tr><tr><td class="card" style="background-color: #eff6ff; border-left: 4px solid #3b82f6;"><p style="margin:0; color: #1e3a8a; font-size: 15px; line-height: 1.5;">Prepare seu uniforme e venha para o jogo! Sua presença é fundamental para o time. Não se esqueça de confirmar sua presença no portal.</p></td></tr></table></td></tr><tr><td class="footer"><p><strong>CBA - Basquete dos Aposentados</strong></p><p>Este é um e-mail automático. Por favor, não responda.</p></td></tr></table></div></body></html>`;
+}
+
+function buildEmailTemplate(data) {
+  const now = new Date();
+  const currentMonthIndex = now.getMonth(); 
+  const mesesDoAno = Object.keys(data.payment_statuses || {});
+  const mesesAteHoje = mesesDoAno.slice(0, currentMonthIndex + 1);
+  const totalMesesPagos = mesesAteHoje.filter(mes => String(data.payment_statuses[mes]).trim() === '20').length;
+  const totalMesesConsiderados = mesesAteHoje.length;
+  const mediaPresencaNum = parseFloat(data.media_presenca_jogador) || 0;
+  let corBarraPresenca;
+  let textoStatusPresenca;
+  if (mediaPresencaNum > 70) { corBarraPresenca = '#22c55e'; textoStatusPresenca = 'Excelente'; } 
+  else if (mediaPresencaNum >= 50) { corBarraPresenca = '#f59e0b'; textoStatusPresenca = 'Regular'; } 
+  else { corBarraPresenca = '#ef4444'; textoStatusPresenca = 'Abaixo da Meta'; }
+  let blocoMesAtrasoHtml = data.meses_atraso ? `<tr><td colspan="2" style="padding-top: 15px; border-top: 1px solid #e5e7eb;"><p style="margin: 0; font-size: 14px; color: #be123c;"><strong>Pendências:</strong> ${data.meses_atraso}</p></td></tr>` : '';
+  let mensagemPersonalizadaHtml = data.mensagem_personalizada ? `<tr><td class="card" style="background-color: #eff6ff; border-left: 4px solid #3b82f6;"><p style="margin:0; color: #1e3a8a; font-size: 15px; line-height: 1.5;">${data.mensagem_personalizada}</p></td></tr><tr><td style="height: 20px;"></td></tr>` : '';
+  
+  let qrCodeBlock = `
+    <tr><td style="height:20px;"></td></tr>
+    <tr>
+      <td class="card" style="text-align: center;">
+        <h2 class="section-title">Pagamento via PIX</h2>
+        <img src="${data.qr_code_url}" alt="QR Code PIX" style="width:150px; height:150px; margin: 10px auto;">
+        <p style="font-size: 12px; color: #6b7280; word-break: break-all; margin-top: 15px;"><strong>PIX Copia e Cola:</strong><br>${data.pix_copia_cola}</p>
+      </td>
+    </tr>
+  `;
+
+  return `<!DOCTYPE html><html lang="pt-br"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet"><style>body{margin:0;padding:0;background-color:#f3f4f6;font-family:'Inter',Arial,sans-serif;}.wrapper{width:100%;table-layout:fixed;background-color:#f3f4f6;padding:20px 0;}.main{background-color:#ffffff;margin:0 auto;width:100%;max-width:600px;border-spacing:0;color:#374151;border-radius:12px;overflow:hidden;box-shadow:0 10px 25px rgba(0,0,0,0.1);}.header{background-image:linear-gradient(45deg, #1e3a8a, #3b82f6);color:#ffffff;padding:30px;text-align:center;}.content{padding:30px;}.section-title{font-size:18px;font-weight:700;color:#111827;padding-bottom:8px;margin-bottom:16px;border-bottom:2px solid #e5e7eb;}.card{background-color:#ffffff;border:1px solid #e5e7eb;border-radius:8px;padding:20px;}.footer{background-color:#111827;color:#9ca3af;text-align:center;padding:20px;font-size:12px;}.status-tag{padding:4px 12px;border-radius:9999px;font-size:12px;font-weight:500;}</style></head><body><div class="wrapper"><table class="main" width="100%"><tr><td class="header"><img src="https://i.ibb.co/pGnycLc/ICONE-CBA.jpg" alt="Logo CBA" style="width:90px;height:90px;border-radius:50%;border:3px solid #ffffff;"><h1 style="font-size:26px;font-weight:700;margin:15px 0 5px 0;">Olá, ${data.nome_jogador}!</h1><p style="font-size:16px;margin:0;color:#dbeafe;">Seu relatório de desempenho mensal está pronto.</p></td></tr><tr><td class="content"><table width="100%" style="border-spacing:0;">${mensagemPersonalizadaHtml}<tr><td class="card"><h2 class="section-title">Resumo Mensal</h2><table width="100%" style="border-spacing:0;font-size:15px;"><tr><td style="padding-bottom:15px;font-weight:500;">Pagamentos do Ano:</td><td style="text-align:right;font-weight:700;color:#166534;">${totalMesesPagos} de ${totalMesesConsiderados} meses pagos ✅</td></tr><tr style="border-top:1px solid #e5e7eb;"><td style="padding-top:15px;font-weight:500;">Média de Presença:</td><td style="text-align:right;"><span class="status-tag" style="color:#ffffff;background-color:${corBarraPresenca};">${data.media_presenca_jogador} - ${textoStatusPresenca}</span></td></tr></table></td></tr><tr><td style="height:20px;"></td></tr><tr><td class="card"><h2 class="section-title">Situação Financeira</h2><table width="100%" style="border-spacing:0;font-size:15px;"><tr><td style="padding-bottom:15px;">Mensalidade (${data.mes_atual_nome}):</td><td style="text-align:right;"><span class="status-tag" style="color:${data.cor_status_mes === '#155724' ? '#166534' : '#9a3412'};background-color:${data.cor_status_mes === '#155724' ? '#dcfce7' : '#fff7ed'};">${data.mes_atual_status}</span></td></tr>${blocoMesAtrasoHtml}<tr style="border-top:1px solid #e5e7eb;"><td colspan="2" style="padding-top:15px;font-size:14px;color:#4b5563;"><p style="margin:0 0 5px 0;"><strong>Valor da Mensalidade:</strong> R$ 20,00</p><p style="margin:0;"><strong>PIX para Pagamento:</strong> CNPJ: 36.560.422/0001-69 (Nubank - Neilor Paiva)</p></td></tr></table></td></tr>${qrCodeBlock}<tr><td style="height:20px;"></td></tr><tr><td class="card"><h2 class="section-title">Detalhes de Presença</h2><p style="text-align:center;margin:0 0 20px 0;font-size:15px;">Você esteve em <strong>${data.resumo_presenca}</strong>.</p><div style="font-size:13px;color:#6b7280;margin-bottom:5px;">Sua Média: <strong style="color:#1d4ed8;">${data.media_presenca_jogador}</strong></div><div style="background-color:#e5e7eb;border-radius:999px;height:10px;"><div style="width:${data.chart_width_jogador}%;background-color:#3b82f6;border-radius:999px;height:10px;"></div></div><div style="font-size:13px;color:#6b7280;margin-top:15px;margin-bottom:5px;">Desempenho Geral do CBA: <strong style="color:#4b5563;">${data.media_presenca_cba}</strong></div><div style="background-color:#e5e7eb;border-radius:999px;height:10px;"><div style="width:${data.chart_width_cba}%;background-color:#6b7280;border-radius:999px;height:10px;"></div></div></td></tr></table></td></tr><tr><td class="footer"><p><strong>CBA - Basquete dos Aposentados</strong></p><p>Este é um e-mail automático. Por favor, não responda.</p></td></tr></table></div></body></html>`;
+}
+
+function processFinancialStatus(playerFinance, paymentHeaders) {
+  const now = new Date();
+  const currentMonthIndex = now.getMonth();
+  let overdueMonths = [];
+  let currentMonthStatus = "A Pagar";
+  let cor_status_mes = "#856404";
+  paymentHeaders.forEach((month, index) => {
+    const status = playerFinance.statuses[month];
+    if (index < currentMonthIndex && status != '20' && String(status).toLowerCase() !== 'isento') {
+      overdueMonths.push(month);
+    }
+    if (index === currentMonthIndex && status == '20') {
+      currentMonthStatus = "Pago";
+      cor_status_mes = "#155724";
+    }
+  });
+  return { cor_status_mes, mes_atual_status: currentMonthStatus, meses_atraso: overdueMonths.join(', ') };
+}
+
+function processPresenceStatus(playerPresence) {
+  const media_presenca_jogador = playerPresence.average.toFixed(1) + '%';
+  const resumo_presenca = `${playerPresence.presences} presenças em ${playerPresence.totalGames} treinos`;
+  let mensagem_personalizada = '';
+  if (playerPresence.average > 80) {
+    mensagem_personalizada = `<strong>Parabéns pelo comprometimento, continue assim!</strong> Sua dedicação é fundamental para o time.`;
+  } else if (playerPresence.average < 50) {
+    mensagem_personalizada = `<strong>Sentimos sua falta!</strong> Que tal voltar com tudo este mês? Sua presença é importante para nós.`;
+  }
+  return { media_presenca_jogador, resumo_presenca, mensagem_personalizada };
+}
+
+function generatePresenceChartData(playerAvg, cbaAvg) {
+  return { chart_width_jogador: playerAvg, chart_width_cba: cbaAvg };
+}
