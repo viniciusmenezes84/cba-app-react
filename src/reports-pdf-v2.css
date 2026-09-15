@@ -1,0 +1,57 @@
+/* PDF V2 print bounds
+   A4 portrait usable width with current margins is ~725 CSS px.
+   A4 landscape usable width with current margins is ~1075 CSS px.
+   Keep a small safety margin because html2canvas/html2pdf may round dimensions. */
+
+#pdf-v2-annual {
+  width: 700px !important;
+  max-width: 700px !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+}
+
+#pdf-v2-monthly {
+  width: 1040px !important;
+  max-width: 1040px !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+}
+
+#pdf-v2-annual *,
+#pdf-v2-monthly * {
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+#pdf-v2-annual table,
+#pdf-v2-monthly table {
+  width: 100% !important;
+  max-width: 100% !important;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+#pdf-v2-annual th,
+#pdf-v2-annual td,
+#pdf-v2-monthly th,
+#pdf-v2-monthly td {
+  max-width: 100%;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+#pdf-v2-annual img,
+#pdf-v2-monthly img {
+  max-width: 100%;
+}
+
+#pdf-v2-monthly th:first-child,
+#pdf-v2-monthly td:first-child {
+  width: 118px !important;
+}
+
+#pdf-v2-annual table th:first-child,
+#pdf-v2-annual table td:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
