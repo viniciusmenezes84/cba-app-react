@@ -14,6 +14,7 @@ import ReportsRankingCompactBridge from './ReportsRankingCompactBridge';
 import ReportsLegacyRankingHider from './ReportsLegacyRankingHider';
 import MesarioDashboardBridge from './MesarioDashboardBridge';
 import SorteioDashboardBridge from './SorteioDashboardBridge';
+import DmDashboardBridge from './DmDashboardBridge';
 import AdminDashboardBridge from './AdminDashboardBridge';
 import reportWebVitals from './reportWebVitals';
 
@@ -30,6 +31,7 @@ root.render(
       <ReportsLegacyRankingHider />
       <MesarioDashboardBridge />
       <SorteioDashboardBridge />
+      <DmDashboardBridge />
       <AdminDashboardBridge />
     </>
   </React.StrictMode>
