@@ -1,13 +1,11 @@
-const APP_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwNXGI4Cc5qGBye-IfWW_qqUcJ04NfArulExPXE4jgX0SZhWAmeWCjjKg2U9FFfHkHE/exec';
 const SUPABASE_URL = 'https://vqirdswgchlcxevepamu.supabase.co/functions/v1/cba-api';
 const SESSION_STORAGE_KEYS = ['cba_session_v1', 'cba_session_v2'];
 const BACKEND_EPOCH_KEY = 'cba_backend_epoch';
-const BACKEND_EPOCH = 'supabase-v1';
+const BACKEND_EPOCH = 'supabase-v2';
 
 const originalFetch = window.fetch.bind(window);
 
-// O corte para Supabase invalida uma única vez as sessões emitidas pelo Apps Script.
-// Isso evita que o app restaure um token legado e pareça autenticado sem estar.
+// Corte definitivo: invalida uma única vez qualquer sessão anterior ao backend Supabase-only.
 try {
   if (window.localStorage.getItem(BACKEND_EPOCH_KEY) !== BACKEND_EPOCH) {
     SESSION_STORAGE_KEYS.forEach(key => window.localStorage.removeItem(key));
@@ -26,6 +24,7 @@ function readSessionToken() {
       if (token) return token;
     } catch { /* tenta a próxima chave */ }
   }
+
   try {
     const raw = window.sessionStorage.getItem('cba_session_v2');
     if (raw) {
@@ -33,12 +32,8 @@ function readSessionToken() {
       return parsed?.token || parsed?.user?.token || null;
     }
   } catch { /* sem impacto */ }
-  return null;
-}
 
-function isBackendUrl(input) {
-  const value = typeof input === 'string' ? input : input?.url;
-  return value === APP_SCRIPT_URL || value === SUPABASE_URL;
+  return null;
 }
 
 function readBody(init = {}) {
@@ -96,26 +91,25 @@ function waitForSessionToken(signal) {
 }
 
 async function rewriteRequest(input, init = {}) {
-  if (!isBackendUrl(input)) return { input, init };
+  const body = readBody(init);
+
+  // Todas as operações do Portal CBA usam um corpo JSON com "action".
+  // Quando esse contrato é detectado, a chamada é enviada diretamente ao Supabase,
+  // independentemente da URL antiga que algum componente legado ainda tenha em memória.
+  if (!body?.action) return { input, init };
 
   const nextInit = { ...init };
-  const body = readBody(nextInit);
+  const action = String(body.action || '');
+  let token = body.token || readSessionToken();
 
-  if (body) {
-    const action = String(body.action || '');
-    let token = body.token || readSessionToken();
-
-    // Os bridges de Presença/Relatórios/Mesário são montados junto com a tela de login.
-    // No backend antigo as leituras eram públicas; no Supabase elas exigem sessão.
-    // Em vez de deixar essas chamadas receberem 401 e renderizarem dashboards zerados,
-    // aguardamos o login concluir e só então enviamos a primeira leitura.
-    if (!token && action && action !== 'loginUser') {
-      token = await waitForSessionToken(nextInit.signal);
-    }
-
-    if (token && action !== 'loginUser') body.token = token;
-    nextInit.body = JSON.stringify(body);
+  // Alguns bridges são montados antes da autenticação. A primeira leitura aguarda
+  // a sessão existir para não transformar um 401 em um dashboard vazio.
+  if (!token && action !== 'loginUser') {
+    token = await waitForSessionToken(nextInit.signal);
   }
+
+  if (token && action !== 'loginUser') body.token = token;
+  nextInit.body = JSON.stringify(body);
 
   return { input: SUPABASE_URL, init: nextInit };
 }
@@ -126,9 +120,10 @@ window.fetch = async (input, init) => {
 };
 
 window.__CBA_BACKEND__ = {
-  mode: 'supabase',
+  mode: 'supabase-only',
   provider: 'Supabase',
   endpoint: SUPABASE_URL,
+  legacyFallback: false,
 };
 
 export {};
