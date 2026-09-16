@@ -8,6 +8,7 @@ import App from './App';
 import PresenceDashboardBridge from './PresenceDashboardBridge';
 import ReportsDashboardBridge from './ReportsDashboardBridge';
 import ReportsStatsByDateBridge from './ReportsStatsByDateBridge';
+import './ReportsStatsLayoutFix';
 import ReportsPdfBridgeV2 from './ReportsPdfBridgeV2';
 import ReportsRankingCompactBridge from './ReportsRankingCompactBridge';
 import ReportsLegacyRankingHider from './ReportsLegacyRankingHider';
