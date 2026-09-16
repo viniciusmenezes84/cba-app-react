@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import './SupabaseCutoverProxy';
 import './index.css';
 import './reports-pdf-v2.css';
 import './mesario-compact.css';
