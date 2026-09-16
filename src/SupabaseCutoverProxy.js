@@ -1,4 +1,4 @@
-const SUPABASE_URL = 'https://vqirdswgchlcxevepamu.supabase.co/functions/v1/cba-api';
+const SUPABASE_URL = 'https://vqirdswgchlcxevepamu.supabase.co/functions/v1/cba-gateway';
 const SESSION_STORAGE_KEYS = ['cba_session_v1', 'cba_session_v2'];
 const BACKEND_EPOCH_KEY = 'cba_backend_epoch';
 const BACKEND_EPOCH = 'supabase-v2';
@@ -94,8 +94,8 @@ async function rewriteRequest(input, init = {}) {
   const body = readBody(init);
 
   // Todas as operações do Portal CBA usam um corpo JSON com "action".
-  // Quando esse contrato é detectado, a chamada é enviada diretamente ao Supabase,
-  // independentemente da URL antiga que algum componente legado ainda tenha em memória.
+  // Quando esse contrato é detectado, a chamada é enviada diretamente ao gateway Supabase,
+  // independentemente da URL que algum componente legado ainda tenha em memória.
   if (!body?.action) return { input, init };
 
   const nextInit = { ...init };
