@@ -6,6 +6,7 @@ import App from './App';
 import PresenceDashboardBridge from './PresenceDashboardBridge';
 import ReportsDashboardBridge from './ReportsDashboardBridge';
 import ReportsPdfBridgeV2 from './ReportsPdfBridgeV2';
+import ReportsRankingCompactBridge from './ReportsRankingCompactBridge';
 import reportWebVitals from './reportWebVitals';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
@@ -16,6 +17,7 @@ root.render(
       <PresenceDashboardBridge />
       <ReportsDashboardBridge />
       <ReportsPdfBridgeV2 />
+      <ReportsRankingCompactBridge />
     </>
   </React.StrictMode>
 );
