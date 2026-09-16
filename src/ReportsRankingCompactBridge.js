@@ -331,7 +331,8 @@ function CompactRanking({ data, year, onSelectPlayer }) {
 
 function findRankingCard() {
   const attendanceButton = [...document.querySelectorAll('button')]
-    .find(button => button.textContent?.trim() === 'Assiduidade');
+    .filter(button => button.textContent?.trim() === 'Assiduidade' && !button.closest('[data-compact-reports-ranking="true"]'))
+    .at(-1);
   if (!attendanceButton) return null;
 
   let element = attendanceButton.parentElement;
