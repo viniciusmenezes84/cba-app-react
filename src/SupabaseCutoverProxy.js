@@ -1,4 +1,10 @@
 const SUPABASE_URL = 'https://vqirdswgchlcxevepamu.supabase.co/functions/v1/cba-gateway';
+const ADMIN_URL = 'https://vqirdswgchlcxevepamu.supabase.co/functions/v1/cba-admin';
+const LEGACY_APP_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwNXGI4Cc5qGBye-IfWW_qqUcJ04NfArulExPXE4jgX0SZhWAmeWCjjKg2U9FFfHkHE/exec';
+const LEGACY_SUPABASE_URLS = [
+  'https://vqirdswgchlcxevepamu.supabase.co/functions/v1/cba-api',
+  'https://vqirdswgchlcxevepamu.supabase.co/functions/v1/legacy-api',
+];
 const SESSION_STORAGE_KEYS = ['cba_session_v1', 'cba_session_v2'];
 const BACKEND_EPOCH_KEY = 'cba_backend_epoch';
 const BACKEND_EPOCH = 'supabase-v2';
@@ -44,6 +50,15 @@ function readBody(init = {}) {
   } catch {
     return null;
   }
+}
+
+function requestUrl(input) {
+  return typeof input === 'string' ? input : input?.url || '';
+}
+
+function shouldRouteToGateway(input) {
+  const url = requestUrl(input);
+  return url === SUPABASE_URL || url === LEGACY_APP_SCRIPT_URL || LEGACY_SUPABASE_URLS.includes(url);
 }
 
 function waitForSessionToken(signal) {
@@ -93,10 +108,11 @@ function waitForSessionToken(signal) {
 async function rewriteRequest(input, init = {}) {
   const body = readBody(init);
 
-  // Todas as operações do Portal CBA usam um corpo JSON com "action".
-  // Quando esse contrato é detectado, a chamada é enviada diretamente ao gateway Supabase,
-  // independentemente da URL que algum componente legado ainda tenha em memória.
-  if (!body?.action) return { input, init };
+  // Somente chamadas do backend operacional do Portal CBA são redirecionadas.
+  // Endpoints especializados, como cba-admin, devem seguir para sua URL original.
+  if (!body?.action || !shouldRouteToGateway(input) || requestUrl(input) === ADMIN_URL) {
+    return { input, init };
+  }
 
   const nextInit = { ...init };
   const action = String(body.action || '');
@@ -123,6 +139,7 @@ window.__CBA_BACKEND__ = {
   mode: 'supabase-only',
   provider: 'Supabase',
   endpoint: SUPABASE_URL,
+  adminEndpoint: ADMIN_URL,
   legacyFallback: false,
 };
 
