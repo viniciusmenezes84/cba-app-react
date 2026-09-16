@@ -10,6 +10,7 @@ import ReportsDashboardBridge from './ReportsDashboardBridge';
 import ReportsStatsByDateBridge from './ReportsStatsByDateBridge';
 import './ReportsStatsLayoutFix';
 import ReportsPdfBridgeV2 from './ReportsPdfBridgeV2';
+import AnnualReportMedicalBridge from './AnnualReportMedicalBridge';
 import ReportsRankingCompactBridge from './ReportsRankingCompactBridge';
 import ReportsLegacyRankingHider from './ReportsLegacyRankingHider';
 import MesarioDashboardBridge from './MesarioDashboardBridge';
@@ -27,6 +28,7 @@ root.render(
       <ReportsDashboardBridge />
       <ReportsStatsByDateBridge />
       <ReportsPdfBridgeV2 />
+      <AnnualReportMedicalBridge />
       <ReportsRankingCompactBridge />
       <ReportsLegacyRankingHider />
       <MesarioDashboardBridge />
