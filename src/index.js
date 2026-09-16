@@ -11,6 +11,7 @@ import ReportsPdfBridgeV2 from './ReportsPdfBridgeV2';
 import ReportsRankingCompactBridge from './ReportsRankingCompactBridge';
 import ReportsLegacyRankingHider from './ReportsLegacyRankingHider';
 import MesarioDashboardBridge from './MesarioDashboardBridge';
+import AdminDashboardBridge from './AdminDashboardBridge';
 import reportWebVitals from './reportWebVitals';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
@@ -24,6 +25,7 @@ root.render(
       <ReportsRankingCompactBridge />
       <ReportsLegacyRankingHider />
       <MesarioDashboardBridge />
+      <AdminDashboardBridge />
     </>
   </React.StrictMode>
 );
