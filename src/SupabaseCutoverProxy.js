@@ -1,39 +1,60 @@
-const LEGACY_URL = 'https://script.google.com/macros/s/AKfycbwNXGI4Cc5qGBye-IfWW_qqUcJ04NfArulExPXE4jgX0SZhWAmeWCjjKg2U9FFfHkHE/exec';
-const SUPABASE_URL = 'https://vqirdswgchlcxevepamu.supabase.co/functions/v1/legacy-api';
-const SESSION_STORAGE_KEY = 'cba_session_v1';
+const APP_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwNXGI4Cc5qGBye-IfWW_qqUcJ04NfArulExPXE4jgX0SZhWAmeWCjjKg2U9FFfHkHE/exec';
+const SUPABASE_URL = 'https://vqirdswgchlcxevepamu.supabase.co/functions/v1/cba-api';
+const SESSION_STORAGE_KEYS = ['cba_session_v1', 'cba_session_v2'];
+const BACKEND_EPOCH_KEY = 'cba_backend_epoch';
+const BACKEND_EPOCH = 'supabase-v1';
 
 const originalFetch = window.fetch.bind(window);
 
-function readLegacyToken() {
-  try {
-    const raw = window.localStorage.getItem(SESSION_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return parsed?.user?.token || parsed?.user?.user?.token || null;
-  } catch {
-    return null;
+// O corte para Supabase invalida uma única vez as sessões emitidas pelo Apps Script.
+// Isso evita que o app restaure um token legado e pareça autenticado sem estar.
+try {
+  if (window.localStorage.getItem(BACKEND_EPOCH_KEY) !== BACKEND_EPOCH) {
+    SESSION_STORAGE_KEYS.forEach(key => window.localStorage.removeItem(key));
+    try { window.sessionStorage.removeItem('cba_session_v2'); } catch { /* sem impacto */ }
+    window.localStorage.setItem(BACKEND_EPOCH_KEY, BACKEND_EPOCH);
   }
+} catch { /* armazenamento pode estar indisponível em modo privado */ }
+
+function readSessionToken() {
+  for (const key of SESSION_STORAGE_KEYS) {
+    try {
+      const raw = window.localStorage.getItem(key);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      const token = parsed?.user?.token || parsed?.user?.user?.token || parsed?.token;
+      if (token) return token;
+    } catch { /* tenta a próxima chave */ }
+  }
+  try {
+    const raw = window.sessionStorage.getItem('cba_session_v2');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return parsed?.token || parsed?.user?.token || null;
+    }
+  } catch { /* sem impacto */ }
+  return null;
 }
 
-function isLegacyBackendUrl(input) {
+function isBackendUrl(input) {
   const value = typeof input === 'string' ? input : input?.url;
-  return value === LEGACY_URL;
+  return value === APP_SCRIPT_URL || value === SUPABASE_URL;
 }
 
-async function rewriteRequest(input, init = {}) {
-  if (!isLegacyBackendUrl(input)) return { input, init };
+function rewriteRequest(input, init = {}) {
+  if (!isBackendUrl(input)) return { input, init };
 
   const nextInit = { ...init };
   if (typeof nextInit.body === 'string') {
     try {
       const body = JSON.parse(nextInit.body);
       if (body && typeof body === 'object' && !Array.isArray(body)) {
-        const token = body.token || readLegacyToken();
+        const token = body.token || readSessionToken();
         if (token && body.action !== 'loginUser') body.token = token;
         nextInit.body = JSON.stringify(body);
       }
     } catch {
-      // Mantém o corpo original caso não seja JSON.
+      // Mantém o corpo original caso uma chamada futura não use JSON.
     }
   }
 
@@ -41,12 +62,13 @@ async function rewriteRequest(input, init = {}) {
 }
 
 window.fetch = async (input, init) => {
-  const rewritten = await rewriteRequest(input, init);
+  const rewritten = rewriteRequest(input, init);
   return originalFetch(rewritten.input, rewritten.init);
 };
 
 window.__CBA_BACKEND__ = {
-  mode: 'supabase-cutover',
+  mode: 'supabase',
+  provider: 'Supabase',
   endpoint: SUPABASE_URL,
 };
 
