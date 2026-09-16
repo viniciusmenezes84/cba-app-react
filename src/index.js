@@ -7,6 +7,7 @@ import PresenceDashboardBridge from './PresenceDashboardBridge';
 import ReportsDashboardBridge from './ReportsDashboardBridge';
 import ReportsPdfBridgeV2 from './ReportsPdfBridgeV2';
 import ReportsRankingCompactBridge from './ReportsRankingCompactBridge';
+import ReportsLegacyRankingHider from './ReportsLegacyRankingHider';
 import reportWebVitals from './reportWebVitals';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
@@ -18,6 +19,7 @@ root.render(
       <ReportsDashboardBridge />
       <ReportsPdfBridgeV2 />
       <ReportsRankingCompactBridge />
+      <ReportsLegacyRankingHider />
     </>
   </React.StrictMode>
 );
