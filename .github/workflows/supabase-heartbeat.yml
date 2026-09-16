@@ -1,0 +1,35 @@
+name: Supabase heartbeat
+
+on:
+  schedule:
+    # 00:17, 08:17 e 16:17 no horário de Salvador (UTC-3).
+    - cron: '17 3,11,19 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-heartbeat
+  cancel-in-progress: false
+
+jobs:
+  keep-database-active:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Consultar saúde do banco CBA
+        shell: bash
+        run: |
+          set -euo pipefail
+          RESPONSE="$(curl \
+            --fail \
+            --silent \
+            --show-error \
+            --retry 3 \
+            --retry-delay 5 \
+            --max-time 20 \
+            'https://vqirdswgchlcxevepamu.supabase.co/functions/v1/cba-health')"
+
+          echo "$RESPONSE"
+          echo "$RESPONSE" | grep -q '"ok":true'
