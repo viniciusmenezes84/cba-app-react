@@ -7,6 +7,7 @@ import './mesario-compact.css';
 import App from './App';
 import PresenceDashboardBridge from './PresenceDashboardBridge';
 import ReportsDashboardBridge from './ReportsDashboardBridge';
+import ReportsStatsByDateBridge from './ReportsStatsByDateBridge';
 import ReportsPdfBridgeV2 from './ReportsPdfBridgeV2';
 import ReportsRankingCompactBridge from './ReportsRankingCompactBridge';
 import ReportsLegacyRankingHider from './ReportsLegacyRankingHider';
@@ -21,6 +22,7 @@ root.render(
       <App />
       <PresenceDashboardBridge />
       <ReportsDashboardBridge />
+      <ReportsStatsByDateBridge />
       <ReportsPdfBridgeV2 />
       <ReportsRankingCompactBridge />
       <ReportsLegacyRankingHider />
