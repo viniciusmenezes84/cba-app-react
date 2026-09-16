@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
 import './reports-pdf-v2.css';
+import './mesario-compact.css';
 import App from './App';
 import PresenceDashboardBridge from './PresenceDashboardBridge';
 import ReportsDashboardBridge from './ReportsDashboardBridge';
