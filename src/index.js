@@ -13,6 +13,7 @@ import ReportsPdfBridgeV2 from './ReportsPdfBridgeV2';
 import ReportsRankingCompactBridge from './ReportsRankingCompactBridge';
 import ReportsLegacyRankingHider from './ReportsLegacyRankingHider';
 import MesarioDashboardBridge from './MesarioDashboardBridge';
+import SorteioDashboardBridge from './SorteioDashboardBridge';
 import AdminDashboardBridge from './AdminDashboardBridge';
 import reportWebVitals from './reportWebVitals';
 
@@ -28,6 +29,7 @@ root.render(
       <ReportsRankingCompactBridge />
       <ReportsLegacyRankingHider />
       <MesarioDashboardBridge />
+      <SorteioDashboardBridge />
       <AdminDashboardBridge />
     </>
   </React.StrictMode>
@@ -35,5 +37,5 @@ root.render(
 
 // If you want to start measuring performance in your app, pass a function
 // to log results (for example: reportWebVitals(console.log))
-// or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals
+// or send to the results analytics endpoint. Learn more: https://bit.ly/CRA-vitals
 reportWebVitals();
