@@ -16,7 +16,7 @@ import ReportsLegacyRankingHider from './ReportsLegacyRankingHider';
 import MesarioDashboardBridge from './MesarioDashboardBridge';
 import SorteioDashboardBridge from './SorteioDashboardBridge';
 import DmDashboardBridge from './DmDashboardBridge';
-import AdminDashboardBridge from './AdminDashboardBridge';
+import AdminDashboardBridge from './AdminDashboardBridge.runtime';
 import reportWebVitals from './reportWebVitals';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
