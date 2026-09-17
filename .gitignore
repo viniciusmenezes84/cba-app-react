@@ -11,6 +11,9 @@
 # production
 /build
 
+# generated runtime bridges
+/src/AdminDashboardBridge.runtime.js
+
 # misc
 .DS_Store
 .env.local
