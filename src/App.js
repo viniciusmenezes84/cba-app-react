@@ -311,12 +311,12 @@ const LoginScreen = ({ onLogin, isLoading, error }) => {
                 <div className="absolute -bottom-36 left-[28%] w-80 h-80 sm:w-[30rem] sm:h-[30rem] rounded-full bg-emerald-500/[0.06] blur-3xl"></div>
             </div>
 
-            <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+            <div className="absolute inset-0 pointer-events-none overflow-hidden">
                 <img
                     src="https://lh3.googleusercontent.com/d/131DvcfgiRLLp9irVnVY8m9qNuM-0y7f8"
                     alt=""
                     aria-hidden="true"
-                    className="w-[290px] sm:w-[430px] lg:w-[560px] opacity-[0.035] select-none"
+                    className="absolute right-4 bottom-4 sm:right-8 sm:bottom-8 lg:right-10 lg:bottom-10 w-[120px] sm:w-[170px] lg:w-[220px] opacity-[0.11] sm:opacity-[0.13] select-none"
                 />
             </div>
 
