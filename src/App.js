@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Activity, CalendarDays, BookOpen, DollarSign, Users, PartyPopper, BarChart, BellRing, 
     X, Menu, Copy, LogOut, RefreshCw, Trophy, Flame, MapPin, ChevronDown, CheckCircle, AlertCircle, Share2, ArrowLeft, Trash, Edit, ClipboardList, Minus, Award, Crown, Star,
-    Stethoscope, HeartPulse, PlusSquare
+    Stethoscope, HeartPulse, PlusSquare, KeyRound
 } from 'lucide-react';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, 
@@ -2900,6 +2900,9 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
     const [activeTab, setActiveTab] = useState('presenca');
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [refreshTrigger, setRefreshTrigger] = useState(0);
+    const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+    const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    const [passwordStatus, setPasswordStatus] = useState({ loading: false, error: '' });
 
     const { data: initialData, isLoading, refetch } = useDataQuery(
         (signal) => api.post(SCRIPT_URL, { action: 'getInitialAppData' }, signal), 
@@ -2922,6 +2925,35 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
             console.error("Erro ao limpar cache", e);
         }
         setRefreshTrigger(prev => prev + 1);
+    };
+
+    const handleOwnPasswordChange = async (e) => {
+        e.preventDefault();
+        const currentPassword = passwordForm.currentPassword;
+        const newPassword = passwordForm.newPassword;
+        const confirmPassword = passwordForm.confirmPassword;
+        if (!currentPassword) {
+            setPasswordStatus({ loading: false, error: 'Informe sua senha atual.' });
+            return;
+        }
+        if (newPassword.length < 8) {
+            setPasswordStatus({ loading: false, error: 'A nova senha deve ter pelo menos 8 caracteres.' });
+            return;
+        }
+        if (newPassword !== confirmPassword) {
+            setPasswordStatus({ loading: false, error: 'A confirmação não corresponde à nova senha.' });
+            return;
+        }
+        try {
+            setPasswordStatus({ loading: true, error: '' });
+            await api.post(SCRIPT_URL, { action: 'changeOwnPassword', currentPassword, newPassword });
+            setIsPasswordModalOpen(false);
+            setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+            window.alert('Senha alterada com sucesso. Entre novamente com a nova senha.');
+            onLogout();
+        } catch (error) {
+            setPasswordStatus({ loading: false, error: error?.message || 'Não foi possível alterar a senha.' });
+        }
     };
 
     const TAB_CONFIG = {
@@ -3000,10 +3032,37 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
                     </div>
                     <div className="flex gap-2">
                         <button onClick={handleForceRefresh} aria-label="Atualizar dados" title="Atualizar dados" className="p-2 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl shadow-sm hover:shadow-md"><RefreshCw className="w-5 h-5" /></button>
+                        <button onClick={() => { setPasswordStatus({ loading: false, error: '' }); setIsPasswordModalOpen(true); }} aria-label="Redefinir senha" title="Redefinir senha" className="px-3 py-2 bg-slate-100 dark:bg-slate-800 text-emerald-500 font-bold text-sm rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-900/20 border border-slate-200 dark:border-slate-700 flex items-center gap-2"><KeyRound className="w-4 h-4"/><span className="hidden md:inline">Senha</span></button>
                         <button onClick={onLogout} className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-rose-500 font-bold text-sm rounded-xl hover:bg-rose-50 dark:hover:bg-rose-900/20 border border-slate-200 dark:border-slate-700 flex items-center gap-2"><LogOut className="w-4 h-4 hidden sm:block"/> Sair</button>
                     </div>
                 </header>
                 <main className="flex-1 overflow-y-auto p-4 md:p-8"><div className="max-w-7xl mx-auto pb-20">{renderContent()}</div></main>
+                <AnimatePresence>
+                    {isPasswordModalOpen && (
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[120] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => !passwordStatus.loading && setIsPasswordModalOpen(false)}>
+                            <motion.form initial={{ opacity: 0, scale: 0.96, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96, y: 10 }} onSubmit={handleOwnPasswordChange} onClick={e => e.stopPropagation()} className="w-full max-w-md rounded-3xl border border-slate-700 bg-slate-900 p-5 md:p-6 shadow-2xl">
+                                <div className="flex items-start justify-between gap-4 mb-5">
+                                    <div>
+                                        <div className="flex items-center gap-2 text-emerald-400"><KeyRound className="w-5 h-5"/><span className="text-xs font-black uppercase tracking-wider">Segurança</span></div>
+                                        <h2 className="text-xl font-black text-white mt-2">Redefinir minha senha</h2>
+                                        <p className="text-xs text-slate-400 mt-1">{user.email}</p>
+                                    </div>
+                                    <button type="button" disabled={passwordStatus.loading} onClick={() => setIsPasswordModalOpen(false)} className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-40"><X className="w-5 h-5"/></button>
+                                </div>
+                                <div className="space-y-4">
+                                    <label className="block"><span className="block text-[10px] uppercase tracking-wider font-black text-slate-400 mb-1.5">Senha atual</span><input type="password" autoComplete="current-password" value={passwordForm.currentPassword} onChange={e => setPasswordForm({...passwordForm, currentPassword:e.target.value})} className="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-3 text-sm text-white outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500"/></label>
+                                    <label className="block"><span className="block text-[10px] uppercase tracking-wider font-black text-slate-400 mb-1.5">Nova senha</span><input type="password" minLength={8} autoComplete="new-password" value={passwordForm.newPassword} onChange={e => setPasswordForm({...passwordForm, newPassword:e.target.value})} className="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-3 text-sm text-white outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500"/><span className="block text-[10px] text-slate-500 mt-1">Mínimo de 8 caracteres.</span></label>
+                                    <label className="block"><span className="block text-[10px] uppercase tracking-wider font-black text-slate-400 mb-1.5">Confirmar nova senha</span><input type="password" minLength={8} autoComplete="new-password" value={passwordForm.confirmPassword} onChange={e => setPasswordForm({...passwordForm, confirmPassword:e.target.value})} className="w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-3 text-sm text-white outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500"/></label>
+                                </div>
+                                {passwordStatus.error && <div className="mt-4 rounded-xl border border-rose-500/30 bg-rose-950/40 px-3 py-2.5 text-sm font-bold text-rose-300">{passwordStatus.error}</div>}
+                                <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 mt-6">
+                                    <button type="button" disabled={passwordStatus.loading} onClick={() => setIsPasswordModalOpen(false)} className="px-4 py-2.5 rounded-xl bg-slate-800 text-slate-300 font-black hover:bg-slate-700 disabled:opacity-40">Cancelar</button>
+                                    <button type="submit" disabled={passwordStatus.loading || !passwordForm.currentPassword || passwordForm.newPassword.length < 8 || passwordForm.newPassword !== passwordForm.confirmPassword} className="px-4 py-2.5 rounded-xl bg-emerald-600 text-white font-black hover:bg-emerald-500 disabled:opacity-40 flex items-center justify-center gap-2">{passwordStatus.loading ? <RefreshCw className="w-4 h-4 animate-spin"/> : <KeyRound className="w-4 h-4"/>}Salvar nova senha</button>
+                                </div>
+                            </motion.form>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </div>
         </div>
     );
