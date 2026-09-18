@@ -3044,7 +3044,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
                 {TABS.map(tab => {
                     const { Icon, activeBg, color, label } = TAB_CONFIG[tab];
                     return (
-                        <button key={tab} title={label} onClick={() => { setActiveTab(tab); setIsSidebarOpen(false); }} className={`flex items-center gap-3 w-full min-h-12 px-3.5 rounded-2xl transition-all duration-300 text-left ${activeTab === tab ? `${activeBg} shadow-lg scale-[1.02]` : `${color} hover:bg-slate-100 dark:hover:bg-slate-800`}`}>
+                        <button key={tab} title={label} onClick={() => { setActiveTab(tab); setIsSidebarOpen(false); }} className={`flex items-center gap-3 w-full min-h-12 px-3.5 rounded-2xl transition-all duration-300 text-left ${activeTab === tab ? `${activeBg} shadow-lg scale-110 md:scale-[1.02]` : `${color} hover:bg-slate-100 dark:hover:bg-slate-800`}`}>
                             <Icon className="w-5 h-5 shrink-0" />
                             <span className="font-black text-sm truncate">{label}</span>
                         </button>
