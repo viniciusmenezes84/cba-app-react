@@ -17,6 +17,7 @@ import MesarioDashboardBridge from './MesarioDashboardBridge';
 import SorteioDashboardBridge from './SorteioDashboardBridge';
 import DmDashboardBridge from './DmDashboardBridge';
 import AdminDashboardBridge from './AdminDashboardBridge.runtime';
+import PortalExperienceBridge from './PortalExperienceBridge';
 import reportWebVitals from './reportWebVitals';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
@@ -35,6 +36,7 @@ root.render(
       <SorteioDashboardBridge />
       <DmDashboardBridge />
       <AdminDashboardBridge />
+      <PortalExperienceBridge />
     </>
   </React.StrictMode>
 );

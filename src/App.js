@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Activity, CalendarDays, BookOpen, DollarSign, Users, PartyPopper, BarChart, BellRing, 
     X, Menu, Copy, LogOut, RefreshCw, Trophy, Flame, MapPin, ChevronDown, CheckCircle, AlertCircle, Share2, ArrowLeft, Trash, Edit, ClipboardList, Minus, Award, Crown, Star,
-    Stethoscope, HeartPulse, PlusSquare, KeyRound
+    Stethoscope, HeartPulse, PlusSquare, KeyRound, Home, Eye, EyeOff
 } from 'lucide-react';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, 
@@ -298,30 +298,43 @@ const AccordionItem = ({ title, children, isOpen, onClick }) => {
 };
 
 // --- AUTENTICAÇÃO ---
-const LoginScreen = ({ onLogin, isLoading, error }) => (
-    <div className="min-h-screen bg-cover bg-center flex items-center justify-center p-4 relative" style={{ backgroundImage: "url('https://images.unsplash.com/photo-1546519638-68e109498ffc?q=80&w=2070&auto=format&fit=crop')" }}>
-        <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm"></div>
-        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.5 }} className="relative z-10 p-10 bg-slate-900/40 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl text-center w-full max-w-md">
-            <img src="https://lh3.googleusercontent.com/d/131DvcfgiRLLp9irVnVY8m9qNuM-0y7f8" alt="Logo CBA" className="h-28 w-28 rounded-full shadow-2xl mx-auto mb-6 ring-4 ring-white/20" />
-            <h1 className="text-4xl font-extrabold text-white mb-2 tracking-tight">Portal do CBA</h1>
-            <p className="text-slate-300 mb-8 font-medium">Basquete dos Aposentados</p>
-            {error && <p className="bg-red-500/20 border border-red-500/50 text-red-200 p-3 rounded-xl mb-6 text-sm flex items-center justify-center gap-2"><AlertCircle className="w-4 h-4"/>{error}</p>}
-            <form onSubmit={onLogin} className="space-y-5">
-                <div>
-                    <label htmlFor="login-email" className="sr-only">Email</label>
-                    <input id="login-email" name="email" type="email" placeholder="Email" className="w-full p-4 bg-slate-800/50 border border-slate-600 text-white rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" required />
+const LoginScreen = ({ onLogin, isLoading, error }) => {
+    const [showPassword, setShowPassword] = useState(false);
+    const [showHelp, setShowHelp] = useState(false);
+    return (
+        <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 relative overflow-hidden">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,.18),transparent_35%),radial-gradient(circle_at_bottom_left,rgba(34,197,94,.10),transparent_35%)]"></div>
+            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-400/40 to-transparent"></div>
+            <motion.div initial={{ opacity: 0, scale: 0.96, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 0.35 }} className="relative z-10 p-6 sm:p-9 bg-slate-900/85 backdrop-blur-xl border border-slate-700/70 rounded-3xl shadow-2xl w-full max-w-md">
+                <div className="text-center">
+                    <img src="https://lh3.googleusercontent.com/d/131DvcfgiRLLp9irVnVY8m9qNuM-0y7f8" alt="Logo CBA" className="h-24 w-24 rounded-full shadow-2xl mx-auto mb-5 ring-4 ring-emerald-500/10" />
+                    <div className="inline-flex items-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[.18em] text-emerald-300">Área restrita</div>
+                    <h1 className="text-3xl sm:text-4xl font-black text-white mt-3 tracking-tight">Portal do CBA</h1>
+                    <p className="text-slate-400 mt-1 mb-7 font-medium">Basquete dos Aposentados</p>
                 </div>
-                <div>
-                    <label htmlFor="login-password" className="sr-only">Senha</label>
-                    <input id="login-password" name="password" type="password" placeholder="Senha" className="w-full p-4 bg-slate-800/50 border border-slate-600 text-white rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" required />
-                </div>
-                <button type="submit" disabled={isLoading} className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-indigo-500/30 disabled:opacity-70 transition-transform active:scale-95">
-                    {isLoading ? 'Autenticando...' : 'Entrar na Área Restrita'}
-                </button>
-            </form>
-        </motion.div>
-    </div>
-);
+                {error && <p className="bg-rose-500/10 border border-rose-500/30 text-rose-200 p-3 rounded-xl mb-5 text-sm flex items-center gap-2"><AlertCircle className="w-4 h-4 shrink-0"/>{error}</p>}
+                <form onSubmit={onLogin} className="space-y-4">
+                    <label className="block">
+                        <span className="block text-[10px] uppercase tracking-wider font-black text-slate-500 mb-1.5">E-mail</span>
+                        <input id="login-email" name="email" type="email" autoComplete="email" placeholder="seuemail@gmail.com" className="w-full p-4 bg-slate-950/70 border border-slate-700 text-white rounded-xl focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500 outline-none" required />
+                    </label>
+                    <label className="block">
+                        <span className="block text-[10px] uppercase tracking-wider font-black text-slate-500 mb-1.5">Senha</span>
+                        <div className="relative">
+                            <input id="login-password" name="password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" placeholder="Sua senha" className="w-full p-4 pr-12 bg-slate-950/70 border border-slate-700 text-white rounded-xl focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-500 outline-none" required />
+                            <button type="button" onClick={() => setShowPassword(v => !v)} aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'} className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-lg flex items-center justify-center text-slate-500 hover:text-white hover:bg-slate-800">{showPassword ? <EyeOff className="w-4 h-4"/> : <Eye className="w-4 h-4"/>}</button>
+                        </div>
+                    </label>
+                    <button type="submit" disabled={isLoading} className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black py-4 rounded-xl shadow-lg shadow-emerald-950/30 disabled:opacity-70 transition-transform active:scale-[.99]">
+                        {isLoading ? 'Autenticando...' : 'Entrar no Portal'}
+                    </button>
+                </form>
+                <button type="button" onClick={() => setShowHelp(v => !v)} className="w-full text-center text-xs font-bold text-slate-500 hover:text-slate-300 mt-4">Esqueci minha senha</button>
+                {showHelp && <div className="mt-3 rounded-xl border border-slate-700 bg-slate-950/60 p-3 text-xs text-slate-400 text-center">Solicite a redefinição de senha a um administrador do CBA. O autoatendimento por e-mail será ativado quando o serviço de e-mail estiver configurado.</div>}
+            </motion.div>
+        </div>
+    );
+};
 
 // --- COMPONENTES ESPECÍFICOS DAS ABAS ---
 const ProximoJogoCard = ({ game, currentUser, onAttendanceUpdate }) => {
@@ -2897,7 +2910,12 @@ const HallDaFamaTab = ({ allPlayersData, dates }) => {
 
 // --- MAIN APP ---
 const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
-    const [activeTab, setActiveTab] = useState('presenca');
+    const [activeTab, setActiveTab] = useState(() => {
+        try {
+            const saved = localStorage.getItem('cba_last_tab_v1');
+            return saved || 'inicio';
+        } catch { return 'inicio'; }
+    });
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [refreshTrigger, setRefreshTrigger] = useState(0);
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
@@ -2911,12 +2929,20 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
     
     const isAdmin = user?.role?.toUpperCase() === 'ADMIN';
     
-    const TABS = useMemo(() => isAdmin ? ['presenca', 'relatorios', 'mesario', 'financas', 'jogos', 'eventos', 'sorteio', 'dm', 'halldafama', 'estatuto', 'notificacoes'] : ['presenca', 'relatorios', 'financas', 'jogos', 'eventos', 'sorteio', 'dm', 'halldafama', 'estatuto'], [isAdmin]);
+    const TABS = useMemo(() => isAdmin ? ['inicio', 'presenca', 'relatorios', 'mesario', 'financas', 'jogos', 'eventos', 'sorteio', 'dm', 'halldafama', 'estatuto', 'notificacoes'] : ['inicio', 'presenca', 'relatorios', 'financas', 'jogos', 'eventos', 'sorteio', 'dm', 'halldafama', 'estatuto'], [isAdmin]);
 
     useEffect(() => {
         window.navigateToTab = (tabName) => { if (TABS.includes(tabName)) setActiveTab(tabName); };
         return () => delete window.navigateToTab;
     }, [TABS]);
+    
+    useEffect(() => {
+        if (!TABS.includes(activeTab)) {
+            setActiveTab('inicio');
+            return;
+        }
+        try { localStorage.setItem('cba_last_tab_v1', activeTab); } catch { }
+    }, [activeTab, TABS]);
 
     const handleForceRefresh = async () => {
         try {
@@ -2957,6 +2983,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
     };
 
     const TAB_CONFIG = {
+        inicio: { Icon: Home, color: 'text-emerald-500 dark:text-emerald-400', activeBg: 'bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20', label: 'Início' },
         presenca: { Icon: Activity, color: 'text-emerald-500 dark:text-emerald-400', activeBg: 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30', label: 'Presença' },
         jogos: { Icon: CalendarDays, color: 'text-orange-500 dark:text-orange-400', activeBg: 'bg-orange-500 text-white shadow-lg shadow-orange-500/30', label: 'Jogos' },
         estatuto: { Icon: BookOpen, color: 'text-teal-500 dark:text-teal-400', activeBg: 'bg-teal-500 text-white shadow-lg shadow-teal-500/30', label: 'Estatuto' },
@@ -2987,6 +3014,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
         return (
             <AnimatePresence mode="wait">
                 <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
+                    {activeTab === 'inicio' && <div data-cba-home-anchor="true" />}
                     {activeTab === 'presenca' && <PresencaTab {...props} onAttendanceUpdate={handleForceRefresh} />}
                     {activeTab === 'relatorios' && <RelatoriosTab {...props} />}
                     {activeTab === 'mesario' && <MesarioTab {...props} onStatsSaved={handleForceRefresh} />}
@@ -3011,13 +3039,14 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
                 )}
             </AnimatePresence>
 
-            <nav className={`fixed inset-y-0 left-0 z-50 md:relative transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-300 w-[72px] md:w-24 shrink-0 h-full flex flex-col items-center py-6 bg-white/90 dark:bg-slate-800/90 backdrop-blur-2xl border-r border-slate-200/50 dark:border-slate-700/50 shadow-2xl md:shadow-lg overflow-y-auto hide-scrollbar gap-4`}>
-                <img src="https://lh3.googleusercontent.com/d/131DvcfgiRLLp9irVnVY8m9qNuM-0y7f8" alt="Logo" className="w-12 h-12 rounded-full mb-4" />
+            <nav className={`fixed inset-y-0 left-0 z-50 md:relative transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-300 w-64 md:w-56 shrink-0 h-full flex flex-col items-stretch py-5 px-3 bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl border-r border-slate-200/50 dark:border-slate-700/50 shadow-2xl md:shadow-lg overflow-y-auto hide-scrollbar gap-2`}>
+                <div className="flex items-center gap-3 px-2 mb-4"><img src="https://lh3.googleusercontent.com/d/131DvcfgiRLLp9irVnVY8m9qNuM-0y7f8" alt="Logo" className="w-12 h-12 rounded-full shrink-0" /><div className="min-w-0"><p className="font-black text-slate-900 dark:text-white">Portal CBA</p><p className="text-[10px] uppercase tracking-wider font-black text-slate-400">Menu principal</p></div></div>
                 {TABS.map(tab => {
                     const { Icon, activeBg, color, label } = TAB_CONFIG[tab];
                     return (
-                        <button key={tab} title={label} onClick={() => { setActiveTab(tab); setIsSidebarOpen(false); }} className={`flex items-center justify-center w-12 h-12 rounded-2xl transition-all duration-300 ${activeTab === tab ? `${activeBg} shadow-lg scale-110` : `${color} hover:bg-slate-100 dark:hover:bg-slate-800`}`}>
-                            <Icon className="w-6 h-6 md:w-7 md:h-7 shrink-0" />
+                        <button key={tab} title={label} onClick={() => { setActiveTab(tab); setIsSidebarOpen(false); }} className={`flex items-center gap-3 w-full min-h-12 px-3.5 rounded-2xl transition-all duration-300 text-left ${activeTab === tab ? `${activeBg} shadow-lg scale-[1.02]` : `${color} hover:bg-slate-100 dark:hover:bg-slate-800`}`}>
+                            <Icon className="w-5 h-5 shrink-0" />
+                            <span className="font-black text-sm truncate">{label}</span>
                         </button>
                     );
                 })}
@@ -3063,6 +3092,23 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
                         </motion.div>
                     )}
                 </AnimatePresence>
+            </div>
+            <div className="md:hidden fixed bottom-0 left-0 right-0 z-[100] border-t border-slate-700/80 bg-slate-950/95 backdrop-blur-xl px-2 py-2">
+                <div className="grid grid-cols-5 gap-1">
+                    {[
+                        ['inicio','Início',Home],
+                        ['jogos','Jogos',CalendarDays],
+                        ['presenca','Presença',Activity],
+                        ['financas','Finanças',DollarSign]
+                    ].map(([key,label,Icon]) => (
+                        <button key={key} onClick={() => setActiveTab(key)} className={`min-h-12 rounded-xl flex flex-col items-center justify-center gap-0.5 ${activeTab === key ? 'bg-emerald-500 text-slate-950' : 'text-slate-400'}`}>
+                            <Icon className="w-5 h-5"/><span className="text-[9px] font-black">{label}</span>
+                        </button>
+                    ))}
+                    <button onClick={() => setIsSidebarOpen(true)} className="min-h-12 rounded-xl flex flex-col items-center justify-center gap-0.5 text-slate-400">
+                        <Menu className="w-5 h-5"/><span className="text-[9px] font-black">Mais</span>
+                    </button>
+                </div>
             </div>
         </div>
     );
