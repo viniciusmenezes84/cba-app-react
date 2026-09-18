@@ -303,7 +303,45 @@ const LoginScreen = ({ onLogin, isLoading, error }) => {
     const [showHelp, setShowHelp] = useState(false);
     return (
         <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 relative overflow-hidden">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,.18),transparent_35%),radial-gradient(circle_at_bottom_left,rgba(34,197,94,.10),transparent_35%)]"></div>
+            {/* Fundo temático CBA: quadra escura, glow verde e marca d'água */}
+            <div className="absolute inset-0 bg-[linear-gradient(180deg,#020617_0%,#061126_48%,#020617_100%)]"></div>
+            <div className="absolute inset-0 pointer-events-none">
+                <div className="absolute -top-28 -left-28 w-80 h-80 sm:w-[28rem] sm:h-[28rem] rounded-full bg-emerald-500/10 blur-3xl"></div>
+                <div className="absolute top-[18%] -right-28 w-96 h-96 sm:w-[34rem] sm:h-[34rem] rounded-full bg-emerald-400/[0.08] blur-3xl"></div>
+                <div className="absolute -bottom-36 left-[28%] w-80 h-80 sm:w-[30rem] sm:h-[30rem] rounded-full bg-emerald-500/[0.06] blur-3xl"></div>
+            </div>
+
+            <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                <img
+                    src="https://lh3.googleusercontent.com/d/131DvcfgiRLLp9irVnVY8m9qNuM-0y7f8"
+                    alt=""
+                    aria-hidden="true"
+                    className="w-[290px] sm:w-[430px] lg:w-[560px] opacity-[0.035] select-none"
+                />
+            </div>
+
+            <div className="absolute inset-0 pointer-events-none opacity-[0.12]">
+                <div className="absolute inset-5 sm:inset-9 lg:inset-12 border border-emerald-300/30 rounded-[28px] sm:rounded-[36px]"></div>
+                <div className="absolute top-5 bottom-5 sm:top-9 sm:bottom-9 lg:top-12 lg:bottom-12 left-1/2 -translate-x-1/2 w-px bg-emerald-300/30"></div>
+                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 sm:w-36 sm:h-36 lg:w-44 lg:h-44 rounded-full border border-emerald-300/30"></div>
+
+                <div className="absolute left-5 sm:left-9 lg:left-12 top-1/2 -translate-y-1/2 w-16 sm:w-24 lg:w-32 h-36 sm:h-48 lg:h-60 border border-emerald-300/30 rounded-r-2xl"></div>
+                <div className="absolute right-5 sm:right-9 lg:right-12 top-1/2 -translate-y-1/2 w-16 sm:w-24 lg:w-32 h-36 sm:h-48 lg:h-60 border border-emerald-300/30 rounded-l-2xl"></div>
+
+                <div className="hidden sm:block absolute left-[5.4rem] lg:left-[8.7rem] top-1/2 -translate-y-1/2 w-16 h-16 lg:w-20 lg:h-20 rounded-full border border-emerald-300/25"></div>
+                <div className="hidden sm:block absolute right-[5.4rem] lg:right-[8.7rem] top-1/2 -translate-y-1/2 w-16 h-16 lg:w-20 lg:h-20 rounded-full border border-emerald-300/25"></div>
+
+                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-28 sm:w-44 lg:w-56 h-56 sm:h-72 lg:h-[22rem] rounded-r-full border border-l-0 border-emerald-300/20"></div>
+                <div className="absolute right-0 top-1/2 -translate-y-1/2 w-28 sm:w-44 lg:w-56 h-56 sm:h-72 lg:h-[22rem] rounded-l-full border border-r-0 border-emerald-300/20"></div>
+            </div>
+
+            <div
+                className="absolute inset-0 pointer-events-none opacity-[0.035]"
+                style={{
+                    backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(255,255,255,.72) 1px, transparent 0)',
+                    backgroundSize: '18px 18px'
+                }}
+            ></div>
             <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-400/40 to-transparent"></div>
             <motion.div initial={{ opacity: 0, scale: 0.96, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 0.35 }} className="relative z-10 p-6 sm:p-9 bg-slate-900/85 backdrop-blur-xl border border-slate-700/70 rounded-3xl shadow-2xl w-full max-w-md">
                 <div className="text-center">
