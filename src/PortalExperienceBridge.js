@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  Activity, AlertTriangle, ArrowRight, BarChart3, BellRing, BookOpen, CalendarDays,
-  Check, CheckCircle2, ChevronRight, Clock3, Copy, CreditCard, DollarSign, Edit3,
-  FileText, History, Home, MapPin, PartyPopper, Plus, RefreshCw, RotateCcw, Search,
+  Activity, AlertTriangle, BarChart3, BellRing, BookOpen, CalendarDays,
+  Check, CheckCircle2, Copy, CreditCard, DollarSign, Edit3,
+  FileText, Home, MapPin, PartyPopper, Plus, RefreshCw, Search,
   Send, ShieldCheck, Star, Trash2, Trophy, UserCheck, Users, WalletCards, X
 } from 'lucide-react';
 
