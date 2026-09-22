@@ -160,29 +160,42 @@ function financeStatus(due, period) {
 
 function FinanceView({ data, refresh }) {
   const f=data.finance || {};
-  const isAdmin=String(data.user?.role).toUpperCase()==='ADMIN';
+  // A autorização efetiva vem do backend, nunca de um parâmetro de tela.
+  const isAdmin=String(data.user?.role).toUpperCase()==='ADMIN' && f.accessScope==='all';
+  const ownAthleteId=f.ownerAthleteId || '';
   const [year,setYear]=useState(f.currentYear || new Date().getFullYear());
-  const [athleteId,setAthleteId]=useState(data.user?.athleteId || data.athletes?.[0]?.id || '');
+  const [athleteId,setAthleteId]=useState(isAdmin ? (ownAthleteId || data.athletes?.[0]?.id || '') : ownAthleteId);
   const [filter,setFilter]=useState('todos');
+  const [monthFilter,setMonthFilter]=useState('todos');
+  const [search,setSearch]=useState('');
   const [copy,setCopy]=useState(false);
   const [busy,setBusy]=useState(false);
   const periods=(f.periods||[]).filter(p=>Number(p.year)===Number(year));
   const periodByMonth=new Map(periods.map(p=>[Number(p.month),p]));
-  const duesForAthlete=(f.dues||[]).filter(d=>d.athlete_id===athleteId);
+  const targetAthleteId=isAdmin ? athleteId : ownAthleteId;
+  const duesForAthlete=(f.dues||[]).filter(d=>d.athlete_id===targetAthleteId);
   const dueByPeriod=new Map(duesForAthlete.map(d=>[d.period_id,d]));
   const months=MONTHS.map((label,i)=>{const period=periodByMonth.get(i+1); const due=period?dueByPeriod.get(period.id):null; return {month:i+1,label,period,due,status:financeStatus(due,period)};});
-  const yearDebt=months.reduce((sum,m)=>sum+(m.due?Math.max(0,Number(m.due.amount_due||0)-Number(m.due.amount_paid||0)):0),0);
+  const yearDebt=months.reduce((sum,m)=>sum+(m.due&&!['exempt','isento'].includes(normalize(m.due.status))?Math.max(0,Number(m.due.amount_due||0)-Number(m.due.amount_paid||0)):0),0);
   const paidCount=months.filter(m=>m.status.label==='Pago'||m.status.label==='Isento').length;
-
-  const debtors=useMemo(()=>{
+  const recordedCount=months.filter(m=>Boolean(m.due)).length;
+  const group=f.aggregateByYear?.[String(year)] || {amountDue:0,amountPaid:0,outstanding:0};
+  const monthlyDues=useMemo(()=>{
     if(!isAdmin) return [];
-    const list=(data.athletes||[]).map(a=>{
-      let debt=0; let overdue=0;
-      periods.forEach(p=>{const d=(f.dues||[]).find(x=>x.athlete_id===a.id&&x.period_id===p.id); if(!d)return; const val=Math.max(0,Number(d.amount_due||0)-Number(d.amount_paid||0)); debt+=val; if(val>0&&String(p.due_date||'')<todayBahia())overdue++;});
-      return {...a,debt,overdue};
-    });
-    return list.filter(a=>filter==='todos'||(filter==='pendentes'?a.debt>0:a.debt===0)).sort((a,b)=>b.debt-a.debt||a.name.localeCompare(b.name));
-  },[isAdmin,data.athletes,f.dues,periods,filter]);
+    const selectedPeriod=monthFilter==='todos' ? null : periodByMonth.get(Number(monthFilter));
+    return (data.athletes||[]).map(a=>{
+      const own=(f.dues||[]).filter(d=>d.athlete_id===a.id);
+      const relevant=selectedPeriod?own.filter(d=>d.period_id===selectedPeriod.id):own.filter(d=>periods.some(p=>p.id===d.period_id));
+      const due=selectedPeriod?relevant[0]:null;
+      const status=selectedPeriod ? financeStatus(due,selectedPeriod) : null;
+      const outstanding=relevant.reduce((sum,d)=>sum+(['exempt','isento'].includes(normalize(d.status))?0:Math.max(0,Number(d.amount_due||0)-Number(d.amount_paid||0))),0);
+      const settled=relevant.filter(d=>['Pago','Isento'].includes(financeStatus(d,periods.find(p=>p.id===d.period_id)).label)).length;
+      const totalPaid=relevant.reduce((sum,d)=>sum+Number(d.amount_paid||0),0);
+      const category=selectedPeriod ? (status?.label==='Pago'?'pago':status?.label==='Parcial'?'parcial':status?.label==='Isento'?'isento':status?.label==='Vencido'?'pendente':status?.label==='A vencer'?'pendente':'sem_registro') : (relevant.length===0?'sem_registro':outstanding>0?'pendente':'pago');
+      return {...a,outstanding,settled,totalPaid,category,status,hasRecords:relevant.length>0};
+    }).filter(a=>(filter==='todos'||filter===a.category) && normalize(a.name).includes(normalize(search)))
+      .sort((a,b)=>b.outstanding-a.outstanding||a.name.localeCompare(b.name));
+  },[isAdmin,data.athletes,f.dues,periods,monthFilter,filter,search]);
 
   const prepare=async()=>{
     setBusy(true);
@@ -200,24 +213,29 @@ function FinanceView({ data, refresh }) {
     </Header>
 
     <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-      {[['Saldo em caixa',money(f.summary?.balance),WalletCards,'text-white'],['Receitas',money(f.summary?.revenue),BarChart3,'text-emerald-300'],['Despesas',money(f.summary?.expense),CreditCard,'text-rose-300'],[isAdmin?'A receber no atleta':'Minha pendência',money(yearDebt),AlertTriangle,yearDebt?'text-amber-300':'text-emerald-300']].map(([label,value,Icon,tone])=><Panel key={label} className="p-4"><div className="flex items-center justify-between"><p className="text-[9px] uppercase tracking-wider font-black text-slate-500">{label}</p><Icon className={cx('w-4 h-4',tone)}/></div><p className={cx('text-xl sm:text-2xl font-black mt-2',tone)}>{value}</p></Panel>)}
+      {[['Saldo geral do CBA',money(f.summary?.balance),WalletCards,'text-white'],['Receitas gerais',money(f.summary?.revenue),BarChart3,'text-emerald-300'],['Despesas gerais',money(f.summary?.expense),CreditCard,'text-rose-300'],['A receber pelo CBA · '+year,money(group.outstanding),AlertTriangle,group.outstanding?'text-amber-300':'text-emerald-300']].map(([label,value,Icon,tone])=><Panel key={label} className="p-4"><div className="flex items-center justify-between"><p className="text-[9px] uppercase tracking-wider font-black text-slate-500">{label}</p><Icon className={cx('w-4 h-4',tone)}/></div><p className={cx('text-xl sm:text-2xl font-black mt-2 break-words',tone)}>{value}</p></Panel>)}
     </div>
 
+    <Panel className="p-4 sm:p-5"><div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+      <div><Pill tone={isAdmin?'amber':'emerald'}>{isAdmin?'Gestão administrativa':'Meu histórico financeiro'}</Pill><h3 className="text-lg font-black text-white mt-2">{isAdmin?'Todos os pagamentos, atleta por atleta':'Apenas seus pagamentos individuais'}</h3><p className="text-xs text-slate-400 mt-1">{isAdmin?'Consulte quem pagou, quem está pendente, valores e competências.':'Você pode acompanhar suas mensalidades e os valores gerais do CBA. Os pagamentos de outros atletas não são compartilhados.'}</p></div>
+      <p className="text-sm font-black text-slate-300">{isAdmin?'Ano '+year:!ownAthleteId?'Conta sem atleta vinculado':recordedCount ? money(yearDebt)+' de pendência pessoal' : 'Nenhuma mensalidade lançada para você'}</p>
+    </div></Panel>
     {!periods.length && <Empty icon={CalendarDays} title={`Exercício ${year} ainda não preparado`} text="Nenhuma competência foi criada para este ano. Isso não gera dívida automaticamente." action={isAdmin?<button onClick={prepare} disabled={busy} className="rounded-2xl bg-emerald-500 text-slate-950 px-5 py-3 font-black">{busy?'Preparando...':'Preparar 12 competências'}</button>:null}/>}
 
     {periods.length>0 && <>
-      {isAdmin && <Panel className="p-4"><div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between"><div><p className="text-xs font-black uppercase tracking-wider text-slate-500">Consultar atleta</p><p className="text-sm text-slate-400 mt-1">A situação abaixo é individual.</p></div><select value={athleteId} onChange={e=>setAthleteId(e.target.value)} className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm font-bold text-white">{(data.athletes||[]).map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select></div></Panel>}
+      {isAdmin && <Panel className="p-4"><div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between"><div><p className="text-xs font-black uppercase tracking-wider text-slate-500">Consultar atleta</p><p className="text-sm text-slate-400 mt-1">A situação abaixo é individual.</p></div><select value={targetAthleteId} onChange={e=>setAthleteId(e.target.value)} className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm font-bold text-white">{(data.athletes||[]).map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select></div></Panel>}
       <Panel className="p-5">
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-4"><div><h3 className="text-xl font-black text-white">Situação anual</h3><p className="text-xs text-slate-500 mt-1">{paidCount}/12 competências quitadas ou isentas · pendência {money(yearDebt)}</p></div></div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-2.5">{months.map(m=><div key={m.month} className="rounded-2xl border border-slate-700 bg-slate-950/70 p-3"><div className="flex items-start justify-between gap-2"><p className="text-xs font-black text-white">{m.label}</p><Pill tone={m.status.tone}>{m.status.label}</Pill></div>{m.due&&<div className="mt-3 text-[10px] text-slate-500"><p>Devido: <strong className="text-slate-300">{money(m.due.amount_due)}</strong></p><p>Pago: <strong className="text-slate-300">{money(m.due.amount_paid)}</strong></p></div>}</div>)}</div>
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-4"><div><h3 className="text-xl font-black text-white">{isAdmin?'Histórico do atleta selecionado':'Meu histórico de pagamentos'}</h3><p className="text-xs text-slate-400 mt-1">{recordedCount} competências lançadas · {paidCount} quitadas ou isentas · pendência pessoal {money(yearDebt)}</p></div></div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-2.5">{months.map(m=><div key={m.month} className="rounded-2xl border border-slate-700 bg-slate-950/70 p-3"><div className="flex items-start justify-between gap-2"><p className="text-xs font-black text-white">{m.label}</p><Pill tone={m.status.tone}>{m.status.label}</Pill></div>{m.due&&<div className="mt-3 text-[10px] text-slate-500"><p>Devido: <strong className="text-slate-300">{money(m.due.amount_due)}</strong></p><p>Pago: <strong className="text-slate-300">{money(m.due.amount_paid)}</strong></p>{m.due.paid_at&&<p>Último pagamento: {new Date(m.due.paid_at).toLocaleDateString('pt-BR')}</p>}</div>}</div>)}</div>
       </Panel>
     </>}
 
     <div className="grid lg:grid-cols-[1.5fr_.8fr] gap-4">
-      {isAdmin ? <Panel className="p-5"><div className="flex items-center justify-between gap-3 mb-4"><div><h3 className="text-lg font-black text-white">Cobrança</h3><p className="text-xs text-slate-500">Valores calculados por amountDue − amountPaid.</p></div><div className="flex gap-1">{[['todos','Todos'],['pendentes','Pendentes'],['em_dia','Em dia']].map(([k,l])=><button key={k} onClick={()=>setFilter(k)} className={cx('rounded-xl px-3 py-2 text-xs font-black',filter===k?'bg-white text-slate-950':'bg-slate-800 text-slate-400')}>{l}</button>)}</div></div><div className="space-y-2 max-h-80 overflow-y-auto">{debtors.map(a=><button key={a.id} onClick={()=>setAthleteId(a.id)} className="w-full rounded-2xl border border-slate-800 bg-slate-950/50 p-3 flex items-center justify-between gap-3 text-left"><div className="min-w-0"><p className="font-black text-white truncate">{a.name}</p><p className="text-[10px] text-slate-500">{a.overdue} competências vencidas</p></div><strong className={a.debt?'text-rose-300':'text-emerald-300'}>{a.debt?money(a.debt):'Em dia'}</strong></button>)}</div></Panel> : <Panel className="p-5"><h3 className="text-lg font-black text-white">Resumo</h3><p className="text-sm text-slate-400 mt-2">{yearDebt>0?`Você possui ${money(yearDebt)} pendente em ${year}.`:`Você não possui pendências registradas em ${year}.`}</p></Panel>}
+      {isAdmin ? <Panel className="p-5"><div className="flex flex-col gap-3 mb-4"><div><h3 className="text-lg font-black text-white">Gestão de pagamentos</h3><p className="text-xs text-slate-500">Visualização administrativa de todos os atletas, com identificação de quem pagou e quem não pagou.</p></div><div className="flex flex-col sm:flex-row gap-2"><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar atleta..." aria-label="Buscar atleta" className="min-w-0 flex-1 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white"/><select value={monthFilter} onChange={e=>{setMonthFilter(e.target.value);setFilter('todos');}} aria-label="Competência para filtrar" className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm font-bold text-white"><option value="todos">Ano inteiro</option>{periods.map(p=><option key={p.id} value={String(p.month)}>{MONTHS[Number(p.month)-1]} / {year}</option>)}</select></div><div className="flex flex-wrap gap-1.5">{[['todos','Todos'],['pago','Pagos / em dia'],['pendente','Pendentes'],...(monthFilter==='todos'?[]:[['parcial','Parciais'],['isento','Isentos']]),['sem_registro','Sem lançamento']].map(([key,label])=><button key={key} onClick={()=>setFilter(key)} className={cx('rounded-xl px-3 py-2.5 text-xs font-black min-h-10',filter===key?'bg-emerald-500 text-slate-950':'bg-slate-800 text-slate-300')}>{label}</button>)}</div></div><p className="text-[11px] font-bold text-slate-500 mb-3">{monthlyDues.length} atleta(s) nesta visão · clique para consultar o histórico completo.</p><div className="space-y-2 max-h-[400px] overflow-y-auto">{monthlyDues.map(a=><button key={a.id} onClick={()=>setAthleteId(a.id)} className={cx('w-full rounded-2xl border p-3 flex items-center justify-between gap-3 text-left min-h-14',targetAthleteId===a.id?'border-emerald-500/50 bg-emerald-950/20':'border-slate-800 bg-slate-950/50')}><div className="min-w-0"><p className="font-black text-white truncate">{a.name}</p><p className="text-[10px] text-slate-400">{monthFilter==='todos'?a.hasRecords?`${a.settled} quitadas/isentas · ${money(a.totalPaid)} pagos`:'Sem mensalidades lançadas':`${a.status?.label||'Sem lançamento'} · pago ${money(a.totalPaid)}`}</p></div><div className="shrink-0 text-right"><Pill tone={a.category==='pago'||a.category==='isento'?'emerald':a.category==='sem_registro'?'slate':'rose'}>{a.category==='sem_registro'?'Sem lançamento':a.category==='pago'?'Pago':a.category==='pendente'?'Pendente':a.category==='isento'?'Isento':'Parcial'}</Pill><p className={cx('text-xs font-black mt-1',a.outstanding?'text-rose-300':'text-slate-400')}>{a.outstanding?money(a.outstanding):'Sem pendência'}</p></div></button>)}{!monthlyDues.length&&<p className="text-sm text-slate-500 py-6 text-center">Nenhum atleta encontrado para esse filtro.</p>}</div></Panel> : <Panel className="p-5"><h3 className="text-lg font-black text-white">Minha situação</h3><p className="text-sm text-slate-400 mt-2">{!ownAthleteId?'Sua conta não possui um atleta vinculado. Solicite a vinculação a um administrador.':!recordedCount?'Nenhuma mensalidade individual lançada neste exercício.':yearDebt>0?`Você possui ${money(yearDebt)} pendente em ${year}.`:`Suas mensalidades registradas para ${year} estão em dia.`}</p></Panel>}
 
       <Panel className="p-5 bg-gradient-to-br from-slate-900 to-emerald-950/30"><Pill tone="emerald">PIX CBA</Pill><h3 className="text-lg font-black text-white mt-3">Pagamento</h3><p className="text-xs text-slate-500 mt-1">Copie a chave oficial cadastrada no portal.</p><div className="mt-4 rounded-2xl border border-slate-700 bg-slate-950 p-3 flex items-center gap-2"><code className="min-w-0 flex-1 truncate text-xs text-slate-300">{f.pixCode || 'PIX não configurado'}</code><button disabled={!f.pixCode} onClick={copyPix} className="w-10 h-10 shrink-0 rounded-xl bg-emerald-500 text-slate-950 flex items-center justify-center disabled:opacity-40">{copy?<Check className="w-4 h-4"/>:<Copy className="w-4 h-4"/>}</button></div></Panel>
     </div>
+    {isAdmin && <Panel className="p-5"><h3 className="text-lg font-black text-white">Lançamentos financeiros do CBA</h3><p className="text-xs text-slate-500 mt-1">Detalhamento exclusivo para administradores.</p><div className="mt-4 space-y-2">{(f.entries||[]).filter(e=>String(e.occurred_on||'').startsWith(String(year))).slice(0,30).map(e=><div key={e.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/60 p-3"><div className="min-w-0"><p className="text-sm font-black text-white truncate">{e.description||e.category||'Lançamento'}</p><p className="text-[10px] text-slate-500">{fmtDate(e.occurred_on)} · {e.category||'Outros'}</p></div><strong className={e.kind==='revenue'?'text-emerald-300':'text-rose-300'}>{e.kind==='revenue'?'+':'−'}{money(e.amount)}</strong></div>)}{!(f.entries||[]).some(e=>String(e.occurred_on||'').startsWith(String(year)))&&<p className="text-sm text-slate-500 py-4">Nenhum lançamento neste ano.</p>}</div></Panel>}
   </div>;
 }
 
