@@ -338,10 +338,76 @@ function bahiaDateTimeInput(value) {
   }catch{return String(value).slice(0,16);}
 }
 function EventForm({ item, onClose, onSaved }) {
-  const [form,setForm]=useState({name:item?.name||'',startsAt:bahiaDateTimeInput(item?.startsAt),deadline:item?.deadline||'',location:item?.location||'',value:item?.value??'',description:item?.description||''}); const [busy,setBusy]=useState(false);
-  const submit=async e=>{e.preventDefault();setBusy(true);try{const date=form.startsAt?`${form.startsAt}:00-03:00`:'';await gatewayPost(item?'updateEvent':'createEvent',{id:item?.id,name:form.name,date,deadline:form.deadline,location:form.location,value:Number(form.value||0),description:form.description});onSaved();onClose();}catch(err){window.alert(err.message);}finally{setBusy(false);}};
-  const field=(label,key,type='text')=><label className="block"><span className="text-[10px] uppercase font-black text-slate-500">{label}</span><input type={type} value={form[key]} onChange={e=>setForm({...form,[key]:e.target.value})} className="mt-1.5 w-full rounded-2xl border border-slate-700 bg-slate-950 p-3.5 text-white outline-none" required/></label>;
-  return <form onSubmit={submit} className="space-y-4">{field('Nome do evento','name')}<div className="grid sm:grid-cols-2 gap-4">{field('Data e hora','startsAt','datetime-local')}{field('Prazo de confirmação','deadline','date')}</div>{field('Local','location')} {field('Valor individual','value','number')}<label className="block"><span className="text-[10px] uppercase font-black text-slate-500">Descrição</span><textarea value={form.description} onChange={e=>setForm({...form,description:e.target.value})} className="mt-1.5 w-full min-h-28 rounded-2xl border border-slate-700 bg-slate-950 p-3.5 text-white outline-none" required/></label><button disabled={busy} className="w-full rounded-2xl bg-emerald-500 text-slate-950 py-3.5 font-black">{busy?'Salvando...':item?'Atualizar evento':'Criar evento'}</button></form>;
+  const [form,setForm]=useState({
+    name:item?.name||'',
+    startsAt:bahiaDateTimeInput(item?.startsAt),
+    deadline:item?.deadline||'',
+    location:item?.location||'',
+    value:item?.value??'',
+    description:item?.description||''
+  });
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState('');
+  // datetime-local contém a data/hora civil escolhida pelo organizador em Salvador.
+  // O prazo é uma data civil; ele pode ser no próprio dia do evento, mas nunca depois.
+  const eventDate=form.startsAt ? form.startsAt.slice(0,10) : '';
+  const deadlineInvalid=Boolean(eventDate && form.deadline && form.deadline > eventDate);
+  const dateError=deadlineInvalid
+    ? `O prazo de confirmação deve ser até ${fmtDate(eventDate)}, dia do evento. Escolha essa data ou uma anterior.`
+    : '';
+  const change=(key,value)=>{setForm(prev=>({...prev,[key]:value}));setError('');};
+  const submit=async e=>{
+    e.preventDefault();
+    if(deadlineInvalid){setError(dateError);return;}
+    if(!eventDate || !form.deadline){setError('Informe a data do evento e o prazo de confirmação.');return;}
+    setBusy(true);setError('');
+    try{
+      const date=`${form.startsAt}:00-03:00`;
+      await gatewayPost(item?'updateEvent':'createEvent',{
+        id:item?.id,name:form.name,date,deadline:form.deadline,
+        location:form.location,value:Number(form.value||0),description:form.description
+      });
+      await onSaved();
+      onClose();
+    }catch(err){
+      const message=String(err?.message||'Não foi possível salvar o evento.');
+      setError(message.includes('events_deadline_valid')
+        ? 'O prazo de confirmação não pode ser posterior à data do evento.'
+        : message);
+    }finally{setBusy(false);}
+  };
+  const field=(label,key,type='text',extra={})=><label className="block min-w-0">
+    <span className="text-[10px] uppercase font-black text-slate-500">{label}</span>
+    <input type={type} value={form[key]} onChange={e=>change(key,e.target.value)}
+      className="mt-1.5 w-full min-w-0 rounded-2xl border border-slate-700 bg-slate-950 p-3.5 text-white outline-none focus:border-emerald-500"
+      required {...extra}/>
+  </label>;
+  return <form onSubmit={submit} className="space-y-4">
+    {field('Nome do evento','name')}
+    <div className="grid sm:grid-cols-2 gap-4">
+      {field('Data e hora','startsAt','datetime-local')}
+      <div>
+        {field('Prazo de confirmação','deadline','date',{
+          max:eventDate||undefined,'aria-invalid':deadlineInvalid,'aria-describedby':'event-deadline-hint'
+        })}
+        <p id="event-deadline-hint" className={`mt-1.5 text-xs ${deadlineInvalid?'text-rose-300':'text-slate-400'}`}>
+          {dateError||'Escolha uma data até o dia do evento. O prazo não pode ser posterior ao evento.'}
+        </p>
+      </div>
+    </div>
+    {field('Local','location')}
+    {field('Valor individual','value','number',{min:0,step:'0.01'})}
+    <label className="block">
+      <span className="text-[10px] uppercase font-black text-slate-500">Descrição</span>
+      <textarea value={form.description} onChange={e=>change('description',e.target.value)}
+        className="mt-1.5 w-full min-h-28 rounded-2xl border border-slate-700 bg-slate-950 p-3.5 text-white outline-none"
+        required/>
+    </label>
+    {(error||dateError)&&<p role="alert" className="rounded-xl border border-rose-500/30 bg-rose-950/30 p-3 text-sm text-rose-200">{error||dateError}</p>}
+    <button disabled={busy||deadlineInvalid} className="w-full rounded-2xl bg-emerald-500 text-slate-950 py-3.5 font-black disabled:opacity-40">
+      {busy?'Salvando...':item?'Atualizar evento':'Criar evento'}
+    </button>
+  </form>;
 }
 function EventsView({ data, refresh }) {
   const isAdmin=String(data.user?.role).toUpperCase()==='ADMIN'; const ownName=data.user?.name||''; const [view,setView]=useState('proximos'); const [formEvent,setFormEvent]=useState(undefined); const [busy,setBusy]=useState(false);
