@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { QRCodeSVG } from 'qrcode.react';
 import {
   Activity, AlertTriangle, BarChart3, BellRing, BookOpen, CalendarDays,
   Check, CheckCircle2, Copy, CreditCard, DollarSign, Edit3,
@@ -169,6 +170,7 @@ function FinanceView({ data, refresh }) {
   const [monthFilter,setMonthFilter]=useState('todos');
   const [search,setSearch]=useState('');
   const [copy,setCopy]=useState(false);
+  const [copyError,setCopyError]=useState('');
   const [busy,setBusy]=useState(false);
   const periods=(f.periods||[]).filter(p=>Number(p.year)===Number(year));
   const periodByMonth=new Map(periods.map(p=>[Number(p.month),p]));
@@ -203,7 +205,20 @@ function FinanceView({ data, refresh }) {
     catch(e){window.alert(e.message);}
     finally{setBusy(false);}
   };
-  const copyPix=async()=>{try{await navigator.clipboard.writeText(f.pixCode||'');setCopy(true);setTimeout(()=>setCopy(false),1800);}catch{}};
+  const pixPayload=typeof f.pixCode==='string' ? f.pixCode.trim() : '';
+  const pixPreview=pixPayload.length>58 ? `${pixPayload.slice(0,38)}…${pixPayload.slice(-14)}` : pixPayload;
+  const copyPix=async()=>{
+    if(!pixPayload)return;
+    try{
+      await navigator.clipboard.writeText(pixPayload);
+      setCopyError('');
+      setCopy(true);
+      window.setTimeout(()=>setCopy(false),2200);
+    }catch{
+      setCopy(false);
+      setCopyError('Não foi possível copiar automaticamente. Abra o código completo para copiá-lo manualmente.');
+    }
+  };
 
   return <div className="space-y-5 pb-24 md:pb-8">
     <Header icon={DollarSign} kicker="Financeiro" title="Finanças do CBA" text="Valores reais do Supabase, sem interpretação por texto ou mensalidade fixa no frontend.">
@@ -230,11 +245,48 @@ function FinanceView({ data, refresh }) {
       </Panel>
     </>}
 
-    <div className="grid lg:grid-cols-[1.5fr_.8fr] gap-4">
+    <div className="grid gap-4">
       {isAdmin ? <Panel className="p-5"><div className="flex flex-col gap-3 mb-4"><div><h3 className="text-lg font-black text-white">Gestão de pagamentos</h3><p className="text-xs text-slate-500">Visualização administrativa de todos os atletas, com identificação de quem pagou e quem não pagou.</p></div><div className="flex flex-col sm:flex-row gap-2"><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar atleta..." aria-label="Buscar atleta" className="min-w-0 flex-1 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white"/><select value={monthFilter} onChange={e=>{setMonthFilter(e.target.value);setFilter('todos');}} aria-label="Competência para filtrar" className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm font-bold text-white"><option value="todos">Ano inteiro</option>{periods.map(p=><option key={p.id} value={String(p.month)}>{MONTHS[Number(p.month)-1]} / {year}</option>)}</select></div><div className="flex flex-wrap gap-1.5">{[['todos','Todos'],['pago','Pagos / em dia'],['pendente','Pendentes'],...(monthFilter==='todos'?[]:[['parcial','Parciais'],['isento','Isentos']]),['sem_registro','Sem lançamento']].map(([key,label])=><button key={key} onClick={()=>setFilter(key)} className={cx('rounded-xl px-3 py-2.5 text-xs font-black min-h-10',filter===key?'bg-emerald-500 text-slate-950':'bg-slate-800 text-slate-300')}>{label}</button>)}</div></div><p className="text-[11px] font-bold text-slate-500 mb-3">{monthlyDues.length} atleta(s) nesta visão · clique para consultar o histórico completo.</p><div className="space-y-2 max-h-[400px] overflow-y-auto">{monthlyDues.map(a=><button key={a.id} onClick={()=>setAthleteId(a.id)} className={cx('w-full rounded-2xl border p-3 flex items-center justify-between gap-3 text-left min-h-14',targetAthleteId===a.id?'border-emerald-500/50 bg-emerald-950/20':'border-slate-800 bg-slate-950/50')}><div className="min-w-0"><p className="font-black text-white truncate">{a.name}</p><p className="text-[10px] text-slate-400">{monthFilter==='todos'?a.hasRecords?`${a.settled} quitadas/isentas · ${money(a.totalPaid)} pagos`:'Sem mensalidades lançadas':`${a.status?.label||'Sem lançamento'} · pago ${money(a.totalPaid)}`}</p></div><div className="shrink-0 text-right"><Pill tone={a.category==='pago'||a.category==='isento'?'emerald':a.category==='sem_registro'?'slate':'rose'}>{a.category==='sem_registro'?'Sem lançamento':a.category==='pago'?'Pago':a.category==='pendente'?'Pendente':a.category==='isento'?'Isento':'Parcial'}</Pill><p className={cx('text-xs font-black mt-1',a.outstanding?'text-rose-300':'text-slate-400')}>{a.outstanding?money(a.outstanding):'Sem pendência'}</p></div></button>)}{!monthlyDues.length&&<p className="text-sm text-slate-500 py-6 text-center">Nenhum atleta encontrado para esse filtro.</p>}</div></Panel> : <Panel className="p-5"><h3 className="text-lg font-black text-white">Minha situação</h3><p className="text-sm text-slate-400 mt-2">{!ownAthleteId?'Sua conta não possui um atleta vinculado. Solicite a vinculação a um administrador.':!recordedCount?'Nenhuma mensalidade individual lançada neste exercício.':yearDebt>0?`Você possui ${money(yearDebt)} pendente em ${year}.`:`Suas mensalidades registradas para ${year} estão em dia.`}</p></Panel>}
 
-      <Panel className="p-5 bg-gradient-to-br from-slate-900 to-emerald-950/30"><Pill tone="emerald">PIX CBA</Pill><h3 className="text-lg font-black text-white mt-3">Pagamento</h3><p className="text-xs text-slate-500 mt-1">Copie a chave oficial cadastrada no portal.</p><div className="mt-4 rounded-2xl border border-slate-700 bg-slate-950 p-3 flex items-center gap-2"><code className="min-w-0 flex-1 truncate text-xs text-slate-300">{f.pixCode || 'PIX não configurado'}</code><button disabled={!f.pixCode} onClick={copyPix} className="w-10 h-10 shrink-0 rounded-xl bg-emerald-500 text-slate-950 flex items-center justify-center disabled:opacity-40">{copy?<Check className="w-4 h-4"/>:<Copy className="w-4 h-4"/>}</button></div></Panel>
     </div>
+    <Panel className="w-full max-w-3xl mx-auto p-4 sm:p-5 bg-gradient-to-br from-slate-900 to-emerald-950/20">
+      <div className="mb-4">
+        <Pill tone="emerald">PIX CBA</Pill>
+        <h3 className="text-lg font-black text-white mt-2">Pagamento por PIX</h3>
+        <p className="text-xs text-slate-400 mt-1">Copie o código PIX ou escaneie o QR Code com o aplicativo do seu banco.</p>
+      </div>
+      {!pixPayload ? (
+        <div className="rounded-2xl border border-slate-700 bg-slate-950/70 p-5 text-sm text-slate-400">
+          O código PIX ainda não foi cadastrado. Solicite os dados de pagamento à administração do CBA.
+        </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_228px] sm:items-start">
+          <div className="min-w-0 rounded-2xl border border-slate-700 bg-slate-950/70 p-4">
+            <p className="text-xs font-black uppercase tracking-wide text-slate-400">PIX copia e cola</p>
+            <p className="mt-2 text-xs text-slate-500">Código abreviado para facilitar a leitura:</p>
+            <code className="mt-2 block break-all rounded-xl border border-slate-800 bg-slate-900 p-3 text-xs leading-5 text-slate-300" title="Use o botão abaixo para copiar o código completo">{pixPreview}</code>
+            <button type="button" onClick={copyPix} className="mt-3 flex w-full min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-3 text-sm font-black text-slate-950 hover:bg-emerald-400">
+              {copy?<Check className="w-4 h-4"/>:<Copy className="w-4 h-4"/>}
+              {copy?'Código copiado':'Copiar código PIX'}
+            </button>
+            <div role="status" aria-live="polite" className="mt-2 min-h-4 text-xs text-emerald-300">
+              {copy?'Código completo copiado para a área de transferência.':copyError}
+            </div>
+            <details className="mt-2 rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2.5">
+              <summary className="cursor-pointer text-xs font-bold text-slate-300">Ver código completo</summary>
+              <textarea readOnly aria-label="Código PIX completo para copiar manualmente" value={pixPayload} rows={4} className="mt-3 block w-full resize-none break-all rounded-lg border border-slate-700 bg-slate-950 p-2.5 text-xs leading-5 text-slate-300 outline-none focus:border-emerald-500" onFocus={event=>event.target.select()}/>
+            </details>
+          </div>
+          <div className="flex flex-col items-center rounded-2xl border border-slate-700 bg-slate-950/70 p-3">
+            <p className="text-xs font-black uppercase tracking-wide text-slate-400">QR Code PIX</p>
+            <div className="mt-3 flex w-full max-w-[228px] items-center justify-center rounded-xl bg-white p-1" role="img" aria-label="QR Code PIX do CBA para pagamento">
+              <QRCodeSVG value={pixPayload} size={212} level="M" marginSize={4} bgColor="#ffffff" fgColor="#08111f" className="h-auto w-full"/>
+            </div>
+            <p className="mt-3 text-center text-xs leading-5 text-slate-400">Escaneie com o app do seu banco. Se estiver usando o celular, prefira <strong className="text-slate-200">Copiar código PIX</strong>.</p>
+          </div>
+        </div>
+      )}
+    </Panel>
     {isAdmin && <Panel className="p-5"><h3 className="text-lg font-black text-white">Lançamentos financeiros do CBA</h3><p className="text-xs text-slate-500 mt-1">Detalhamento exclusivo para administradores.</p><div className="mt-4 space-y-2">{(f.entries||[]).filter(e=>String(e.occurred_on||'').startsWith(String(year))).slice(0,30).map(e=><div key={e.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/60 p-3"><div className="min-w-0"><p className="text-sm font-black text-white truncate">{e.description||e.category||'Lançamento'}</p><p className="text-[10px] text-slate-500">{fmtDate(e.occurred_on)} · {e.category||'Outros'}</p></div><strong className={e.kind==='revenue'?'text-emerald-300':'text-rose-300'}>{e.kind==='revenue'?'+':'−'}{money(e.amount)}</strong></div>)}{!(f.entries||[]).some(e=>String(e.occurred_on||'').startsWith(String(year)))&&<p className="text-sm text-slate-500 py-4">Nenhum lançamento neste ano.</p>}</div></Panel>}
   </div>;
 }
