@@ -322,6 +322,10 @@ function SorteioExperience({ players, dates, isAdmin }) {
           </div>
         </div>
 
+        <div className="md:hidden mb-4 flex items-center justify-between gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-950/20 p-3">
+          <span className="text-xs font-black text-emerald-300">{selected.length} atleta{selected.length===1?'':'s'} selecionado{selected.length===1?'':'s'}</span>
+          <button type="button" onClick={() => setStep('mode')} disabled={!selected.length} className="min-h-11 rounded-xl bg-emerald-500 px-4 py-2 font-black text-slate-950 disabled:opacity-40">Continuar →</button>
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5">
           {filteredPlayers.map(player => {
             const active = selectedSet.has(player.name);
@@ -339,9 +343,9 @@ function SorteioExperience({ players, dates, isAdmin }) {
         <div className="grid sm:grid-cols-3 gap-2">{history.map((item, index) => <div key={`${item.savedAt}-${index}`} className="rounded-2xl bg-slate-900 border border-slate-700 p-3"><p className="text-[10px] font-black uppercase text-slate-500">{new Date(item.savedAt).toLocaleDateString('pt-BR')}</p><p className="text-xs font-bold text-white mt-1">⚫ {item.black?.join(', ')}</p><p className="text-xs font-bold text-emerald-400 mt-1">🟢 {item.green?.join(', ')}</p></div>)}</div>
       </div>}
 
-      <div className="hidden md:flex justify-end"><button onClick={() => setStep('mode')} disabled={!selected.length} className="rounded-2xl bg-emerald-500 px-6 py-3.5 font-black text-slate-950 flex items-center gap-2 disabled:opacity-40">Continuar <ChevronRight className="w-5 h-5"/></button></div>
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-[90] border-t border-slate-700 bg-slate-950/95 backdrop-blur-xl p-3 safe-area-pb">
-        <div className="max-w-7xl mx-auto flex items-center gap-3"><div className="min-w-0 flex-1"><p className="text-2xl font-black text-emerald-400 leading-none">{selected.length}</p><p className="text-[9px] uppercase font-black text-slate-500 mt-1">atletas selecionados</p></div><button onClick={() => setStep('mode')} disabled={!selected.length} className="rounded-2xl bg-emerald-500 px-5 py-3.5 font-black text-slate-950 flex items-center gap-2 disabled:opacity-40">Continuar <ChevronRight className="w-5 h-5"/></button></div>
+      <div className="rounded-2xl border border-emerald-500/30 bg-slate-900/95 p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="min-w-0 flex-1"><p className="text-xl font-black text-emerald-400 leading-none">{selected.length} selecionado{selected.length===1?'':'s'}</p><p className="text-xs text-slate-400 mt-1">Pronto para escolher o tipo de sorteio?</p></div>
+        <button type="button" onClick={() => setStep('mode')} disabled={!selected.length} className="min-h-12 w-full sm:w-auto rounded-2xl bg-emerald-500 px-6 py-3 font-black text-slate-950 flex items-center justify-center gap-2 disabled:opacity-40">Continuar <ChevronRight className="w-5 h-5"/></button>
       </div>
     </>}
 
