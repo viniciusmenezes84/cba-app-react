@@ -3210,13 +3210,15 @@ function AppInner() {
             // O backend devolve 401 para credenciais inválidas; não confundir com falha de rede.
             const message = String(error?.message || '');
             let loginError = 'Não foi possível conectar ao servidor. Verifique sua conexão e tente novamente.';
-            const responseMatch = message.match(/Resposta:\\s*(\\{[\\s\\S]*\\})/);
+            // O api.post mantém a resposta HTTP no texto do erro; extrair status e JSON
+            // com expressões corretas (sem barras invertidas duplicadas).
+            const responseMatch = message.match(/Resposta:\s*(\{[\s\S]*\})/);
             let serverError = null;
             if (responseMatch) {
                 try { serverError = JSON.parse(responseMatch[1]); } catch { /* resposta não JSON */ }
             }
             const code = String(serverError?.code || '').toUpperCase();
-            const httpStatus = Number(message.match(/Erro de HTTP:\\s*(\\d+)/)?.[1] || 0);
+            const httpStatus = Number(message.match(/Erro de HTTP:\s*(\d+)/)?.[1] || 0);
             if (code === 'INVALID_CREDENTIALS' || (httpStatus === 401 && !['SESSION_EXPIRED','UNAUTHORIZED'].includes(code))) {
                 loginError = 'E-mail ou senha incorretos. Confira os dados e tente novamente.';
             } else if (code === 'RATE_LIMITED' || httpStatus === 429) {
