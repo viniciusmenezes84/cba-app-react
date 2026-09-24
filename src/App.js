@@ -3206,7 +3206,30 @@ function AppInner() {
             } else {
                 setAuth({ status: 'unauthenticated', user: null, error: data.message });
             }
-        } catch (error) { setAuth({ status: 'unauthenticated', user: null, error: 'Falha no servidor.' }); }
+        } catch (error) {
+            // O backend devolve 401 para credenciais inválidas; não confundir com falha de rede.
+            const message = String(error?.message || '');
+            let loginError = 'Não foi possível conectar ao servidor. Verifique sua conexão e tente novamente.';
+            const responseMatch = message.match(/Resposta:\\s*(\\{[\\s\\S]*\\})/);
+            let serverError = null;
+            if (responseMatch) {
+                try { serverError = JSON.parse(responseMatch[1]); } catch { /* resposta não JSON */ }
+            }
+            const code = String(serverError?.code || '').toUpperCase();
+            const httpStatus = Number(message.match(/Erro de HTTP:\\s*(\\d+)/)?.[1] || 0);
+            if (code === 'INVALID_CREDENTIALS' || (httpStatus === 401 && !['SESSION_EXPIRED','UNAUTHORIZED'].includes(code))) {
+                loginError = 'E-mail ou senha incorretos. Confira os dados e tente novamente.';
+            } else if (code === 'RATE_LIMITED' || httpStatus === 429) {
+                loginError = 'Muitas tentativas de acesso. Aguarde 10 minutos e tente novamente.';
+            } else if (code === 'FORBIDDEN' || httpStatus === 403) {
+                loginError = 'Sua conta não está autorizada. Procure a administração do CBA.';
+            } else if (serverError?.message && httpStatus >= 400 && httpStatus < 500) {
+                loginError = String(serverError.message);
+            } else if (httpStatus >= 500) {
+                loginError = 'O serviço está temporariamente indisponível. Tente novamente em instantes.';
+            }
+            setAuth({ status: 'unauthenticated', user: null, error: loginError });
+        }
     };
 
     const handleLogout = () => {
