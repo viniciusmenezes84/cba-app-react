@@ -3078,11 +3078,11 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
         <div className="flex h-screen w-full bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 overflow-hidden">
             <AnimatePresence>
                 {isSidebarOpen && (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-40 md:hidden" onClick={() => setIsSidebarOpen(false)} />
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="cba-sidebar-backdrop fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-40 md:hidden" onClick={() => setIsSidebarOpen(false)} />
                 )}
             </AnimatePresence>
 
-            <nav className={`fixed inset-y-0 left-0 z-50 md:relative transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-300 w-64 md:w-56 shrink-0 h-full flex flex-col items-stretch py-5 px-3 bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl border-r border-slate-200/50 dark:border-slate-700/50 shadow-2xl md:shadow-lg overflow-y-auto hide-scrollbar gap-2`}>
+            <nav id="cba-menu-principal" aria-label="Menu principal" className={`cba-mobile-sidebar fixed inset-y-0 left-0 z-50 md:relative transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-300 w-64 md:w-56 shrink-0 h-full flex flex-col items-stretch py-5 px-3 bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl border-r border-slate-200/50 dark:border-slate-700/50 shadow-2xl md:shadow-lg overflow-y-auto hide-scrollbar gap-2`}>
                 <div className="flex items-center gap-3 px-2 mb-4"><img src="https://lh3.googleusercontent.com/d/131DvcfgiRLLp9irVnVY8m9qNuM-0y7f8" alt="Logo" className="w-12 h-12 rounded-full shrink-0" /><div className="min-w-0"><p className="font-black text-slate-900 dark:text-white">Portal CBA</p><p className="text-[10px] uppercase tracking-wider font-black text-slate-400">Menu principal</p></div></div>
                 {TABS.map(tab => {
                     const { Icon, activeBg, color, label } = TAB_CONFIG[tab];
@@ -3098,7 +3098,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
             <div className="flex-1 flex flex-col h-full overflow-hidden w-full relative">
                 <header className="shrink-0 p-4 flex justify-between items-center bg-white/40 dark:bg-slate-800/30 backdrop-blur-md border-b border-slate-200/50 dark:border-slate-700/50 z-30">
                     <div className="flex items-center gap-3">
-                        <button onClick={() => setIsSidebarOpen(true)} aria-label="Abrir menu de navegação" className="md:hidden p-2 text-slate-600 dark:text-slate-300 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800"><Menu className="w-6 h-6" /></button>
+                        <button onClick={() => setIsSidebarOpen(true)} aria-label="Abrir menu de navegação" aria-controls="cba-menu-principal" aria-expanded={isSidebarOpen} className="md:hidden p-2 text-slate-600 dark:text-slate-300 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800"><Menu className="w-6 h-6" /></button>
                         <img src={user.fotoUrl || 'https://placehold.co/100'} alt="Avatar" className="h-10 w-10 rounded-full object-cover shadow-sm ring-2 ring-white dark:ring-slate-700" crossOrigin="anonymous" />
                         <div className="hidden sm:block"><h1 className="text-xl font-black leading-none">Portal CBA</h1><p className="text-indigo-600 dark:text-indigo-400 font-bold text-[10px] uppercase tracking-widest">{user.name}</p></div>
                     </div>
@@ -3148,7 +3148,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
                             <Icon className="w-5 h-5"/><span className="text-[9px] font-black">{label}</span>
                         </button>
                     ))}
-                    <button onClick={() => setIsSidebarOpen(true)} className="min-h-12 rounded-xl flex flex-col items-center justify-center gap-0.5 text-slate-400">
+                    <button onClick={() => setIsSidebarOpen(true)} aria-controls="cba-menu-principal" aria-expanded={isSidebarOpen} className="min-h-12 rounded-xl flex flex-col items-center justify-center gap-0.5 text-slate-400">
                         <Menu className="w-5 h-5"/><span className="text-[9px] font-black">Mais</span>
                     </button>
                 </div>
