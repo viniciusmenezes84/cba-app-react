@@ -26,6 +26,9 @@
 .cba-player__filters select, .cba-player__filters button { min-height: 41px; color: #f8fafc; background: #18283d; border: 1px solid #344860; border-radius: 11px; padding: 0 12px; font-size: 12px; font-weight: 750; letter-spacing: 0; text-transform: none; }
 .cba-player__filters select { max-width: 220px; }
 .cba-player__filters button { color: #fb923c; cursor: pointer; }
+.cba-player__filters .cba-player__card-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; border-color: #fb923c; color: #15202d; background: #fb923c; font-weight: 900; }
+.cba-player__filters .cba-player__card-button:hover:not(:disabled) { background: #ffb37d; }
+.cba-player__filters .cba-player__card-button:disabled { opacity: .5; cursor: not-allowed; }
 .cba-player__filters select:focus-visible, .cba-player__filters button:focus-visible, .cba-player__metric-switch button:focus-visible { outline: 2px solid #fb923c; outline-offset: 2px; }
 .cba-player__copy-status { margin: -8px 0 14px; color: #79e6ae; font-size: 11px; font-weight: 800; text-align: right; }
 

@@ -4,9 +4,10 @@ import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Filler
 } from 'chart.js';
 import {
-  Activity, Award, BarChart3, CalendarDays, Flame, Shield, Target, Trophy, Users
+  Activity, Award, BarChart3, CalendarDays, Download, Flame, Shield, Target, Trophy, Users
 } from 'lucide-react';
 import { availableAthleteYears, buildAthleteSeason, formatDate } from './athleteDashboardData';
+import AthleteCardModal from './AthleteCardModal';
 import './AthleteDashboard.css';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Filler);
@@ -53,6 +54,7 @@ export default function AthleteDashboard({ allPlayersData = [], dates = [], curr
   const [selectedName, setSelectedName] = useState('');
   const [metric, setMetric] = useState('pts');
   const [copyStatus, setCopyStatus] = useState('');
+  const [cardOpen, setCardOpen] = useState(false);
 
   useEffect(() => {
     if (years.length && !years.includes(year)) setYear(years[0]);
@@ -162,6 +164,11 @@ export default function AthleteDashboard({ allPlayersData = [], dates = [], curr
         </label>
         {ownPlayer && ownPlayer.name !== athlete.name && <button type="button" onClick={() => setSelectedName(ownPlayer.name)}>Meu perfil</button>}
         <button type="button" onClick={copySummary}>Copiar resumo</button>
+        <button type="button" className="cba-player__card-button" onClick={() => setCardOpen(true)}
+          disabled={!athlete.statDates && !athlete.validDates}
+          title={!athlete.statDates && !athlete.validDates ? 'O card estará disponível após os primeiros registros da temporada.' : undefined}>
+          <Download size={15} aria-hidden="true" /> Gerar card
+        </button>
       </div>
     </header>
     {copyStatus && <p className="cba-player__copy-status" role="status">{copyStatus}</p>}
@@ -276,5 +283,6 @@ export default function AthleteDashboard({ allPlayersData = [], dates = [], curr
     </div>
 
     <p className="cba-player__disclaimer"><Trophy size={16} aria-hidden="true" /> As súmulas atuais são consolidadas por data. Quando há várias partidas no mesmo dia, os números representam a rodada inteira.</p>
+    {cardOpen && <AthleteCardModal athlete={athlete} year={year} onClose={() => setCardOpen(false)} />}
   </section>;
 }
