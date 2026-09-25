@@ -7,3 +7,16 @@
 .hide-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
+@media (max-width: 767px) {
+  /* O menu aberto cobre a barra inferior e rola até o último item no iPhone. */
+  #root .cba-sidebar-backdrop { z-index: 105; }
+  #root .cba-mobile-sidebar {
+    z-index: 110;
+    height: 100vh;
+    height: 100dvh;
+    padding-bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+}
