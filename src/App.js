@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, createContext, useContext, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SITE_VERSION } from './siteVersion';
+import AthleteDashboard from './AthleteDashboard';
 import { 
     Activity, CalendarDays, BookOpen, DollarSign, Users, PartyPopper, BarChart, BellRing, 
     X, Menu, Copy, LogOut, RefreshCw, Trophy, Flame, MapPin, ChevronDown, CheckCircle, AlertCircle, Share2, ArrowLeft, Trash, Edit, ClipboardList, Minus, Award, Crown, Star,
@@ -2962,14 +2963,14 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
     const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
     const [passwordStatus, setPasswordStatus] = useState({ loading: false, error: '' });
 
-    const { data: initialData, isLoading, refetch } = useDataQuery(
+    const { data: initialData, isLoading, error: dataError, refetch } = useDataQuery(
         (signal) => api.post(SCRIPT_URL, { action: 'getInitialAppData' }, signal), 
         [refreshTrigger]
     );
     
     const isAdmin = user?.role?.toUpperCase() === 'ADMIN';
     
-    const TABS = useMemo(() => isAdmin ? ['inicio', 'presenca', 'relatorios', 'mesario', 'financas', 'jogos', 'eventos', 'sorteio', 'dm', 'halldafama', 'estatuto', 'notificacoes'] : ['inicio', 'presenca', 'relatorios', 'financas', 'jogos', 'eventos', 'sorteio', 'dm', 'halldafama', 'estatuto'], [isAdmin]);
+    const TABS = useMemo(() => isAdmin ? ['inicio', 'presenca', 'relatorios', 'atleta', 'mesario', 'financas', 'jogos', 'eventos', 'sorteio', 'dm', 'halldafama', 'estatuto', 'notificacoes'] : ['inicio', 'presenca', 'relatorios', 'atleta', 'financas', 'jogos', 'eventos', 'sorteio', 'dm', 'halldafama', 'estatuto'], [isAdmin]);
 
     useEffect(() => {
         window.navigateToTab = (tabName) => { if (TABS.includes(tabName)) setActiveTab(tabName); };
@@ -3031,6 +3032,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
         sorteio: { Icon: Users, color: 'text-amber-500 dark:text-amber-400', activeBg: 'bg-amber-500 text-white shadow-lg shadow-amber-500/30', label: 'Sorteio' },
         eventos: { Icon: PartyPopper, color: 'text-purple-500 dark:text-purple-400', activeBg: 'bg-purple-500 text-white shadow-lg shadow-purple-500/30', label: 'Eventos' },
         relatorios: { Icon: BarChart, color: 'text-blue-500 dark:text-blue-400', activeBg: 'bg-blue-600 text-white shadow-lg shadow-blue-500/30', label: 'Relatórios' },
+        atleta: { Icon: Trophy, color: 'text-orange-500 dark:text-orange-400', activeBg: 'bg-orange-500 text-slate-950 shadow-lg shadow-orange-500/30', label: 'Desempenho do Atleta' },
         mesario: { Icon: ClipboardList, color: 'text-cyan-500 dark:text-cyan-400', activeBg: 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/30', label: 'Mesário' },
         dm: { Icon: Stethoscope, color: 'text-red-500 dark:text-red-400', activeBg: 'bg-red-500 text-white shadow-lg shadow-red-500/30', label: 'Departamento Médico' },
         halldafama: { Icon: Crown, color: 'text-yellow-500 dark:text-yellow-400', activeBg: 'bg-gradient-to-r from-yellow-500 to-amber-600 text-white shadow-lg shadow-yellow-500/30', label: 'Hall da Fama' },
@@ -3057,6 +3059,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
                     {activeTab === 'inicio' && <div data-cba-home-anchor="true" />}
                     {activeTab === 'presenca' && <PresencaTab {...props} onAttendanceUpdate={handleForceRefresh} />}
                     {activeTab === 'relatorios' && <RelatoriosTab {...props} />}
+                    {activeTab === 'atleta' && <AthleteDashboard {...props} dataError={dataError} />}
                     {activeTab === 'mesario' && <MesarioTab {...props} onStatsSaved={handleForceRefresh} />}
                     {activeTab === 'financas' && <FinancasTab {...props} />}
                     {activeTab === 'jogos' && <JogosTab {...props} />}
