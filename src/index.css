@@ -1,0 +1,9 @@
+.hide-scrollbar {
+  /* Mantém a rolagem por toque, mouse e teclado sem a faixa visual. */
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
