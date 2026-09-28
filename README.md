@@ -28,6 +28,6 @@ npm run build
 
 ## Backend e segurança
 
-As funções Supabase `cba-gateway`, `cba-portal` e `cba-admin` são chamadas pelo frontend, mas seus fontes e políticas do banco não estão neste repositório. O papel salvo no navegador serve para mostrar os controles; **cada ação administrativa precisa validar token e papel no servidor**. A conferência das funções e políticas deve ser feita no projeto Supabase correspondente, com uma sessão comum e uma administrativa de teste. Não coloque chaves de serviço no cliente.
+As funções Supabase `cba-gateway`, `cba-portal` e `cba-admin` são chamadas pelo frontend, mas seus fontes e políticas do banco não estão neste repositório. O papel salvo no navegador serve para mostrar os controles; **cada ação administrativa precisa validar token e papel no servidor**. O logout chama `logoutUser` para revogar a sessão antes de apagar o token local; se o servidor não responder, o app avisa o usuário. As permissões `TRUNCATE` de `anon` e `authenticated` foram revogadas das tabelas públicas no projeto Supabase, inclusive dos privilégios padrão do papel `postgres`. Não coloque chaves de serviço no cliente.
 
 O arquivo `public/service-worker.js` é legado e não é registrado pelo frontend. O aplicativo instalado exige conexão para consultar dados operacionais; uma estratégia de acesso offline deve tratar separadamente sessão e informações de atletas.
