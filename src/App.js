@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useCallback, useMemo, createContext, useContext, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SITE_VERSION } from './siteVersion';
 import AthleteDashboard from './AthleteDashboard';
+import { InitialDataContext } from './InitialDataContext';
 import { 
     Activity, CalendarDays, BookOpen, DollarSign, Users, PartyPopper, BarChart, BellRing, 
     X, Menu, Copy, LogOut, RefreshCw, Trophy, Flame, MapPin, ChevronDown, CheckCircle, AlertCircle, Share2, ArrowLeft, Trash, Edit, ClipboardList, Minus, Award, Crown, Star,
@@ -11,10 +12,33 @@ import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, 
   BarElement, ArcElement, Title, Tooltip, Legend, Filler
 } from 'chart.js';
-import { Bar, Doughnut, Line } from 'react-chartjs-2';
+import { Doughnut } from 'react-chartjs-2';
 
 // Registo dos componentes do Chart.js
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
+
+const AdminDashboardBridge = lazy(() => import('./AdminDashboardBridge'));
+const PresenceDashboardBridge = lazy(() => import('./PresenceDashboardBridge'));
+const ReportsDashboardBridge = lazy(() => import('./ReportsDashboardBridge'));
+const ReportsStatsByDateBridge = lazy(() => import('./ReportsStatsByDateBridge'));
+const ReportsPdfBridgeV2 = lazy(() => import('./ReportsPdfBridgeV2'));
+const AnnualReportMedicalBridge = lazy(() => import('./AnnualReportMedicalBridge'));
+const ReportsRankingCompactBridge = lazy(() => import('./ReportsRankingCompactBridge'));
+const ReportsLegacyRankingHider = lazy(() => import('./ReportsLegacyRankingHider'));
+const MesarioDashboardBridge = lazy(() => import('./MesarioDashboardBridge'));
+const SorteioDashboardBridge = lazy(() => import('./SorteioDashboardBridge'));
+const DmDashboardBridge = lazy(() => import('./DmDashboardBridge'));
+const PortalExperienceBridge = lazy(() => import('./PortalExperienceBridge'));
+
+function ActiveBridges({ tab }) {
+    return <Suspense fallback={null}>
+        {tab === 'relatorios' && <><ReportsDashboardBridge /><ReportsStatsByDateBridge /><ReportsPdfBridgeV2 /><AnnualReportMedicalBridge /><ReportsRankingCompactBridge /><ReportsLegacyRankingHider /></>}
+        {tab === 'mesario' && <MesarioDashboardBridge />}
+        {tab === 'sorteio' && <SorteioDashboardBridge />}
+        {tab === 'dm' && <DmDashboardBridge />}
+        {['inicio', 'financas', 'jogos', 'eventos', 'halldafama', 'estatuto', 'notificacoes'].includes(tab) && <PortalExperienceBridge />}
+    </Suspense>;
+}
 
 // Constantes Globais
 const MONTHS_MAP = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
@@ -49,19 +73,14 @@ const calculatePlayerDebt = (player, financeData) => {
 };
 
 // --- CONTEXTO DE TEMA ---
-const ThemeContext = createContext({ theme: 'dark', toggleTheme: () => {} });
-
 const ThemeProvider = ({ children }) => {
-    const theme = 'dark';
     useEffect(() => {
         const root = window.document.documentElement;
         root.classList.remove('light');
         root.classList.add('dark');
     }, []);
-    return <ThemeContext.Provider value={{ theme, toggleTheme: () => {} }}>{children}</ThemeContext.Provider>;
+    return children;
 };
-
-const useTheme = () => useContext(ThemeContext);
 
 // --- ERROR BOUNDARY ---
 class ErrorBoundary extends React.Component {
@@ -149,33 +168,33 @@ function useDataQuery(queryFn, dependencies = []) {
     const [data, setData] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
+    const queryRef = useRef(queryFn);
+    const controllerRef = useRef(null);
+    queryRef.current = queryFn;
+    const dependencyKey = JSON.stringify(dependencies);
 
-    const fetchData = useCallback(async (signal) => {
+    const fetchData = useCallback(async () => {
+        controllerRef.current?.abort();
+        const controller = new AbortController();
+        controllerRef.current = controller;
         setIsLoading(true);
         setError(null);
         try {
-            const result = await queryFn(signal);
-            setData(result);
+            const result = await queryRef.current(controller.signal);
+            if (!controller.signal.aborted) setData(result);
         } catch (err) {
-            if (err?.name === 'AbortError') return;
-            setError(err.message || "Erro desconhecido ao buscar dados.");
+            if (!controller.signal.aborted && err?.name !== 'AbortError') setError(err.message || "Erro desconhecido ao buscar dados.");
         } finally {
-            setIsLoading(false);
+            if (controllerRef.current === controller && !controller.signal.aborted) setIsLoading(false);
         }
-    }, dependencies);
+    }, []);
 
     useEffect(() => {
-        const controller = new AbortController();
-        fetchData(controller.signal);
-        return () => controller.abort();
-    }, [fetchData]);
+        fetchData();
+        return () => controllerRef.current?.abort();
+    }, [fetchData, dependencyKey]);
 
-    const refetch = useCallback(() => {
-        const controller = new AbortController();
-        fetchData(controller.signal);
-    }, [fetchData]);
-
-    return { data, isLoading, error, refetch };
+    return { data, isLoading, error, refetch: fetchData };
 }
 
 // --- UTILITÁRIO MODERNO DE CLIPBOARD ---
@@ -429,239 +448,14 @@ const ProximoJogoCard = ({ game, currentUser, onAttendanceUpdate }) => {
 // ==========================================
 
 // 1. ABA PRESENÇA
-const PresencaTab = ({ allPlayersData, dates, financeData, isLoading, error, nextGame, currentUser, onAttendanceUpdate }) => {
-    const availableYears = useMemo(() => {
-        if (!dates || dates.length === 0) return [new Date().getFullYear().toString()];
-        return [...new Set(dates.map(d => d.substring(0, 4)))].sort((a, b) => b - a);
-    }, [dates]);
-
-    const [selectedYear, setSelectedYear] = useState(availableYears[0]);
-    
-    useEffect(() => {
-        if (availableYears.length > 0 && !availableYears.includes(selectedYear)) {
-            setSelectedYear(availableYears[0]);
-        }
-    }, [availableYears, selectedYear]);
-    
-    const playedDatesByYear = useMemo(() => {
-        const uniqueDates = [...new Set(dates || [])];
-        const filtered = uniqueDates.filter(d => d.startsWith(selectedYear));
-        return filtered.filter(date => allPlayersData.some(p => p.attendance[date]?.includes('✅')));
-    }, [dates, selectedYear, allPlayersData]);
-
-    const playersWithStats = useMemo(() => {
-        if (!allPlayersData || !playedDatesByYear.length) return [];
-        return allPlayersData.map(p => {
-            let validGames = 0; let presences = 0;
-            playedDatesByYear.forEach(d => {
-                const status = p.attendance[d]?.trim() || '';
-                if (status !== '' && status !== 'N/A') {
-                    validGames++;
-                    if (status.includes('✅')) presences++;
-                }
-            });
-            const percentage = validGames > 0 ? (presences / validGames) * 100 : 0;
-            return { ...p, percentage, presences, validGames };
-        });
-    }, [allPlayersData, playedDatesByYear]);
-
-    const topPresencePlayer = [...playersWithStats]
-        .filter(p => p.validGames > 0 && String(p.isEligibleForHoF).toUpperCase() !== 'FALSE')
-        .sort((a,b) => (b.presences - a.presences) || (b.percentage - a.percentage))[0];
-
-    const topPercentagePlayer = [...playersWithStats]
-        .filter(p => p.validGames > 0 && String(p.isEligibleForHoF).toUpperCase() !== 'FALSE')
-        .sort((a,b) => (b.percentage - a.percentage) || (b.presences - a.presences))[0];
-
-    const totalAtletas = allPlayersData.length;
-    let totalValidPlayerGames = 0; let totalGlobalPresences = 0;
-
-    playedDatesByYear.forEach(date => {
-        allPlayersData.forEach(p => {
-             const status = p.attendance[date]?.trim() || '';
-             if (status !== '' && status !== 'N/A') {
-                 totalValidPlayerGames++;
-                 if (status.includes('✅')) totalGlobalPresences++;
-             }
-        });
-    });
-
-    const globalAverage = totalValidPlayerGames > 0 ? (totalGlobalPresences / totalValidPlayerGames) * 100 : 0;
-    const jogosRealizados = playedDatesByYear.length;
-
-    const myFinanceRecord = financeData?.paymentStatus?.find(p => p.player.toLowerCase() === currentUser.name.toLowerCase());
-    let myDebt = 0;
-    if (myFinanceRecord && financeData?.paymentHeaders) {
-        const monthMap = { "janeiro": 0, "fevereiro": 1, "março": 2, "abril": 3, "maio": 4, "junho": 5, "julho": 6, "agosto": 7, "setembro": 8, "outubro": 9, "novembro": 10, "dezembro": 11 };
-        const currentMonth = new Date().getMonth();
-        financeData.paymentHeaders.forEach(m => {
-            const statusStr = String(myFinanceRecord.statuses[m] || '').trim().toLowerCase();
-            if (statusStr !== 'isento' && statusStr !== '20' && monthMap[m.toLowerCase()] < currentMonth) {
-                myDebt += 20;
-            }
-        });
-    }
-
-    const monthlyData = new Array(12).fill(0);
-    playedDatesByYear.forEach(dateStr => {
-        const monthIndex = parseInt(dateStr.substring(5, 7), 10) - 1;
-        if (monthIndex >= 0 && monthIndex < 12) {
-            monthlyData[monthIndex] += allPlayersData.reduce((c, p) => c + (p.attendance[dateStr]?.includes('✅') ? 1 : 0), 0);
-        }
-    });
-
-    const { theme } = useTheme();
-    const isDark = theme === 'dark';
-    
-    const chartOptions = { 
-        responsive: true, 
-        maintainAspectRatio: false, 
-        plugins: { legend: { display: false } }, 
-        scales: { 
-            y: { beginAtZero: true, ticks: { color: isDark ? '#94a3b8' : '#64748b' } },
-            x: { ticks: { color: isDark ? '#94a3b8' : '#64748b' } }
-        } 
-    };
-    
-    const chartDataObj = { 
-        labels: MONTHS_MAP, 
-        datasets: [{ 
-            label: 'Total de Presenças', 
-            data: monthlyData, 
-            backgroundColor: '#818cf8', 
-            borderRadius: 6 
-        }] 
-    };
-
-    // --- NOVO GRÁFICO: Comparativo Anual (Linhas) ---
-    const yearlyComparisonData = useMemo(() => {
-        const colors = ['#6366f1', '#f59e0b', '#10b981', '#ec4899', '#8b5cf6'];
-        const datasets = [];
-
-        availableYears.forEach((year, index) => {
-            const yearMonthlyData = new Array(12).fill(0);
-            const yearDates = [...new Set(dates || [])].filter(d => d.startsWith(year));
-            const playedYearDates = yearDates.filter(date => allPlayersData.some(p => p.attendance[date]?.includes('✅')));
-
-            playedYearDates.forEach(dateStr => {
-                const monthIndex = parseInt(dateStr.substring(5, 7), 10) - 1;
-                if (monthIndex >= 0 && monthIndex < 12) {
-                    yearMonthlyData[monthIndex] += allPlayersData.reduce((c, p) => c + (p.attendance[dateStr]?.includes('✅') ? 1 : 0), 0);
-                }
-            });
-
-            datasets.push({
-                label: year,
-                data: yearMonthlyData,
-                borderColor: colors[index % colors.length],
-                backgroundColor: colors[index % colors.length] + '80',
-                tension: 0.4,
-                borderWidth: 3,
-                pointBackgroundColor: colors[index % colors.length],
-                pointRadius: 4,
-                pointHoverRadius: 6
-            });
-        });
-
-        return { labels: MONTHS_MAP, datasets };
-    }, [dates, allPlayersData, availableYears]);
-
-    const lineChartOptions = {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: { display: true, position: 'top', labels: { color: isDark ? '#e2e8f0' : '#475569', font: { weight: 'bold' } } },
-            tooltip: { mode: 'index', intersect: false }
-        },
-        interaction: { mode: 'nearest', axis: 'x', intersect: false },
-        scales: {
-            y: { beginAtZero: true, ticks: { color: isDark ? '#94a3b8' : '#64748b' } },
-            x: { ticks: { color: isDark ? '#94a3b8' : '#64748b' } }
-        }
-    };
-
-    if (isLoading) return <Loader message="Sincronizando quadra..." />;
-    if (error) return <p className="text-red-500">{error}</p>;
-
-    return (
-        <div className="space-y-6">
-            <ProximoJogoCard game={nextGame} currentUser={currentUser} onAttendanceUpdate={onAttendanceUpdate} />
-            
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <GlassCard className="col-span-1 md:col-span-2 bg-gradient-to-br from-orange-500 to-rose-600 !text-white border-none relative overflow-hidden">
-                    <div className="absolute -right-6 top-4 opacity-20"><Trophy className="w-40 h-40" /></div>
-                    <div className="relative z-10">
-                        <h3 className="text-orange-200 font-bold uppercase tracking-wider text-xs mb-1">Destaque do Ano</h3>
-                        <p className="text-3xl font-black mb-1">{topPresencePlayer?.name || '--'}</p>
-                        <p className="text-lg font-medium">{topPresencePlayer?.presences || 0} presenças em {jogosRealizados} jogos</p>
-                    </div>
-                </GlassCard>
-
-                <GlassCard className="col-span-1 flex flex-col justify-center items-center text-center">
-                    <h3 className="text-slate-500 font-bold uppercase tracking-wider text-xs mb-2">Maior Média Ano</h3>
-                    <p className="text-2xl font-black text-slate-800 dark:text-white">{topPercentagePlayer?.name || '--'}</p>
-                    <span className="mt-2 px-4 py-1 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 font-black rounded-full">
-                        {topPercentagePlayer?.percentage?.toFixed(0) || 0}%
-                    </span>
-                </GlassCard>
-
-                <GlassCard className="col-span-1 flex flex-col justify-center items-center text-center bg-indigo-50 dark:bg-indigo-900/20">
-                    <h3 className="text-indigo-500 font-bold uppercase tracking-wider text-xs mb-2">Jogos Realizados</h3>
-                    <p className="text-5xl font-black text-indigo-600 dark:text-indigo-400">{jogosRealizados}</p>
-                    <p className="text-sm font-medium text-slate-500 mt-1">Em {selectedYear}</p>
-                </GlassCard>
-
-                <GlassCard className={`col-span-1 md:col-span-2 flex flex-col sm:flex-row items-start sm:items-center justify-between relative ${myDebt > 0 ? 'bg-gradient-to-br from-rose-500 to-red-600 !text-white border-none' : 'bg-gradient-to-br from-emerald-500 to-teal-600 !text-white border-none'}`} onClick={() => window.navigateToTab && window.navigateToTab('financas')}>
-                    <div className="absolute -right-4 opacity-20 pointer-events-none"><DollarSign className="w-32 h-32"/></div>
-                    <div className="relative z-10 flex-grow pr-4">
-                        <h3 className="font-bold uppercase tracking-wider text-xs mb-1 opacity-80">Meu Status Financeiro</h3>
-                        <p className="text-2xl font-black mb-1">{myDebt > 0 ? 'Mensalidade Atrasada' : 'Tudo em Dia!'}</p>
-                        <p className="text-sm font-medium">{myDebt > 0 ? `Você possui pendências de R$ ${myDebt.toFixed(2)}.` : 'Obrigado por fortalecer o CBA.'}</p>
-                    </div>
-                    <div className="relative z-10 mt-4 sm:mt-0 shrink-0">
-                        <span className={`px-4 py-2 rounded-xl text-sm font-bold shadow-md ${myDebt > 0 ? 'bg-white text-rose-600' : 'bg-white text-emerald-600'}`}>Ver Detalhes →</span>
-                    </div>
-                </GlassCard>
-
-                <GlassCard className="col-span-1 flex flex-col justify-center items-center text-center hover:bg-slate-100 dark:hover:bg-slate-800/50">
-                    <h3 className="text-slate-500 font-bold uppercase tracking-wider text-xs mb-2">Atletas Ativos</h3>
-                    <p className="text-4xl font-black text-slate-800 dark:text-white">{totalAtletas}</p>
-                    <p className="text-sm font-medium text-slate-500 mt-1">Registados no Elenco</p>
-                </GlassCard>
-
-                <GlassCard className="col-span-1 flex flex-col justify-center items-center text-center hover:bg-slate-100 dark:hover:bg-slate-800/50">
-                    <h3 className="text-slate-500 font-bold uppercase tracking-wider text-xs mb-2">Quórum Médio</h3>
-                    <p className="text-4xl font-black text-slate-800 dark:text-white">{globalAverage.toFixed(0)}%</p>
-                    <p className="text-sm font-medium text-slate-500 mt-1">Presença da Equipa</p>
-                </GlassCard>
-
-                <GlassCard className="col-span-1 md:col-span-4">
-                    <div className="flex justify-between items-center mb-6">
-                        <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2"><BarChart className="w-5 h-5"/> Tendência de Quórum (Mensal)</h3>
-                        <select value={selectedYear} onChange={e => setSelectedYear(e.target.value)} className="p-2 bg-slate-100 dark:bg-slate-700 rounded-xl outline-none font-bold text-sm text-slate-800 dark:text-white border-none focus:ring-2 focus:ring-indigo-500">
-                            {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
-                        </select>
-                    </div>
-                    <div className="h-64 w-full">
-                        <Bar data={chartDataObj} options={chartOptions} />
-                    </div>
-                </GlassCard>
-
-                {/* NOVO GRÁFICO COMPARATIVO ANUAL */}
-                <GlassCard className="col-span-1 md:col-span-4">
-                    <div className="flex justify-between items-center mb-6">
-                        <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                            <Activity className="w-5 h-5"/> Comparativo Anual de Presenças
-                        </h3>
-                    </div>
-                    <div className="h-72 w-full">
-                        <Line data={yearlyComparisonData} options={lineChartOptions} />
-                    </div>
-                </GlassCard>
-            </div>
-        </div>
-    );
-};
+const PresencaTab = ({ nextGame, currentUser, onAttendanceUpdate }) => (
+    <div className="space-y-6">
+        <ProximoJogoCard game={nextGame} currentUser={currentUser} onAttendanceUpdate={onAttendanceUpdate} />
+        <Suspense fallback={<Loader message="Carregando presença..." />}>
+            <PresenceDashboardBridge />
+        </Suspense>
+    </div>
+);
 
 // 2. ABA RELATÓRIOS
 const RelatoriosTab = ({ allPlayersData, dates, financeData, currentUser }) => {
@@ -2958,6 +2752,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
         } catch { return 'inicio'; }
     });
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [adminOpen, setAdminOpen] = useState(false);
     const [refreshTrigger, setRefreshTrigger] = useState(0);
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
     const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
@@ -3040,7 +2835,8 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
     };
 
     const renderContent = () => {
-        if (isLoading) return <Loader message="Carregando dados na quadra..." />;
+        if (isLoading && !initialData) return <Loader message="Carregando dados na quadra..." />;
+        if (dataError && !initialData) return <div role="alert" className="mx-auto max-w-lg rounded-3xl border border-rose-500/30 bg-slate-800 p-6 text-center text-white"><AlertCircle className="mx-auto mb-3 h-9 w-9 text-rose-400"/><h2 className="text-xl font-black">Não foi possível carregar o portal</h2><p className="mt-2 text-sm text-slate-300">Confira sua conexão e tente novamente.</p><button type="button" onClick={refetch} className="mt-5 rounded-xl bg-emerald-500 px-5 py-3 font-black text-slate-950">Tentar novamente</button></div>;
         
         const appData = initialData?.data || initialData;
         
@@ -3075,6 +2871,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
     };
 
     return (
+        <InitialDataContext.Provider value={initialData}>
         <div className="flex h-screen w-full bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 overflow-hidden">
             <AnimatePresence>
                 {isSidebarOpen && (
@@ -3084,6 +2881,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
 
             <nav id="cba-menu-principal" aria-label="Menu principal" className={`cba-mobile-sidebar fixed inset-y-0 left-0 z-50 md:relative transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-300 w-64 md:w-56 shrink-0 h-full flex flex-col items-stretch py-5 px-3 bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl border-r border-slate-200/50 dark:border-slate-700/50 shadow-2xl md:shadow-lg overflow-y-auto hide-scrollbar gap-2`}>
                 <div className="flex items-center gap-3 px-2 mb-4"><img src="https://lh3.googleusercontent.com/d/131DvcfgiRLLp9irVnVY8m9qNuM-0y7f8" alt="Logo" className="w-12 h-12 rounded-full shrink-0" /><div className="min-w-0"><p className="font-black text-slate-900 dark:text-white">Portal CBA</p><p className="text-[10px] uppercase tracking-wider font-black text-slate-400">Menu principal</p></div></div>
+                {isAdmin && <button type="button" onClick={() => { setIsSidebarOpen(false); setAdminOpen(true); }} className="flex w-full min-h-12 items-center gap-3 rounded-2xl border border-indigo-500/40 bg-indigo-500/10 px-3.5 text-left font-black text-sm text-indigo-400"><KeyRound className="h-5 w-5 shrink-0"/>Administração</button>}
                 {TABS.map(tab => {
                     const { Icon, activeBg, color, label } = TAB_CONFIG[tab];
                     return (
@@ -3108,7 +2906,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
                         <button onClick={onLogout} className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-rose-500 font-bold text-sm rounded-xl hover:bg-rose-50 dark:hover:bg-rose-900/20 border border-slate-200 dark:border-slate-700 flex items-center gap-2"><LogOut className="w-4 h-4 hidden sm:block"/> Sair</button>
                     </div>
                 </header>
-                <main className="flex-1 min-w-0 overflow-y-auto hide-scrollbar p-4 md:p-8"><div className="max-w-7xl mx-auto min-h-full flex flex-col pb-24 md:pb-4"><div className="flex-1">{renderContent()}</div><footer className="mt-10 pt-4 border-t border-slate-200/30 dark:border-slate-700/40 text-center text-[10px] tracking-wide text-slate-500 dark:text-slate-400" aria-label={`Versão do Portal CBA ${SITE_VERSION}`}>Portal CBA · v{SITE_VERSION}</footer></div></main>
+                <main className="flex-1 min-w-0 overflow-y-auto hide-scrollbar p-4 md:p-8"><div className="max-w-7xl mx-auto min-h-full flex flex-col pb-24 md:pb-4"><div className="flex-1">{dataError && initialData && <div role="alert" className="mb-4 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">Não foi possível atualizar os dados. <button type="button" onClick={refetch} className="font-black underline">Tentar novamente</button></div>}{renderContent()}</div><footer className="mt-10 pt-4 border-t border-slate-200/30 dark:border-slate-700/40 text-center text-[10px] tracking-wide text-slate-500 dark:text-slate-400" aria-label={`Versão do Portal CBA ${SITE_VERSION}`}>Portal CBA · v{SITE_VERSION}</footer></div></main>
                 <AnimatePresence>
                     {isPasswordModalOpen && (
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[120] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => !passwordStatus.loading && setIsPasswordModalOpen(false)}>
@@ -3136,8 +2934,8 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
                     )}
                 </AnimatePresence>
             </div>
-            <div className="md:hidden fixed bottom-0 left-0 right-0 z-[100] border-t border-slate-700/80 bg-slate-950/95 backdrop-blur-xl px-2 py-2">
-                <div className="grid grid-cols-5 gap-1">
+            <div className="md:hidden fixed bottom-0 left-0 right-0 z-[100] border-t border-slate-700/80 bg-slate-950/95 backdrop-blur-xl px-2 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))]">
+                <div className={`grid ${isAdmin ? 'grid-cols-6' : 'grid-cols-5'} gap-1`}>
                     {[
                         ['inicio','Início',Home],
                         ['jogos','Jogos',CalendarDays],
@@ -3148,12 +2946,16 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
                             <Icon className="w-5 h-5"/><span className="text-[9px] font-black">{label}</span>
                         </button>
                     ))}
+                    {isAdmin && <button type="button" onClick={() => setAdminOpen(true)} aria-label="Abrir Administração" className="min-h-12 rounded-xl flex flex-col items-center justify-center gap-0.5 text-indigo-400"><KeyRound className="w-5 h-5"/><span className="text-[9px] font-black">Admin</span></button>}
                     <button onClick={() => setIsSidebarOpen(true)} aria-controls="cba-menu-principal" aria-expanded={isSidebarOpen} className="min-h-12 rounded-xl flex flex-col items-center justify-center gap-0.5 text-slate-400">
                         <Menu className="w-5 h-5"/><span className="text-[9px] font-black">Mais</span>
                     </button>
                 </div>
             </div>
+            {initialData && <ActiveBridges tab={activeTab} />}
+            {isAdmin && adminOpen && <Suspense fallback={null}><AdminDashboardBridge open onClose={() => setAdminOpen(false)} /></Suspense>}
         </div>
+        </InitialDataContext.Provider>
     );
 };
 

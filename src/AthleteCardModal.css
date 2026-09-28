@@ -11,11 +11,16 @@
 .cba-card-modal__preview canvas { display: block; width: 100%; height: auto; aspect-ratio: 4 / 5; }
 .cba-card-modal__aside h3 { margin: 10px 0 17px; color: #fff; font-size: 30px; line-height: 1.13; }
 .cba-card-modal__aside p { color: #aebfd2; font-size: 14px; line-height: 1.6; }
+.cba-card-modal__formats { display: flex; gap: 7px; margin: 14px 0; }
+.cba-card-modal__formats button { flex: 1; min-height: 43px; padding: 8px; border: 1px solid #40566d; border-radius: 10px; background: #182b41; color: #dbe5ef; font-size: 12px; font-weight: 800; cursor: pointer; }
+.cba-card-modal__formats button[aria-pressed="true"] { border-color: #ff994d; color: #fff; background: #553620; }
 .cba-card-modal__aside .cba-card-modal__notice { padding: 11px 13px; border: 1px solid #79553b; border-radius: 9px; color: #ffd5b5; background: #3a2a23; }
+.cba-card-modal__share { display: inline-flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 48px; margin-top: 17px; border: 0; border-radius: 11px; background: #19b892; color: #08231d; font-size: 14px; font-weight: 900; cursor: pointer; }
+.cba-card-modal__share + .cba-card-modal__download { margin-top: 9px; }
 .cba-card-modal__download { display: inline-flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 48px; margin-top: 19px; border: 0; border-radius: 11px; color: #18202b; background: #ff994d; font-size: 14px; font-weight: 900; cursor: pointer; }
 .cba-card-modal__download:hover:not(:disabled) { background: #ffaf72; }
 .cba-card-modal__download:disabled { opacity: .55; cursor: wait; }
-.cba-card-modal__close:focus-visible, .cba-card-modal__download:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+.cba-card-modal__close:focus-visible, .cba-card-modal__download:focus-visible, .cba-card-modal__formats button:focus-visible, .cba-card-modal__share:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
 .cba-card-modal__aside .cba-card-modal__status { margin: 10px 0 0; color: #90eabb; font-size: 12px; }
 @media (max-width: 680px) {
   .cba-card-modal { padding: 8px; }

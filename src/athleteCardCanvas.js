@@ -1,5 +1,6 @@
 export const CARD_WIDTH = 1080;
 export const CARD_HEIGHT = 1350;
+export const STORY_HEIGHT = 1920;
 
 const INK = '#f7fafc';
 const MUTED = '#a8b8c9';
@@ -161,4 +162,28 @@ export function drawAthleteCard(canvas, athlete, year, photo = null) {
   ctx.textAlign = 'right';
   drawText(ctx, String(year), 1003, 1310, 19, MUTED, 900);
   ctx.textAlign = 'left';
+}
+
+/** Adapts the existing post card to Stories without cropping any season numbers. */
+export function drawAthleteStory(canvas, athlete, year, photo = null) {
+  const post = document.createElement('canvas');
+  drawAthleteCard(post, athlete, year, photo);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas indisponível neste navegador.');
+  canvas.width = CARD_WIDTH;
+  canvas.height = STORY_HEIGHT;
+
+  const background = ctx.createLinearGradient(0, 0, CARD_WIDTH, STORY_HEIGHT);
+  background.addColorStop(0, '#172d44');
+  background.addColorStop(.6, '#091827');
+  background.addColorStop(1, '#15263a');
+  ctx.fillStyle = background;
+  ctx.fillRect(0, 0, CARD_WIDTH, STORY_HEIGHT);
+  ctx.fillStyle = ORANGE;
+  ctx.fillRect(0, 0, 13, STORY_HEIGHT);
+  drawText(ctx, 'CBA  /  TEMPORADA ' + year, 78, 146, 39, INK, 900);
+  drawText(ctx, 'O BASQUETE EM NÚMEROS', 78, 207, 23, ORANGE, 900);
+  ctx.drawImage(post, 0, 290, CARD_WIDTH, CARD_HEIGHT);
+  drawText(ctx, 'MEU DESEMPENHO NA QUADRA', 78, 1701, 37, INK, 900);
+  drawText(ctx, 'Portal CBA  •  Compartilhe sua temporada', 78, 1766, 25, MUTED, 700);
 }

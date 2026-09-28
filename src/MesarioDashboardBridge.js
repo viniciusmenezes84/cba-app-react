@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { InitialDataContext } from './InitialDataContext';
 import {
   AlertCircle, CalendarDays, CheckCircle, ClipboardList, History, Minus,
   Play, RefreshCw, Save, Search, Trash, Trophy, Users, X
@@ -472,11 +473,7 @@ function MesarioExperience({ data }) {
 export default function MesarioDashboardBridge() {
   const [mountNode, setMountNode] = useState(null);
   const [active, setActive] = useState(false);
-  const [data, setData] = useState(null);
-
-  useEffect(() => {
-    post({ action: 'getInitialAppData' }).then(setData).catch(() => setData(null));
-  }, []);
+  const data = useContext(InitialDataContext);
 
   useEffect(() => {
     let node = null;

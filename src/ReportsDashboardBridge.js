@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { InitialDataContext } from './InitialDataContext';
 import { Activity, Award, BarChart3, CalendarDays, CheckCircle2, Flame, Medal, Shield, Star, Target, Trophy, User, Users, Zap } from 'lucide-react';
 import { Doughnut, Line } from 'react-chartjs-2';
 import {
@@ -9,7 +10,6 @@ import {
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Tooltip, Legend, Filler);
 
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwNXGI4Cc5qGBye-IfWW_qqUcJ04NfArulExPXE4jgX0SZhWAmeWCjjKg2U9FFfHkHE/exec';
 
 const Card = ({ children, className = '' }) => (
   <div className={`bg-white/85 dark:bg-slate-800/70 backdrop-blur-xl border border-slate-200/70 dark:border-slate-700/60 shadow-xl rounded-3xl p-5 sm:p-6 ${className}`}>{children}</div>
@@ -259,19 +259,11 @@ function ReportsExperience({ data, year, selectedPlayer, onSelectPlayer }) {
 
 export default function ReportsDashboardBridge() {
   const [mountNode, setMountNode] = useState(null);
-  const [data, setData] = useState(null);
+  const data = useContext(InitialDataContext);
   const [active, setActive] = useState(false);
   const [year, setYear] = useState(new Date().getFullYear().toString());
   const [selectedPlayer, setSelectedPlayer] = useState('todos');
   const [playerSelect, setPlayerSelect] = useState(null);
-
-  useEffect(() => {
-    fetch(SCRIPT_URL, {
-      method: 'POST', mode: 'cors', redirect: 'follow',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: 'getInitialAppData' })
-    }).then(response => response.json()).then(setData).catch(() => setData(null));
-  }, []);
 
   useEffect(() => {
     let node = null;

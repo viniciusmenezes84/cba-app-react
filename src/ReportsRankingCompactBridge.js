@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { InitialDataContext } from './InitialDataContext';
 import { BarChart3, Search, Users } from 'lucide-react';
 import { Bar } from 'react-chartjs-2';
 import {
@@ -13,7 +14,6 @@ import {
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
 
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwNXGI4Cc5qGBye-IfWW_qqUcJ04NfArulExPXE4jgX0SZhWAmeWCjjKg2U9FFfHkHE/exec';
 
 const num = value => Number(value || 0);
 const calcPts = stats => (num(stats?.pts2) * 2) + (num(stats?.pts3) * 3);
@@ -347,22 +347,9 @@ function findRankingCard() {
 export default function ReportsRankingCompactBridge() {
   const [mountNode, setMountNode] = useState(null);
   const [active, setActive] = useState(false);
-  const [data, setData] = useState(null);
+  const data = useContext(InitialDataContext);
   const [year, setYear] = useState(new Date().getFullYear().toString());
   const [playerSelect, setPlayerSelect] = useState(null);
-
-  useEffect(() => {
-    fetch(SCRIPT_URL, {
-      method: 'POST',
-      mode: 'cors',
-      redirect: 'follow',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: 'getInitialAppData' })
-    })
-      .then(response => response.json())
-      .then(setData)
-      .catch(() => setData(null));
-  }, []);
 
   useEffect(() => {
     let node = null;

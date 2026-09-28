@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { InitialDataContext } from './InitialDataContext';
 import { BookOpen, CalendarDays, RefreshCw } from 'lucide-react';
 
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwNXGI4Cc5qGBye-IfWW_qqUcJ04NfArulExPXE4jgX0SZhWAmeWCjjKg2U9FFfHkHE/exec';
 const LOGO_URL = 'https://lh3.googleusercontent.com/d/131DvcfgiRLLp9irVnVY8m9qNuM-0y7f8';
 const MONTHS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
@@ -366,16 +366,11 @@ function Monthly({ year, derived }) {
 export default function ReportsPdfBridgeV2() {
   const [mountNode, setMountNode] = useState(null);
   const [active, setActive] = useState(false);
-  const [data, setData] = useState(null);
+  const data = useContext(InitialDataContext);
   const [year, setYear] = useState(new Date().getFullYear().toString());
   const [selectedPlayer, setSelectedPlayer] = useState('todos');
   const [annualBusy, setAnnualBusy] = useState(false);
   const [monthlyBusy, setMonthlyBusy] = useState(false);
-
-  useEffect(() => {
-    fetch(SCRIPT_URL, { method: 'POST', mode: 'cors', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: 'getInitialAppData' }) })
-      .then(response => response.json()).then(setData).catch(() => setData(null));
-  }, []);
 
   useEffect(() => {
     let node = null;
