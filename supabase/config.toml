@@ -1,0 +1,16 @@
+# O portal usa sessões próprias em app_sessions; cada função valida o token no corpo da requisição.
+# Migrar para JWT do Supabase Auth exige alterar cliente, funções e políticas em conjunto.
+[functions.cba-api]
+verify_jwt = false
+
+[functions.cba-gateway]
+verify_jwt = false
+
+[functions.cba-admin]
+verify_jwt = false
+
+[functions.cba-portal]
+verify_jwt = false
+
+[functions.cba-medical]
+verify_jwt = false
