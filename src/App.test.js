@@ -59,3 +59,50 @@ test('o painel de presença usa os dados iniciais sem repetir a consulta', async
     window.localStorage.removeItem('cba_last_tab_v1');
   }
 });
+
+test('sair revoga a sessão no servidor antes de limpar o dispositivo', async () => {
+  const token = 'a'.repeat(64);
+  window.localStorage.setItem('cba_session_v1', JSON.stringify({
+    user: { role: 'MEMBER', email: 'atleta@cba.test', name: 'Atleta', token }, savedAt: Date.now()
+  }));
+  const previousFetch = global.fetch;
+  global.fetch = jest.fn((_, options) => {
+    const body = JSON.parse(options.body);
+    if (body.action === 'logoutUser') {
+      expect(body.token).toBe(token);
+      expect(window.localStorage.getItem('cba_session_v1')).not.toBeNull();
+      return Promise.resolve({ ok: true, json: async () => ({ result: 'success' }) });
+    }
+    return new Promise(() => {});
+  });
+  try {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Sair' }));
+    expect(await screen.findByRole('button', { name: 'Entrar no Portal' })).toBeInTheDocument();
+    expect(window.localStorage.getItem('cba_session_v1')).toBeNull();
+    expect(global.fetch.mock.calls.some(([, options]) => JSON.parse(options.body).action === 'logoutUser')).toBe(true);
+  } finally {
+    global.fetch = previousFetch;
+    window.localStorage.removeItem('cba_session_v1');
+  }
+});
+
+test('falha na revogação limpa a sessão local e avisa o usuário', async () => {
+  window.localStorage.setItem('cba_session_v1', JSON.stringify({
+    user: { role: 'MEMBER', email: 'atleta@cba.test', name: 'Atleta', token: 'b'.repeat(64) }, savedAt: Date.now()
+  }));
+  const previousFetch = global.fetch;
+  global.fetch = jest.fn((_, options) => JSON.parse(options.body).action === 'logoutUser'
+    ? Promise.reject(new Error('Offline')) : new Promise(() => {}));
+  const previousError = jest.spyOn(console, 'error').mockImplementation(() => {});
+  try {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Sair' }));
+    expect(await screen.findByText(/não foi possível confirmar o encerramento da sessão no servidor/i)).toBeInTheDocument();
+    expect(window.localStorage.getItem('cba_session_v1')).toBeNull();
+  } finally {
+    previousError.mockRestore();
+    global.fetch = previousFetch;
+    window.localStorage.removeItem('cba_session_v1');
+  }
+});

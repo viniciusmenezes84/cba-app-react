@@ -2744,7 +2744,7 @@ const HallDaFamaTab = ({ allPlayersData, dates }) => {
 };
 
 // --- MAIN APP ---
-const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
+const MainApp = ({ user, onLogout, logoutPending, SCRIPT_URL }) => {
     const [activeTab, setActiveTab] = useState(() => {
         try {
             const saved = localStorage.getItem('cba_last_tab_v1');
@@ -2812,7 +2812,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
             setIsPasswordModalOpen(false);
             setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
             window.alert('Senha alterada com sucesso. Entre novamente com a nova senha.');
-            onLogout();
+            onLogout(true);
         } catch (error) {
             setPasswordStatus({ loading: false, error: error?.message || 'Não foi possível alterar a senha.' });
         }
@@ -2903,7 +2903,7 @@ const MainApp = ({ user, onLogout, SCRIPT_URL }) => {
                     <div className="flex gap-2">
                         <button onClick={handleForceRefresh} aria-label="Atualizar dados" title="Atualizar dados" className="p-2 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl shadow-sm hover:shadow-md"><RefreshCw className="w-5 h-5" /></button>
                         <button onClick={() => { setPasswordStatus({ loading: false, error: '' }); setIsPasswordModalOpen(true); }} aria-label="Redefinir senha" title="Redefinir senha" className="px-3 py-2 bg-slate-100 dark:bg-slate-800 text-emerald-500 font-bold text-sm rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-900/20 border border-slate-200 dark:border-slate-700 flex items-center gap-2"><KeyRound className="w-4 h-4"/><span className="hidden md:inline">Senha</span></button>
-                        <button onClick={onLogout} className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-rose-500 font-bold text-sm rounded-xl hover:bg-rose-50 dark:hover:bg-rose-900/20 border border-slate-200 dark:border-slate-700 flex items-center gap-2"><LogOut className="w-4 h-4 hidden sm:block"/> Sair</button>
+                        <button onClick={() => onLogout()} disabled={logoutPending} className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-rose-500 font-bold text-sm rounded-xl hover:bg-rose-50 dark:hover:bg-rose-900/20 border border-slate-200 dark:border-slate-700 flex items-center gap-2 disabled:opacity-50"><LogOut className="w-4 h-4 hidden sm:block"/> {logoutPending ? 'Saindo...' : 'Sair'}</button>
                     </div>
                 </header>
                 <main className="flex-1 min-w-0 overflow-y-auto hide-scrollbar p-4 md:p-8"><div className="max-w-7xl mx-auto min-h-full flex flex-col pb-24 md:pb-4"><div className="flex-1">{dataError && initialData && <div role="alert" className="mb-4 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">Não foi possível atualizar os dados. <button type="button" onClick={refetch} className="font-black underline">Tentar novamente</button></div>}{renderContent()}</div><footer className="mt-10 pt-4 border-t border-slate-200/30 dark:border-slate-700/40 text-center text-[10px] tracking-wide text-slate-500 dark:text-slate-400" aria-label={`Versão do Portal CBA ${SITE_VERSION}`}>Portal CBA · v{SITE_VERSION}</footer></div></main>
@@ -2986,10 +2986,16 @@ const persistSession = (user) => {
 };
 
 const clearPersistedSession = () => {
-    try { localStorage.removeItem(SESSION_STORAGE_KEY); } catch { }
+    try {
+        localStorage.removeItem(SESSION_STORAGE_KEY);
+        localStorage.removeItem('cba_session_v2');
+        sessionStorage.removeItem('cba_session_v2');
+    } catch { }
 };
 
 function AppInner() {
+    const logoutInFlight = useRef(false);
+    const [logoutPending, setLogoutPending] = useState(false);
     const [auth, setAuth] = useState(() => {
         const restoredUser = loadPersistedSession();
         return restoredUser
@@ -3039,14 +3045,37 @@ function AppInner() {
         }
     };
 
-    const handleLogout = () => {
-        clearPersistedSession();
-        setAuth({ status: 'unauthenticated', user: null, error: null });
+    const handleLogout = async (alreadyRevoked = false) => {
+        if (logoutInFlight.current) return;
+        logoutInFlight.current = true;
+        setLogoutPending(true);
+        let warning = null;
+        try {
+            if (!alreadyRevoked) {
+                const token = auth.user?.token || auth.user?.user?.token;
+                if (!token) throw new Error('Sessão sem token');
+                const controller = new AbortController();
+                const timeout = window.setTimeout(() => controller.abort(), 5000);
+                try {
+                    const response = await api.post(SCRIPT_URL, { action: 'logoutUser', token }, controller.signal);
+                    if (response?.result !== 'success') throw new Error('Revogação não confirmada');
+                } finally {
+                    window.clearTimeout(timeout);
+                }
+            }
+        } catch {
+            warning = 'Você saiu deste dispositivo, mas não foi possível confirmar o encerramento da sessão no servidor. Verifique sua conexão.';
+        } finally {
+            clearPersistedSession();
+            setAuth({ status: 'unauthenticated', user: null, error: warning });
+            setLogoutPending(false);
+            logoutInFlight.current = false;
+        }
     };
 
     return (
         <ThemeProvider>
-            {auth.status === 'authenticated' ? <MainApp user={auth.user} onLogout={handleLogout} SCRIPT_URL={SCRIPT_URL} /> : <LoginScreen onLogin={handleLogin} isLoading={auth.status === 'loading'} error={auth.error} />}
+            {auth.status === 'authenticated' ? <MainApp user={auth.user} onLogout={handleLogout} logoutPending={logoutPending} SCRIPT_URL={SCRIPT_URL} /> : <LoginScreen onLogin={handleLogin} isLoading={auth.status === 'loading'} error={auth.error} />}
         </ThemeProvider>
     );
 }
