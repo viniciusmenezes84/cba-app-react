@@ -1,6 +1,5 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import './SupabaseCutoverProxy';
 import './tailwind.generated.css';
 import './index.css';
 import './reports-pdf-v2.css';

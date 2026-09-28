@@ -8,6 +8,33 @@ test('mostra a entrada do Portal CBA', () => {
   expect(screen.getByRole('button', { name: 'Entrar no Portal' })).toBeInTheDocument();
 });
 
+test('login entra pelo gateway e carrega os painéis com a sessão recebida', async () => {
+  const token = 'c'.repeat(64);
+  const previousFetch = global.fetch;
+  global.fetch = jest.fn((url, options) => {
+    const body = JSON.parse(options.body);
+    expect(url).toBe('https://vqirdswgchlcxevepamu.supabase.co/functions/v1/cba-gateway');
+    if (body.action === 'loginUser') {
+      expect(body.token).toBeUndefined();
+      return Promise.resolve({ ok: true, json: async () => ({ status: 'approved', role: 'MEMBER', name: 'Atleta', email: 'atleta@cba.test', token }) });
+    }
+    expect(body).toMatchObject({ action: 'getInitialAppData', token });
+    return new Promise(() => {});
+  });
+  try {
+    render(<App />);
+    fireEvent.change(screen.getByLabelText('E-mail'), { target: { value: 'atleta@cba.test' } });
+    fireEvent.change(screen.getByLabelText('Senha'), { target: { value: 'senha-de-teste' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Entrar no Portal' }));
+    expect(await screen.findByText('Carregando dados na quadra...')).toBeInTheDocument();
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(window.localStorage.getItem('cba_session_v1')).user.token).toBe(token);
+  } finally {
+    global.fetch = previousFetch;
+    window.localStorage.removeItem('cba_session_v1');
+  }
+});
+
 test('administrador acessa o painel diretamente pela barra inferior', async () => {
   window.localStorage.setItem('cba_session_v1', JSON.stringify({
     user: { role: 'ADMIN', email: 'admin@cba.test', name: 'Admin', token: 'sessao-de-teste' }, savedAt: Date.now()

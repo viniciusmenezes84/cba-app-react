@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { QRCodeSVG } from 'qrcode.react';
+import { gatewayPost, portalPost, readSession } from './cbaApi';
 import {
   Activity, AlertTriangle, BarChart3, BellRing, BookOpen, CalendarDays,
   Check, CheckCircle2, Copy, CreditCard, DollarSign, Edit3,
@@ -8,9 +9,6 @@ import {
   Send, ShieldCheck, Star, Trash2, Trophy, UserCheck, Users, WalletCards, X
 } from 'lucide-react';
 
-const PORTAL_URL = 'https://vqirdswgchlcxevepamu.supabase.co/functions/v1/cba-portal';
-const GATEWAY_URL = 'https://vqirdswgchlcxevepamu.supabase.co/functions/v1/cba-gateway';
-const SESSION_KEYS = ['cba_session_v2', 'cba_session_v1'];
 const MONTHS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
 const cx = (...values) => values.filter(Boolean).join(' ');
@@ -24,42 +22,6 @@ const fmtDate = value => {
 const todayBahia = () => new Intl.DateTimeFormat('en-CA', { timeZone:'America/Bahia', year:'numeric', month:'2-digit', day:'2-digit' }).format(new Date());
 const normalize = value => String(value || '').trim().toLowerCase();
 const isAdminSession = () => String(readSession()?.role || '').toUpperCase() === 'ADMIN';
-
-function readSession() {
-  for (const key of SESSION_KEYS) {
-    try {
-      const raw = window.localStorage.getItem(key);
-      if (!raw) continue;
-      const parsed = JSON.parse(raw);
-      const user = parsed?.user?.user || parsed?.user || parsed;
-      const token = parsed?.user?.token || parsed?.user?.user?.token || parsed?.token || user?.token;
-      if (token) return { token, role:user?.role || parsed?.role || '', email:user?.email || parsed?.email || '', name:user?.name || '' };
-    } catch { /* tenta próxima */ }
-  }
-  try {
-    const raw = window.sessionStorage.getItem('cba_session_v2');
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      return { token: parsed?.token || parsed?.user?.token, role:parsed?.role || parsed?.user?.role || '', email:parsed?.email || parsed?.user?.email || '', name:parsed?.name || parsed?.user?.name || '' };
-    }
-  } catch { /* sem impacto */ }
-  return null;
-}
-
-async function post(url, action, payload = {}) {
-  const session = readSession();
-  if (!session?.token) throw new Error('Sessão não encontrada. Entre novamente no portal.');
-  const response = await fetch(url, {
-    method:'POST',
-    headers:{ 'Content-Type':'application/json' },
-    body:JSON.stringify({ action, token:session.token, ...payload })
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok || data?.result === 'error') throw new Error(data?.message || 'Falha ao comunicar com o servidor.');
-  return data;
-}
-const portalPost = (action,payload={}) => post(PORTAL_URL,action,payload);
-const gatewayPost = (action,payload={}) => post(GATEWAY_URL,action,payload);
 
 function Panel({ children, className='' }) {
   return <div className={cx('rounded-3xl border border-slate-700/80 bg-slate-900/75 shadow-xl',className)}>{children}</div>;

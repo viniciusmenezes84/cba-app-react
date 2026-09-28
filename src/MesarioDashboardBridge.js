@@ -1,12 +1,12 @@
 import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { InitialDataContext } from './InitialDataContext';
+import { gatewayPost } from './cbaApi';
 import {
   AlertCircle, CalendarDays, CheckCircle, ClipboardList, History, Minus,
   Play, RefreshCw, Save, Search, Trash, Trophy, Users, X
 } from 'lucide-react';
 
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwNXGI4Cc5qGBye-IfWW_qqUcJ04NfArulExPXE4jgX0SZhWAmeWCjjKg2U9FFfHkHE/exec';
 const BACKUP_KEY = 'cba_mesario_backup_v2';
 const LEGACY_KEY = 'cba_mesario_backup';
 const SCHEMA_VERSION = 2;
@@ -60,17 +60,7 @@ function readBackup() {
   };
 }
 
-async function post(params) {
-  const response = await fetch(SCRIPT_URL, {
-    method: 'POST',
-    mode: 'cors',
-    redirect: 'follow',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify(params)
-  });
-  if (!response.ok) throw new Error(`Erro HTTP ${response.status}`);
-  return response.json();
-}
+const post = params => gatewayPost(params.action, params);
 
 function Modal({ open, onClose, children, width = 'max-w-lg' }) {
   if (!open) return null;

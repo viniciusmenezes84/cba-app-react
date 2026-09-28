@@ -1,53 +1,17 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { gatewayPost, readSession } from './cbaApi';
 import {
   ArrowLeft, Check, ChevronRight, Clipboard, RotateCcw, Save, Search,
   Share2, Shuffle, Sparkles, Trophy, UserCheck, Users, X
 } from 'lucide-react';
 
-const GATEWAY_URL = 'https://vqirdswgchlcxevepamu.supabase.co/functions/v1/cba-gateway';
-const SESSION_KEYS = ['cba_session_v2', 'cba_session_v1'];
 const HISTORY_KEY = 'cba_sorteio_history_v2';
 
 const normalize = value => String(value || '').trim().toLowerCase();
 const fmtDate = value => value ? String(value).split('-').reverse().join('/') : '--';
 
-function readSession() {
-  for (const key of SESSION_KEYS) {
-    try {
-      const raw = window.localStorage.getItem(key);
-      if (!raw) continue;
-      const parsed = JSON.parse(raw);
-      const token = parsed?.user?.token || parsed?.user?.user?.token || parsed?.token;
-      const role = parsed?.user?.role || parsed?.user?.user?.role || parsed?.role || '';
-      if (token) return { token, role };
-    } catch { /* tenta a próxima chave */ }
-  }
-  try {
-    const raw = window.sessionStorage.getItem('cba_session_v2');
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      return {
-        token: parsed?.token || parsed?.user?.token || null,
-        role: parsed?.role || parsed?.user?.role || ''
-      };
-    }
-  } catch { /* sem impacto */ }
-  return { token: null, role: '' };
-}
-
-async function postBackend(action, payload = {}) {
-  const { token } = readSession();
-  if (!token) throw new Error('Sessão não encontrada. Entre novamente.');
-  const response = await fetch(GATEWAY_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action, token, ...payload })
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok || data?.result === 'error') throw new Error(data?.message || 'Falha ao comunicar com o servidor.');
-  return data;
-}
+const postBackend = gatewayPost;
 
 function shuffle(items) {
   const result = [...items];
