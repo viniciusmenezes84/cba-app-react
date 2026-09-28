@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { SITE_VERSION } from './siteVersion';
 import AthleteDashboard from './AthleteDashboard';
 import { InitialDataContext } from './InitialDataContext';
+import { gatewayPost } from './cbaApi';
 import { 
     Activity, CalendarDays, BookOpen, DollarSign, Users, PartyPopper, BarChart, BellRing, 
     X, Menu, Copy, LogOut, RefreshCw, Trophy, Flame, MapPin, ChevronDown, CheckCircle, AlertCircle, Share2, ArrowLeft, Trash, Edit, ClipboardList, Minus, Award, Crown, Star,
@@ -123,28 +124,7 @@ class ErrorBoundary extends React.Component {
 
 // --- UTILITÁRIOS DE API CENTRALIZADOS ---
 const api = {
-    post: async (baseUrl, params, signal) => {
-        try {
-            const res = await fetch(baseUrl, {
-                method: 'POST', mode: 'cors', redirect: 'follow',
-                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                body: JSON.stringify(params),
-                signal,
-            });
-            if (!res.ok) {
-                const errorText = await res.text().catch(() => 'Erro desconhecido.');
-                if (errorText.trim().toLowerCase().startsWith('<!doctype html')) {
-                    throw new Error(`Erro de Servidor (${res.status}). Verifique a implantação do script.`);
-                }
-                throw new Error(`Erro de HTTP: ${res.status}. Resposta: ${errorText}`);
-            }
-            return res.json();
-        } catch (error) {
-            if (error.name === 'AbortError') throw error;
-            console.error('Fetch POST error:', error.message);
-            throw error;
-        }
-    }
+    post: (params, signal) => gatewayPost(params.action, params, { signal })
 };
 
 let html2pdfLoadPromise = null;
@@ -1280,7 +1260,7 @@ const RelatoriosTab = ({ allPlayersData, dates, financeData, currentUser }) => {
 };
 
 // 3. ABA FINANÇAS
-const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin, scriptUrl, pixCode }) => {
+const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin, pixCode }) => {
     const [selectedPlayer, setSelectedPlayer] = useState('');
     const [isSending, setIsSending] = useState(false);
     const [emailMessage, setEmailMessage] = useState({ text: '', type: '' });
@@ -1306,7 +1286,7 @@ const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin, scri
     const handleSendReports = async () => {
         setIsSending(true); setEmailMessage({ text: 'Enviando e-mails...', type: 'info' });
         try {
-            const data = await api.post(scriptUrl, { action: 'sendFinanceReports' });
+            const data = await api.post({ action: 'sendFinanceReports' });
             if (data.result === 'success') setEmailMessage({ text: data.message, type: 'success' });
             else throw new Error(data.message);
         } catch (err) { setEmailMessage({ text: `Erro: ${err.message}`, type: 'error' }); } 
@@ -1414,8 +1394,8 @@ const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin, scri
 };
 
 // 4. ABA JOGOS
-const JogosTab = ({ currentUser, isAdmin, scriptUrl, refreshKey }) => {
-    const { data: gamesData, isLoading, refetch } = useDataQuery((signal) => api.post(scriptUrl, { action: 'getGames' }, signal), [refreshKey, scriptUrl]);
+const JogosTab = ({ currentUser, isAdmin, refreshKey }) => {
+    const { data: gamesData, isLoading, refetch } = useDataQuery((signal) => api.post({ action: 'getGames' }, signal), [refreshKey]);
     const games = [...(gamesData?.data || [])].sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
     
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -1436,7 +1416,7 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, refreshKey }) => {
             local: formData.get('local') 
         };
         try {
-            const res = await api.post(scriptUrl, payload);
+            const res = await api.post(payload);
             if (res.result === 'success') { 
                 setIsModalOpen(false); 
                 setEditingGame(null);
@@ -1453,7 +1433,7 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, refreshKey }) => {
     const handleDeleteGame = async () => {
         if (!confirmDelete) return;
         try {
-            const res = await api.post(scriptUrl, { action: 'deleteGame', id: confirmDelete.id });
+            const res = await api.post({ action: 'deleteGame', id: confirmDelete.id });
             if (res.result === 'success') {
                 setConfirmDelete(null);
                 refetch();
@@ -1464,7 +1444,7 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, refreshKey }) => {
     };
 
     const handleAttendance = async (gameId, actionType) => {
-        await api.post(scriptUrl, { action: 'handleAttendanceUpdate', itemId: gameId, playerName: currentUser.name, actionType, type: 'game' });
+        await api.post({ action: 'handleAttendanceUpdate', itemId: gameId, playerName: currentUser.name, actionType, type: 'game' });
         refetch();
     };
 
@@ -1533,8 +1513,8 @@ const JogosTab = ({ currentUser, isAdmin, scriptUrl, refreshKey }) => {
 };
 
 // 5. ABA EVENTOS
-const EventosTab = ({ scriptUrl, currentUser, isAdmin, refreshKey }) => {
-    const { data: eventsData, isLoading, refetch } = useDataQuery((signal) => api.post(scriptUrl, { action: 'getEvents' }, signal), [refreshKey, scriptUrl]);
+const EventosTab = ({ currentUser, isAdmin, refreshKey }) => {
+    const { data: eventsData, isLoading, refetch } = useDataQuery((signal) => api.post({ action: 'getEvents' }, signal), [refreshKey]);
     const events = (eventsData?.data || []).map(e => ({ ...e, attendees: typeof e.attendees === 'string' ? e.attendees.split(',').filter(Boolean) : [] }));
     
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -1560,7 +1540,7 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, refreshKey }) => {
             description: formData.get('description') 
         };
         try {
-            const res = await api.post(scriptUrl, payload);
+            const res = await api.post(payload);
             if (res.result === 'success') { setIsModalOpen(false); setEditingEvent(null); refetch(); }
             else throw new Error(res.message);
         } catch (err) { setInfoModal({ isOpen: true, title: 'Erro', message: err.message }); } finally { setIsSubmitting(false); }
@@ -1569,14 +1549,14 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, refreshKey }) => {
     const handleDeleteEvent = async () => {
         if (!confirmDelete) return;
         try {
-            const res = await api.post(scriptUrl, { action: 'deleteEvent', id: confirmDelete.id });
+            const res = await api.post({ action: 'deleteEvent', id: confirmDelete.id });
             if (res.result === 'success') { setConfirmDelete(null); refetch(); }
             else throw new Error(res.message);
         } catch (err) { setInfoModal({ isOpen: true, title: 'Erro', message: err.message }); }
     };
 
     const handleAttendance = async (eventId, actionType) => {
-        await api.post(scriptUrl, { action: 'handleAttendanceUpdate', itemId: eventId, playerName: currentUser.name, actionType, type: 'event' });
+        await api.post({ action: 'handleAttendanceUpdate', itemId: eventId, playerName: currentUser.name, actionType, type: 'event' });
         refetch();
     };
 
@@ -1682,7 +1662,7 @@ const EventosTab = ({ scriptUrl, currentUser, isAdmin, refreshKey }) => {
 };
 
 // 6. ABA SORTEIO
-const SorteioTab = ({ allPlayersData, scriptUrl }) => {
+const SorteioTab = ({ allPlayersData }) => {
     const [selectedPlayers, setSelectedPlayers] = useState([]);
     const [teams, setTeams] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
@@ -1717,7 +1697,7 @@ const SorteioTab = ({ allPlayersData, scriptUrl }) => {
         if (!teams) return;
         setIsLoading(true);
         try {
-            const data = await api.post(scriptUrl, { action: 'saveTeams', teamBlack: teams.teamBlack.join(','), teamRed: teams.teamRed.join(',') });
+            const data = await api.post({ action: 'saveTeams', teamBlack: teams.teamBlack.join(','), teamRed: teams.teamRed.join(',') });
             if (data.result === 'success') setModalInfo({ isOpen: true, title: 'Sucesso', message: 'Times salvos na planilha com sucesso!' });
             else throw new Error(data.message || 'Erro desconhecido.');
         } catch (error) { setModalInfo({ isOpen: true, title: 'Erro', message: error.message }); } 
@@ -1996,8 +1976,8 @@ const EstatutoTab = () => {
 };
 
 // 8. ABA NOTIFICAÇÕES (COM HISTÓRICO RESTAURADO)
-const NotificacoesTab = ({ scriptUrl }) => {
-    const { data: notifData, isLoading, error, refetch } = useDataQuery((signal) => api.post(scriptUrl, { action: 'getNotifications' }, signal), [scriptUrl]);
+const NotificacoesTab = () => {
+    const { data: notifData, isLoading, error, refetch } = useDataQuery((signal) => api.post({ action: 'getNotifications' }, signal), []);
 
     const notifications = useMemo(() => {
         if (!notifData?.data && !notifData) return [];
@@ -2016,7 +1996,7 @@ const NotificacoesTab = ({ scriptUrl }) => {
         const formData = new FormData(e.currentTarget);
         
         try {
-            const data = await api.post(scriptUrl, { 
+            const data = await api.post({
                 action: 'sendPushNotificationToAll', 
                 title: formData.get('title'), 
                 message: formData.get('message'), 
@@ -2106,7 +2086,7 @@ const NotificacoesTab = ({ scriptUrl }) => {
 };
 
 // 9. ABA MODO MESÁRIO (COM AUTO-SAVE)
-const MesarioTab = ({ allPlayersData, scriptUrl, onStatsSaved }) => {
+const MesarioTab = ({ allPlayersData, onStatsSaved }) => {
     
     // Funcao para ler o backup (usada na inicialização do useState)
     const getInitialState = () => {
@@ -2239,7 +2219,7 @@ const MesarioTab = ({ allPlayersData, scriptUrl, onStatsSaved }) => {
         }
 
         try {
-            const res = await api.post(scriptUrl, { action: 'saveMatchStats', date, stats: statsArray });
+            const res = await api.post({ action: 'saveMatchStats', date, stats: statsArray });
             if (res.result === 'success') {
                 setModalInfo({ isOpen: true, title: 'Sucesso', message: 'O domingo foi encerrado e todas as estatísticas foram salvas na planilha!' });
                 setIsLive(false);
@@ -2744,7 +2724,7 @@ const HallDaFamaTab = ({ allPlayersData, dates }) => {
 };
 
 // --- MAIN APP ---
-const MainApp = ({ user, onLogout, logoutPending, SCRIPT_URL }) => {
+const MainApp = ({ user, onLogout, logoutPending }) => {
     const [activeTab, setActiveTab] = useState(() => {
         try {
             const saved = localStorage.getItem('cba_last_tab_v1');
@@ -2759,7 +2739,7 @@ const MainApp = ({ user, onLogout, logoutPending, SCRIPT_URL }) => {
     const [passwordStatus, setPasswordStatus] = useState({ loading: false, error: '' });
 
     const { data: initialData, isLoading, error: dataError, refetch } = useDataQuery(
-        (signal) => api.post(SCRIPT_URL, { action: 'getInitialAppData' }, signal), 
+        (signal) => api.post({ action: 'getInitialAppData' }, signal),
         [refreshTrigger]
     );
     
@@ -2782,7 +2762,7 @@ const MainApp = ({ user, onLogout, logoutPending, SCRIPT_URL }) => {
 
     const handleForceRefresh = async () => {
         try {
-            await api.post(SCRIPT_URL, { action: 'clearCache' });
+            await api.post({ action: 'clearCache' });
         } catch (e) {
             console.error("Erro ao limpar cache", e);
         }
@@ -2808,7 +2788,7 @@ const MainApp = ({ user, onLogout, logoutPending, SCRIPT_URL }) => {
         }
         try {
             setPasswordStatus({ loading: true, error: '' });
-            await api.post(SCRIPT_URL, { action: 'changeOwnPassword', currentPassword, newPassword });
+            await api.post({ action: 'changeOwnPassword', currentPassword, newPassword });
             setIsPasswordModalOpen(false);
             setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
             window.alert('Senha alterada com sucesso. Entre novamente com a nova senha.');
@@ -2845,7 +2825,7 @@ const MainApp = ({ user, onLogout, logoutPending, SCRIPT_URL }) => {
             dates: appData?.dashboard?.dates || [], 
             financeData: appData?.finance, 
             nextGame: appData?.nextGame, 
-            currentUser: user, isAdmin, scriptUrl: SCRIPT_URL, 
+            currentUser: user, isAdmin,
             pixCode: appData?.pixCode, refreshKey: refreshTrigger 
         };
 
@@ -2864,7 +2844,7 @@ const MainApp = ({ user, onLogout, logoutPending, SCRIPT_URL }) => {
                     {activeTab === 'dm' && <DmTab {...props} />}
                     {activeTab === 'halldafama' && <HallDaFamaTab {...props} />}
                     {activeTab === 'estatuto' && <EstatutoTab />}
-                    {activeTab === 'notificacoes' && <NotificacoesTab {...props} scriptUrl={SCRIPT_URL} />}
+                    {activeTab === 'notificacoes' && <NotificacoesTab {...props} />}
                 </motion.div>
             </AnimatePresence>
         );
@@ -3003,14 +2983,12 @@ function AppInner() {
             : { status: 'unauthenticated', user: null, error: null };
     });
 
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwNXGI4Cc5qGBye-IfWW_qqUcJ04NfArulExPXE4jgX0SZhWAmeWCjjKg2U9FFfHkHE/exec";
-
     const handleLogin = async (e) => {
         e.preventDefault();
         setAuth({ status: 'loading', user: null, error: null });
         const formData = new FormData(e.currentTarget);
         try {
-            const data = await api.post(SCRIPT_URL, { action: 'loginUser', email: formData.get('email'), password: formData.get('password') });
+            const data = await api.post({ action: 'loginUser', email: formData.get('email'), password: formData.get('password') });
             if (data.status === 'approved') {
                 persistSession(data);
                 setAuth({ status: 'authenticated', user: data, error: null });
@@ -3018,26 +2996,17 @@ function AppInner() {
                 setAuth({ status: 'unauthenticated', user: null, error: data.message });
             }
         } catch (error) {
-            // O backend devolve 401 para credenciais inválidas; não confundir com falha de rede.
-            const message = String(error?.message || '');
             let loginError = 'Não foi possível conectar ao servidor. Verifique sua conexão e tente novamente.';
-            // O api.post mantém a resposta HTTP no texto do erro; extrair status e JSON
-            // com expressões corretas (sem barras invertidas duplicadas).
-            const responseMatch = message.match(/Resposta:\s*(\{[\s\S]*\})/);
-            let serverError = null;
-            if (responseMatch) {
-                try { serverError = JSON.parse(responseMatch[1]); } catch { /* resposta não JSON */ }
-            }
-            const code = String(serverError?.code || '').toUpperCase();
-            const httpStatus = Number(message.match(/Erro de HTTP:\s*(\d+)/)?.[1] || 0);
+            const code = String(error?.code || '').toUpperCase();
+            const httpStatus = Number(error?.status || 0);
             if (code === 'INVALID_CREDENTIALS' || (httpStatus === 401 && !['SESSION_EXPIRED','UNAUTHORIZED'].includes(code))) {
                 loginError = 'E-mail ou senha incorretos. Confira os dados e tente novamente.';
             } else if (code === 'RATE_LIMITED' || httpStatus === 429) {
                 loginError = 'Muitas tentativas de acesso. Aguarde 10 minutos e tente novamente.';
             } else if (code === 'FORBIDDEN' || httpStatus === 403) {
                 loginError = 'Sua conta não está autorizada. Procure a administração do CBA.';
-            } else if (serverError?.message && httpStatus >= 400 && httpStatus < 500) {
-                loginError = String(serverError.message);
+            } else if (error?.message && httpStatus >= 400 && httpStatus < 500) {
+                loginError = String(error.message);
             } else if (httpStatus >= 500) {
                 loginError = 'O serviço está temporariamente indisponível. Tente novamente em instantes.';
             }
@@ -3057,7 +3026,7 @@ function AppInner() {
                 const controller = new AbortController();
                 const timeout = window.setTimeout(() => controller.abort(), 5000);
                 try {
-                    const response = await api.post(SCRIPT_URL, { action: 'logoutUser', token }, controller.signal);
+                    const response = await api.post({ action: 'logoutUser', token }, controller.signal);
                     if (response?.result !== 'success') throw new Error('Revogação não confirmada');
                 } finally {
                     window.clearTimeout(timeout);
@@ -3075,7 +3044,7 @@ function AppInner() {
 
     return (
         <ThemeProvider>
-            {auth.status === 'authenticated' ? <MainApp user={auth.user} onLogout={handleLogout} logoutPending={logoutPending} SCRIPT_URL={SCRIPT_URL} /> : <LoginScreen onLogin={handleLogin} isLoading={auth.status === 'loading'} error={auth.error} />}
+            {auth.status === 'authenticated' ? <MainApp user={auth.user} onLogout={handleLogout} logoutPending={logoutPending} /> : <LoginScreen onLogin={handleLogin} isLoading={auth.status === 'loading'} error={auth.error} />}
         </ThemeProvider>
     );
 }

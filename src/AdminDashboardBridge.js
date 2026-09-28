@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { adminPost, readSession } from './cbaApi';
 import {
   ShieldCheck, X, LayoutDashboard, Users, ClipboardCheck, DollarSign, BarChart3,
   CalendarDays, PartyPopper, Stethoscope, BellRing, Settings, History, Search,
@@ -8,45 +9,7 @@ import {
 } from 'lucide-react';
 
 const ADMIN_EMAIL = 'vinicius.m84@gmail.com';
-const ADMIN_URL = 'https://vqirdswgchlcxevepamu.supabase.co/functions/v1/cba-admin';
-const SESSION_KEYS = ['cba_session_v2', 'cba_session_v1'];
 const MONTHS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-
-function readSession() {
-  for (const key of SESSION_KEYS) {
-    try {
-      const raw = window.localStorage.getItem(key);
-      if (!raw) continue;
-      const parsed = JSON.parse(raw);
-      const user = parsed?.user?.user || parsed?.user || parsed;
-      const token = parsed?.user?.token || parsed?.user?.user?.token || parsed?.token || user?.token;
-      const email = String(user?.email || parsed?.email || '').toLowerCase();
-      const role = String(user?.role || parsed?.role || parsed?.user?.role || '').toUpperCase();
-      if (token && email) return { token, email, role, user };
-    } catch { /* tenta a próxima chave */ }
-  }
-  try {
-    const raw = window.sessionStorage.getItem('cba_session_v2');
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      return { token: parsed?.token, email: String(parsed?.email || parsed?.user?.email || '').toLowerCase(), role: String(parsed?.role || parsed?.user?.role || '').toUpperCase(), user: parsed?.user || parsed };
-    }
-  } catch { /* sem impacto */ }
-  return null;
-}
-
-async function adminPost(action, payload = {}) {
-  const session = readSession();
-  if (!session?.token) throw new Error('Sessão administrativa não encontrada. Entre novamente no portal.');
-  const response = await fetch(ADMIN_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action, token: session.token, ...payload }),
-  });
-  const data = await response.json().catch(() => ({ result: 'error', message: `HTTP ${response.status}` }));
-  if (!response.ok || data?.result === 'error') throw new Error(data?.message || `Erro administrativo (${response.status}).`);
-  return data;
-}
 
 const cx = (...values) => values.filter(Boolean).join(' ');
 const money = value => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });

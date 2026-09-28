@@ -1,47 +1,13 @@
 import { useEffect } from 'react';
+import { medicalPost } from './cbaApi';
 
-const MEDICAL_URL = 'https://vqirdswgchlcxevepamu.supabase.co/functions/v1/cba-medical';
-const SESSION_KEYS = ['cba_session_v2', 'cba_session_v1'];
 
 let currentRecords = [];
 let currentError = '';
 let replayingAnnualClick = false;
 
-function readToken() {
-  for (const key of SESSION_KEYS) {
-    try {
-      const raw = window.localStorage.getItem(key);
-      if (!raw) continue;
-      const parsed = JSON.parse(raw);
-      const token = parsed?.user?.token || parsed?.user?.user?.token || parsed?.token;
-      if (token) return token;
-    } catch { /* tenta a próxima chave */ }
-  }
-
-  try {
-    const raw = window.sessionStorage.getItem('cba_session_v2');
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      return parsed?.token || parsed?.user?.token || null;
-    }
-  } catch { /* sem impacto */ }
-
-  return null;
-}
-
 async function refreshMedicalRecords() {
-  const token = readToken();
-  if (!token) throw new Error('Sessão não encontrada.');
-
-  const response = await fetch(MEDICAL_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'bootstrap', token })
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok || data?.result === 'error') {
-    throw new Error(data?.message || 'Falha ao carregar o Departamento Médico.');
-  }
+  const data = await medicalPost('bootstrap');
 
   currentRecords = (Array.isArray(data?.records) ? data.records : [])
     .filter(record => !record?.dischargedAt && String(record?.status || '').toLowerCase() !== 'alta')
