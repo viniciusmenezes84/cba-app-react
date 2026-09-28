@@ -31,6 +31,7 @@
     "build": "react-scripts build",
     "pretest": "node scripts/build-tailwind.js",
     "test": "react-scripts test",
+    "test:backend": "node scripts/test-cba-api-auth.cjs",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {
