@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { createPortal } from 'react-dom';
+import React, { useContext, useEffect, useMemo, useState } from 'react';
+import { InitialDataContext } from './InitialDataContext';
 import { Activity, AlertCircle, Award, CalendarDays, CheckCircle, Crown, Flame, Star, Trophy, Users } from 'lucide-react';
 import { Bar, Doughnut, Line } from 'react-chartjs-2';
 import {
@@ -9,7 +9,6 @@ import {
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Tooltip, Legend, Filler);
 
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwNXGI4Cc5qGBye-IfWW_qqUcJ04NfArulExPXE4jgX0SZhWAmeWCjjKg2U9FFfHkHE/exec';
 const MONTHS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
 const Card = ({ children, className = '' }) => (
@@ -148,50 +147,6 @@ function Insights({ data }) {
 }
 
 export default function PresenceDashboardBridge() {
-  const [mountNode, setMountNode] = useState(null);
-  const [data, setData] = useState(null);
-  const [active, setActive] = useState(false);
-
-  useEffect(() => {
-    fetch(SCRIPT_URL, {
-      method: 'POST', mode: 'cors', redirect: 'follow',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: 'getInitialAppData' })
-    }).then(response => response.json()).then(setData).catch(() => setData(null));
-  }, []);
-
-  useEffect(() => {
-    let node = null;
-    const sync = () => {
-      const presenceButton = document.querySelector('button[title="Presença"]');
-      const isPresence = Boolean(presenceButton?.className?.includes('scale-110'));
-      setActive(isPresence);
-      const container = document.querySelector('main .max-w-7xl > div > div.space-y-6');
-      if (!container) return;
-
-      if (!node || !node.isConnected) {
-        node = document.createElement('div');
-        node.dataset.presenceDashboardV2 = 'true';
-        container.appendChild(node);
-        setMountNode(node);
-      }
-
-      [...container.children].forEach((child, index) => {
-        if (child === node) return;
-        child.style.display = isPresence && index > 0 ? 'none' : '';
-      });
-      node.style.display = isPresence ? '' : 'none';
-    };
-
-    sync();
-    const observer = new MutationObserver(sync);
-    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
-    return () => {
-      observer.disconnect();
-      if (node?.isConnected) node.remove();
-    };
-  }, []);
-
-  if (!active || !mountNode || !data) return null;
-  return createPortal(<Insights data={data} />, mountNode);
+  const data = useContext(InitialDataContext);
+  return data ? <Insights data={data} /> : null;
 }

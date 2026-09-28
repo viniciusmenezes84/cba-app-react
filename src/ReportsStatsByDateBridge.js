@@ -1,49 +1,14 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { InitialDataContext } from './InitialDataContext';
 import {
   BarChart3, CalendarDays, CheckCircle2, ChevronRight, Maximize2,
   Target, Trophy, Users, X
 } from 'lucide-react';
 
-const GATEWAY_URL = 'https://vqirdswgchlcxevepamu.supabase.co/functions/v1/cba-gateway';
-const SESSION_KEYS = ['cba_session_v2', 'cba_session_v1'];
-
 const num = value => Number(value || 0);
 const calcPts = stats => (num(stats?.pts2) * 2) + (num(stats?.pts3) * 3);
 const fmtDate = value => value ? value.split('-').reverse().join('/') : '--';
-
-function readToken() {
-  for (const key of SESSION_KEYS) {
-    try {
-      const raw = window.localStorage.getItem(key);
-      if (!raw) continue;
-      const parsed = JSON.parse(raw);
-      const token = parsed?.user?.token || parsed?.user?.user?.token || parsed?.token;
-      if (token) return token;
-    } catch { /* tenta a próxima chave */ }
-  }
-  try {
-    const raw = window.sessionStorage.getItem('cba_session_v2');
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      return parsed?.token || parsed?.user?.token || null;
-    }
-  } catch { /* sem impacto */ }
-  return null;
-}
-
-async function loadInitialData() {
-  const token = readToken();
-  if (!token) throw new Error('Sessão não encontrada.');
-  const response = await fetch(GATEWAY_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action: 'getInitialAppData', token })
-  });
-  const payload = await response.json();
-  if (!response.ok || payload?.result === 'error') throw new Error(payload?.message || 'Falha ao carregar estatísticas.');
-  return payload;
-}
 
 const Panel = ({ children, className = '' }) => (
   <div className={`rounded-3xl border border-slate-200/70 dark:border-slate-700/60 bg-white/90 dark:bg-slate-800/80 shadow-xl ${className}`}>{children}</div>
@@ -297,17 +262,7 @@ export default function ReportsStatsByDateBridge() {
   const [active, setActive] = useState(false);
   const [year, setYear] = useState(String(new Date().getFullYear()));
   const [selectedPlayer, setSelectedPlayer] = useState('todos');
-  const [data, setData] = useState(null);
-  const [error, setError] = useState('');
-
-  const refresh = useCallback(async () => {
-    try { setError(''); setData(await loadInitialData()); }
-    catch (err) { setError(err?.message || 'Falha ao carregar estatísticas.'); }
-  }, []);
-
-  useEffect(() => {
-    if (active) refresh();
-  }, [active, refresh]);
+  const data = useContext(InitialDataContext);
 
   useEffect(() => {
     let node = null;
@@ -352,7 +307,6 @@ export default function ReportsStatsByDateBridge() {
   }, []);
 
   if (!active || !mountNode) return null;
-  if (error) return createPortal(<Panel className="mt-5 p-4 text-sm font-bold text-rose-500">{error}</Panel>, mountNode);
   if (!data) return createPortal(<Panel className="mt-5 p-4 text-sm font-bold text-slate-500">Carregando estatísticas por data...</Panel>, mountNode);
   return createPortal(<StatsExperience data={data} year={year} selectedPlayer={selectedPlayer} />, mountNode);
 }

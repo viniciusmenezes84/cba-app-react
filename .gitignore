@@ -11,8 +11,8 @@
 # production
 /build
 
-# generated runtime bridges
-/src/AdminDashboardBridge.runtime.js
+# generated styles
+/src/tailwind.generated.css
 
 # misc
 .DS_Store
