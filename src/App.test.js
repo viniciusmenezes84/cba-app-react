@@ -281,3 +281,31 @@ test('Relatórios abre diretamente com dados iniciais e filtros compartilhados',
     window.localStorage.removeItem('cba_last_tab_v1');
   }
 });
+
+
+test('Início abre diretamente, sem ponte pelo DOM, e os atalhos mudam de aba', async () => {
+  window.localStorage.setItem('cba_session_v1', JSON.stringify({
+    user: { role: 'MEMBER', email: 'atleta@cba.test', name: 'Atleta', token: 'sessao-de-teste' }, savedAt: Date.now()
+  }));
+  window.localStorage.setItem('cba_last_tab_v1', 'inicio');
+  const previousFetch = global.fetch;
+  global.fetch = jest.fn(async (url, options) => {
+    const { action } = JSON.parse(options.body);
+    if (action === 'getInitialAppData') return { ok: true, json: async () => ({ data: { dashboard: { players: [], dates: [] }, finance: { summary: { balance: 0, revenue: 0, expense: 0 }, paymentStatus: [], paymentHeaders: [] } } }) };
+    if (action === 'bootstrap') return { ok: true, json: async () => ({ result: 'success', user: { name: 'Atleta' }, games: [], events: [], notifications: [], finance: { ownerAthleteId: 'own', periods: [], dues: [] }, overview: {} }) };
+    throw new Error(`Ação inesperada: ${action}`);
+  });
+  try {
+    const { container } = render(<App />);
+    expect(await screen.findByRole('heading', { name: 'Olá, Atleta' })).toBeInTheDocument();
+    expect(container.querySelector('[data-cba-home-anchor]')).toBeNull();
+    expect(container.querySelector('[data-portal-experience-v3]')).toBeNull();
+    expect(global.fetch.mock.calls.map(([, options]) => JSON.parse(options.body).action)).toEqual(['getInitialAppData', 'bootstrap']);
+    fireEvent.click(screen.getByRole('button', { name: 'Ver financeiro' }));
+    expect(await screen.findByText('Situação Anual')).toBeInTheDocument();
+  } finally {
+    global.fetch = previousFetch;
+    window.localStorage.removeItem('cba_session_v1');
+    window.localStorage.removeItem('cba_last_tab_v1');
+  }
+});

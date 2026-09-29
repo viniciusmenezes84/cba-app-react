@@ -5,7 +5,7 @@ import { gatewayPost, portalPost, readSession } from './cbaApi';
 import {
   Activity, AlertTriangle, BarChart3, BellRing, BookOpen, CalendarDays,
   Check, CheckCircle2, Copy, CreditCard, DollarSign, Edit3,
-  FileText, Home, MapPin, PartyPopper, Plus, RefreshCw, Search,
+  FileText, MapPin, PartyPopper, Plus, RefreshCw, Search,
   Send, ShieldCheck, Star, Trash2, Trophy, UserCheck, Users, WalletCards, X
 } from 'lucide-react';
 
@@ -21,7 +21,6 @@ const fmtDate = value => {
 };
 const todayBahia = () => new Intl.DateTimeFormat('en-CA', { timeZone:'America/Bahia', year:'numeric', month:'2-digit', day:'2-digit' }).format(new Date());
 const normalize = value => String(value || '').trim().toLowerCase();
-const isAdminSession = () => String(readSession()?.role || '').toUpperCase() === 'ADMIN';
 
 function Panel({ children, className='' }) {
   return <div className={cx('rounded-3xl border border-slate-700/80 bg-slate-900/75 shadow-xl',className)}>{children}</div>;
@@ -60,53 +59,6 @@ function Header({ icon:Icon, kicker, title, text, children }) {
     <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
       <div><div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[.18em] text-emerald-300"><Icon className="w-4 h-4"/>{kicker}</div><h2 className="text-2xl sm:text-3xl font-black text-white mt-3">{title}</h2><p className="text-sm text-slate-400 mt-1 max-w-2xl">{text}</p></div>
       {children}
-    </div>
-  </div>;
-}
-
-function HomeView({ data }) {
-  const nextGame = useMemo(() => (data.games || []).filter(g=>!g.cancelledAt && g.date >= todayBahia()).sort((a,b)=>`${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`))[0], [data.games]);
-  const nextEvent = useMemo(() => (data.events || []).filter(e=>String(e.startsAt).slice(0,10)>=todayBahia()).sort((a,b)=>String(a.startsAt).localeCompare(String(b.startsAt)))[0], [data.events]);
-  const ownDues = data.finance?.dues || [];
-  const currentYear = data.finance?.currentYear;
-  const currentPeriods = (data.finance?.periods || []).filter(p=>Number(p.year)===Number(currentYear));
-  const currentIds = new Set(currentPeriods.map(p=>p.id));
-  const ownYearDues = ownDues.filter(d=>currentIds.has(d.period_id));
-  const debt = ownYearDues.reduce((sum,d)=>sum+Math.max(0,Number(d.amount_due||0)-Number(d.amount_paid||0)),0);
-  const latestNotice = data.notifications?.[0];
-
-  return <div className="space-y-5 pb-24 md:pb-8">
-    <Header icon={Home} kicker="Início" title={`Olá, ${data.user?.name || 'atleta'}`} text="O que importa no CBA agora, sem precisar procurar em várias abas.">
-      <div className="grid grid-cols-3 gap-2 lg:min-w-[360px]">
-        <div className="rounded-2xl border border-slate-700 bg-slate-950/60 p-3 text-center"><p className="text-xl font-black text-white">{data.overview?.athletes || 0}</p><p className="text-[9px] uppercase font-black text-slate-500">Atletas</p></div>
-        <div className="rounded-2xl border border-slate-700 bg-slate-950/60 p-3 text-center"><p className="text-xl font-black text-emerald-300">{data.overview?.upcomingGames || 0}</p><p className="text-[9px] uppercase font-black text-slate-500">Jogos</p></div>
-        <div className="rounded-2xl border border-slate-700 bg-slate-950/60 p-3 text-center"><p className="text-xl font-black text-rose-300">{data.overview?.dmActive || 0}</p><p className="text-[9px] uppercase font-black text-slate-500">DM</p></div>
-      </div>
-    </Header>
-
-    <div className="grid lg:grid-cols-2 gap-4">
-      <Panel className="p-5">
-        <div className="flex items-center justify-between"><div><Pill tone="emerald">Próximo jogo</Pill><h3 className="text-xl font-black text-white mt-3">{nextGame ? fmtDate(nextGame.date) : 'Nenhum jogo agendado'}</h3></div><CalendarDays className="w-8 h-8 text-emerald-400"/></div>
-        {nextGame ? <><p className="text-sm text-slate-400 mt-2">{nextGame.time} · {nextGame.location}</p><p className="text-xs text-slate-500 mt-4">{nextGame.confirmed.length} confirmados</p><button onClick={()=>window.navigateToTab?.('jogos')} className="mt-4 w-full rounded-2xl bg-emerald-500 py-3 text-slate-950 font-black">Ver jogo</button></> : <button onClick={()=>window.navigateToTab?.('jogos')} className="mt-4 w-full rounded-2xl border border-slate-700 bg-slate-800 py-3 text-white font-black">Ir para Jogos</button>}
-      </Panel>
-
-      <Panel className="p-5">
-        <div className="flex items-center justify-between"><div><Pill tone={debt>0?'rose':'emerald'}>Minha situação</Pill><h3 className={cx('text-2xl font-black mt-3',debt>0?'text-rose-300':'text-emerald-300')}>{debt>0?money(debt):'Em dia'}</h3></div><WalletCards className="w-8 h-8 text-slate-400"/></div>
-        <p className="text-xs text-slate-500 mt-2">{currentPeriods.length ? `Exercício ${currentYear}` : `Exercício ${currentYear} ainda não preparado`}</p>
-        <button onClick={()=>window.navigateToTab?.('financas')} className="mt-4 w-full rounded-2xl border border-slate-700 bg-slate-800 py-3 text-white font-black">Ver financeiro</button>
-      </Panel>
-
-      <Panel className="p-5">
-        <div className="flex items-center justify-between"><div><Pill tone="amber">Próximo evento</Pill><h3 className="text-xl font-black text-white mt-3">{nextEvent?.name || 'Nenhum evento agendado'}</h3></div><PartyPopper className="w-8 h-8 text-amber-300"/></div>
-        {nextEvent && <p className="text-sm text-slate-400 mt-2">{fmtDate(nextEvent.startsAt)} · {nextEvent.location}</p>}
-        <button onClick={()=>window.navigateToTab?.('eventos')} className="mt-4 w-full rounded-2xl border border-slate-700 bg-slate-800 py-3 text-white font-black">Ver eventos</button>
-      </Panel>
-
-      <Panel className="p-5">
-        <div className="flex items-center justify-between"><div><Pill tone="blue">Comunicação</Pill><h3 className="text-xl font-black text-white mt-3">{latestNotice?.title || 'Sem avisos recentes'}</h3></div><BellRing className="w-8 h-8 text-blue-300"/></div>
-        <p className="text-sm text-slate-400 mt-2 line-clamp-2">{latestNotice?.message || 'Os avisos do CBA aparecerão aqui.'}</p>
-        {isAdminSession() && <button onClick={()=>window.navigateToTab?.('notificacoes')} className="mt-4 w-full rounded-2xl border border-slate-700 bg-slate-800 py-3 text-white font-black">Central de comunicação</button>}
-      </Panel>
     </div>
   </div>;
 }
@@ -432,7 +384,6 @@ function NotificationsView({ data, refresh }) {
 }
 
 const VIEWS = {
-  inicio: HomeView,
   financas: FinanceView,
   jogos: GamesView,
   eventos: EventsView,
@@ -458,12 +409,9 @@ export default function PortalExperienceBridge() {
     let node=null, hiddenRoot=null;
     const sync=()=>{
       let activeKey=null;
-      if(document.querySelector('[data-cba-home-anchor="true"]')) activeKey='inicio';
-      if(!activeKey){
-        for(const [key,title] of Object.entries(TITLES)){
-          const button=document.querySelector(`button[title="${title}"]`);
-          if(button?.className?.includes('scale-110')){activeKey=key;break;}
-        }
+      for(const [key,title] of Object.entries(TITLES)){
+        const button=document.querySelector(`button[title="${title}"]`);
+        if(button?.className?.includes('scale-110')){activeKey=key;break;}
       }
       setTab(activeKey);
       if(!activeKey||!VIEWS[activeKey]){
@@ -471,15 +419,10 @@ export default function PortalExperienceBridge() {
         if(node?.isConnected)node.style.display='none';
         return;
       }
-      let anchor=null, legacyRoot=null;
-      if(activeKey==='inicio'){
-        anchor=document.querySelector('[data-cba-home-anchor="true"]');
-      }else{
-        const wanted=HEADING_MATCH[activeKey];
-        const heading=[...document.querySelectorAll('h2,h3')].find(el=>el.textContent?.trim().includes(wanted));
-        legacyRoot=heading?.closest('.space-y-8') || heading?.closest('[class*="space-y-8"]');
-        anchor=legacyRoot;
-      }
+      const wanted=HEADING_MATCH[activeKey];
+      const heading=[...document.querySelectorAll('h2,h3')].find(el=>el.textContent?.trim().includes(wanted));
+      const legacyRoot=heading?.closest('.space-y-8') || heading?.closest('[class*="space-y-8"]');
+      const anchor=legacyRoot;
       if(!anchor?.parentElement)return;
       if(hiddenRoot&&hiddenRoot!==legacyRoot&&hiddenRoot.isConnected)hiddenRoot.style.display='';
       hiddenRoot=legacyRoot;
