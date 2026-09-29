@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from './App';
 
 jest.mock('react-chartjs-2', () => ({ Bar: () => null, Doughnut: () => null, Line: () => null }));
@@ -80,6 +80,38 @@ test('o painel de presença usa os dados iniciais sem repetir a consulta', async
     render(<App />);
     expect(await screen.findByText(/Visão do elenco em/)).toBeInTheDocument();
     expect(global.fetch).toHaveBeenCalledTimes(1);
+  } finally {
+    global.fetch = previousFetch;
+    window.localStorage.removeItem('cba_session_v1');
+    window.localStorage.removeItem('cba_last_tab_v1');
+  }
+});
+
+test('menu móvel abre o Sorteio diretamente, rola até o fim e volta sem nova consulta', async () => {
+  window.localStorage.setItem('cba_session_v1', JSON.stringify({
+    user: { role: 'MEMBER', email: 'atleta@cba.test', name: 'Atleta', token: 'sessao-de-teste' }, savedAt: Date.now()
+  }));
+  const previousFetch = global.fetch;
+  global.fetch = jest.fn(async () => ({ ok: true, json: async () => ({
+    data: { dashboard: { players: [{ name: 'Atleta Teste', posicao: 'Armador', attendance: {} }], dates: [] }, finance: {} }
+  }) }));
+  try {
+    const { container } = render(<App />);
+    expect(await screen.findByRole('button', { name: 'Abrir menu de navegação' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir menu de navegação' }));
+    expect(screen.getByRole('button', { name: 'Fechar menu' })).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Menu principal' })).toHaveClass('overflow-y-auto');
+    container.querySelector('main').scrollTop = 200;
+    fireEvent.click(screen.getByTitle('Sorteio'));
+    expect(await screen.findByText('Monte os times em poucos toques')).toBeInTheDocument();
+    expect(screen.getByText('Atleta Teste')).toBeInTheDocument();
+    expect(container.querySelector('main').scrollTop).toBe(0);
+    expect(screen.getByRole('button', { name: 'Abrir menu de navegação' })).toHaveAttribute('aria-expanded', 'false');
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Jogos' }).at(-1));
+    expect(await screen.findByRole('button', { name: 'Abrir menu de navegação' })).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('Monte os times em poucos toques')).not.toBeInTheDocument());
+    expect(global.fetch).toHaveBeenCalledTimes(2);
   } finally {
     global.fetch = previousFetch;
     window.localStorage.removeItem('cba_session_v1');

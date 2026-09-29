@@ -27,7 +27,7 @@ const AnnualReportMedicalBridge = lazy(() => import('./AnnualReportMedicalBridge
 const ReportsRankingCompactBridge = lazy(() => import('./ReportsRankingCompactBridge'));
 const ReportsLegacyRankingHider = lazy(() => import('./ReportsLegacyRankingHider'));
 const MesarioDashboardBridge = lazy(() => import('./MesarioDashboardBridge'));
-const SorteioDashboardBridge = lazy(() => import('./SorteioDashboardBridge'));
+const SorteioDashboard = lazy(() => import('./SorteioDashboard'));
 const DmDashboardBridge = lazy(() => import('./DmDashboardBridge'));
 const PortalExperienceBridge = lazy(() => import('./PortalExperienceBridge'));
 
@@ -35,7 +35,6 @@ function ActiveBridges({ tab }) {
     return <Suspense fallback={null}>
         {tab === 'relatorios' && <><ReportsDashboardBridge /><ReportsStatsByDateBridge /><ReportsPdfBridgeV2 /><AnnualReportMedicalBridge /><ReportsRankingCompactBridge /><ReportsLegacyRankingHider /></>}
         {tab === 'mesario' && <MesarioDashboardBridge />}
-        {tab === 'sorteio' && <SorteioDashboardBridge />}
         {tab === 'dm' && <DmDashboardBridge />}
         {['inicio', 'financas', 'jogos', 'eventos', 'halldafama', 'estatuto', 'notificacoes'].includes(tab) && <PortalExperienceBridge />}
     </Suspense>;
@@ -43,16 +42,6 @@ function ActiveBridges({ tab }) {
 
 // Constantes Globais
 const MONTHS_MAP = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
-
-// --- UTILITÁRIO ÚNICO DE SHUFFLE (Fisher-Yates) ---
-const shuffleArray = (array) => {
-    const result = [...array];
-    for (let i = result.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [result[i], result[j]] = [result[j], result[i]];
-    }
-    return result;
-};
 
 // Funções puras de finanças
 const getEnhancedStatus = (monthName, originalStatus) => {
@@ -1661,180 +1650,6 @@ const EventosTab = ({ currentUser, isAdmin, refreshKey }) => {
     );
 };
 
-// 6. ABA SORTEIO
-const SorteioTab = ({ allPlayersData }) => {
-    const [selectedPlayers, setSelectedPlayers] = useState([]);
-    const [teams, setTeams] = useState(null);
-    const [isLoading, setIsLoading] = useState(false);
-    const [modalInfo, setModalInfo] = useState({ isOpen: false, title: '', message: '' });
-    const [searchQuery, setSearchQuery] = useState('');
-    const [numToDraw, setNumToDraw] = useState(1);
-    const [drawnPlayers, setDrawnPlayers] = useState([]);
-    const [drawMode, setDrawMode] = useState('selection'); 
-
-    const sortedPlayers = useMemo(() => [...allPlayersData].sort((a, b) => a.name.localeCompare(b.name)), [allPlayersData]);
-    const filteredPlayers = useMemo(() => sortedPlayers.filter(player => player.name.toLowerCase().includes(searchQuery.toLowerCase())), [sortedPlayers, searchQuery]);
-
-    const handlePlayerToggle = (playerName) => {
-        setSelectedPlayers(prev => prev.includes(playerName) ? prev.filter(name => name !== playerName) : [...prev, playerName]);
-    };
-
-    const handleDrawTeams = () => {
-        if (selectedPlayers.length < 10) { setModalInfo({ isOpen: true, title: 'Atenção', message: 'Selecione pelo menos 10 jogadores para formar dois times.' }); return; }
-        const playersToDraw = shuffleArray(selectedPlayers).slice(0, 10);
-        setTeams({ teamBlack: playersToDraw.slice(0, 5), teamRed: playersToDraw.slice(5, 10) });
-        setDrawMode('teams');
-    };
-    
-    const handleCustomDraw = () => {
-        const num = Number(numToDraw);
-        if (selectedPlayers.length < num) { setModalInfo({ isOpen: true, title: 'Atenção', message: `Selecione pelo menos ${num} jogador(es) para sortear.` }); return; }
-        setDrawnPlayers(shuffleArray(selectedPlayers).slice(0, num));
-        setDrawMode('custom');
-    };
-
-    const handleSaveDraw = async () => {
-        if (!teams) return;
-        setIsLoading(true);
-        try {
-            const data = await api.post({ action: 'saveTeams', teamBlack: teams.teamBlack.join(','), teamRed: teams.teamRed.join(',') });
-            if (data.result === 'success') setModalInfo({ isOpen: true, title: 'Sucesso', message: 'Times salvos na planilha com sucesso!' });
-            else throw new Error(data.message || 'Erro desconhecido.');
-        } catch (error) { setModalInfo({ isOpen: true, title: 'Erro', message: error.message }); } 
-        finally { setIsLoading(false); }
-    };
-    
-    const handleReset = () => { setSelectedPlayers([]); setTeams(null); setDrawnPlayers([]); setDrawMode('selection'); setNumToDraw(1); };
-
-    return (
-        <div className="space-y-8 animate-fade-in-up">
-            <Modal isOpen={modalInfo.isOpen} onClose={() => setModalInfo({ isOpen: false, title: '', message: '' })} title={modalInfo.title}>
-                <p className="text-slate-700 dark:text-slate-300">{modalInfo.message}</p>
-            </Modal>
-
-            {drawMode === 'selection' && (
-                <GlassCard>
-                    <div className="flex flex-col md:flex-row justify-between md:items-end mb-8 gap-4 border-b border-slate-200 dark:border-slate-700 pb-6">
-                        <div>
-                            <h2 className="text-3xl font-extrabold text-slate-800 dark:text-slate-100">Sorteador Automático</h2>
-                            <p className="text-slate-500 mt-1 font-medium">Selecione os atletas disponíveis na quadra.</p>
-                        </div>
-                        <div className="bg-indigo-50 dark:bg-indigo-900/30 px-6 py-3 rounded-2xl border border-indigo-100 dark:border-indigo-800/50">
-                            <span className="text-3xl font-black text-indigo-600 dark:text-indigo-400">{selectedPlayers.length}</span>
-                            <span className="text-sm font-bold text-slate-500 uppercase ml-2">Selecionados</span>
-                        </div>
-                    </div>
-                    
-                    <div className="mb-8 relative">
-                        <label htmlFor="sorteio-search" className="sr-only">Buscar jogador</label>
-                        <input id="sorteio-search" type="text" placeholder="Buscar jogador..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full p-4 pl-12 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-2xl outline-none focus:ring-2 focus:ring-indigo-50 transition-all font-medium" />
-                        <svg className="w-6 h-6 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                    </div>
-
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 mb-10 max-h-[50vh] overflow-y-auto pr-2 pb-2">
-                        {filteredPlayers.map(player => (
-                            <button
-                                key={player.name}
-                                onClick={() => handlePlayerToggle(player.name)}
-                                className={`p-4 rounded-2xl text-center font-bold transition-all duration-200 ${
-                                    selectedPlayers.includes(player.name)
-                                        ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/40 scale-[1.02]'
-                                        : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-600'
-                                }`}
-                            >
-                                {player.name}
-                            </button>
-                        ))}
-                    </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                         <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-3xl border border-slate-200 dark:border-slate-700 flex flex-col justify-center items-center text-center">
-                             <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-2">Jogo Oficial (5x5)</h3>
-                            <p className="text-sm text-slate-500 mb-6">Sorteia 2 times equilibrados. Mínimo 10 selecionados.</p>
-                            <button onClick={handleDrawTeams} disabled={selectedPlayers.length < 10} className="w-full bg-emerald-500 text-white font-bold py-4 rounded-xl hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-emerald-500/30">
-                                Sortear Times
-                            </button>
-                        </div>
-
-                        <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-3xl border border-slate-200 dark:border-slate-700 flex flex-col justify-center items-center text-center">
-                            <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-2">Sorteio Avulso</h3>
-                            <p className="text-sm text-slate-500 mb-6">Escolha a quantidade para um sorteio rápido.</p>
-                            <div className="flex gap-3 w-full">
-                                <label htmlFor="sorteio-num" className="sr-only">Quantidade a sortear</label>
-                                <select id="sorteio-num" value={numToDraw} onChange={(e) => setNumToDraw(Number(e.target.value))} className="w-1/3 p-4 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 font-bold rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800 dark:text-white">
-                                    {[1,2,3,4,5].map(n => <option key={n} value={n}>{n}</option>)}
-                                </select>
-                                <button onClick={handleCustomDraw} disabled={selectedPlayers.length === 0} className="w-2/3 bg-purple-600 text-white font-bold py-4 rounded-xl hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-purple-600/30">
-                                    Sortear Nomes
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </GlassCard>
-            )}
-
-            {drawMode === 'teams' && teams && (
-                <GlassCard className="text-center">
-                    <h2 className="text-4xl font-black text-slate-800 dark:text-white mb-10">Confronto Definido!</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 relative">
-                        <div className="hidden md:flex absolute inset-0 items-center justify-center z-10 pointer-events-none">
-                            <span className="bg-white dark:bg-slate-800 text-slate-400 font-black text-3xl italic p-4 rounded-full shadow-lg border border-slate-200 dark:border-slate-700">VS</span>
-                        </div>
-                        <div className="bg-slate-900 border border-slate-700 p-8 rounded-3xl shadow-2xl relative overflow-hidden">
-                            <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-3xl"></div>
-                            <h3 className="text-3xl font-black text-white mb-6 tracking-widest uppercase">Time Preto</h3>
-                            <ul className="space-y-3 relative z-10">
-                                {teams.teamBlack.map(player => (
-                                    <li key={player} className="text-white text-xl font-bold bg-white/10 p-3 rounded-xl border border-white/10">{player}</li>
-                                ))}
-                            </ul>
-                        </div>
-                        <div className="bg-emerald-600 border border-emerald-500 p-8 rounded-3xl shadow-2xl relative overflow-hidden">
-                             <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl"></div>
-                             <h3 className="text-3xl font-black text-white mb-6 tracking-widest uppercase">Time Verde</h3>
-                             <ul className="space-y-3 relative z-10">
-                                {teams.teamRed.map(player => (
-                                    <li key={player} className="text-white text-xl font-bold bg-white/20 p-3 rounded-xl border border-white/20">{player}</li>
-                                ))}
-                            </ul>
-                        </div>
-                    </div>
-                    <div className="mt-10 flex flex-col sm:flex-row justify-center items-center gap-4">
-                        {isLoading ? <Loader message="Salvando histórico..." /> : (
-                            <button onClick={handleSaveDraw} className="w-full sm:w-auto bg-indigo-600 text-white font-bold py-4 px-8 rounded-xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-500/30">
-                                Gravar na Planilha
-                            </button>
-                        )}
-                        <button onClick={handleReset} className="w-full sm:w-auto bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-white font-bold py-4 px-8 rounded-xl hover:bg-slate-300 dark:hover:bg-slate-600 transition-all">
-                            Refazer Sorteio
-                        </button>
-                    </div>
-                </GlassCard>
-            )}
-
-            {drawMode === 'custom' && (
-                <GlassCard className="text-center">
-                    <h2 className="text-3xl font-black text-slate-800 dark:text-white mb-8">Sorteio Avulso Concluído</h2>
-                    <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800/50 p-8 rounded-3xl max-w-lg mx-auto">
-                        <ul className="space-y-4">
-                            {drawnPlayers.map((player, idx) => (
-                                <li key={player} className="text-purple-700 dark:text-purple-300 text-2xl font-black bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm flex items-center gap-4">
-                                    <span className="w-8 h-8 rounded-full bg-purple-200 dark:bg-purple-800 flex items-center justify-center text-sm">{idx+1}</span>
-                                    {player}
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-                    <div className="mt-10">
-                        <button onClick={handleReset} className="bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-white font-bold py-4 px-8 rounded-xl hover:bg-slate-300 transition-all">
-                            Voltar
-                        </button>
-                    </div>
-                </GlassCard>
-            )}
-        </div>
-    );
-};
 
 // 7. ABA ESTATUTO
 const EstatutoTab = () => {
@@ -2732,6 +2547,7 @@ const MainApp = ({ user, onLogout, logoutPending }) => {
         } catch { return 'inicio'; }
     });
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const mainScrollRef = useRef(null);
     const [adminOpen, setAdminOpen] = useState(false);
     const [refreshTrigger, setRefreshTrigger] = useState(0);
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
@@ -2759,6 +2575,10 @@ const MainApp = ({ user, onLogout, logoutPending }) => {
         }
         try { localStorage.setItem('cba_last_tab_v1', activeTab); } catch { }
     }, [activeTab, TABS]);
+
+    useEffect(() => {
+        if (mainScrollRef.current) mainScrollRef.current.scrollTop = 0;
+    }, [activeTab]);
 
     const handleForceRefresh = async () => {
         try {
@@ -2840,7 +2660,7 @@ const MainApp = ({ user, onLogout, logoutPending }) => {
                     {activeTab === 'financas' && <FinancasTab {...props} />}
                     {activeTab === 'jogos' && <JogosTab {...props} />}
                     {activeTab === 'eventos' && <EventosTab {...props} />}
-                    {activeTab === 'sorteio' && <SorteioTab {...props} />}
+                    {activeTab === 'sorteio' && <Suspense fallback={<Loader message="Carregando Sorteio..." />}><SorteioDashboard players={props.allPlayersData} dates={props.dates} isAdmin={isAdmin} /></Suspense>}
                     {activeTab === 'dm' && <DmTab {...props} />}
                     {activeTab === 'halldafama' && <HallDaFamaTab {...props} />}
                     {activeTab === 'estatuto' && <EstatutoTab />}
@@ -2859,13 +2679,13 @@ const MainApp = ({ user, onLogout, logoutPending }) => {
                 )}
             </AnimatePresence>
 
-            <nav id="cba-menu-principal" aria-label="Menu principal" className={`cba-mobile-sidebar fixed inset-y-0 left-0 z-50 md:relative transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-300 w-64 md:w-56 shrink-0 h-full flex flex-col items-stretch py-5 px-3 bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl border-r border-slate-200/50 dark:border-slate-700/50 shadow-2xl md:shadow-lg overflow-y-auto hide-scrollbar gap-2`}>
-                <div className="flex items-center gap-3 px-2 mb-4"><img src="https://lh3.googleusercontent.com/d/131DvcfgiRLLp9irVnVY8m9qNuM-0y7f8" alt="Logo" className="w-12 h-12 rounded-full shrink-0" /><div className="min-w-0"><p className="font-black text-slate-900 dark:text-white">Portal CBA</p><p className="text-[10px] uppercase tracking-wider font-black text-slate-400">Menu principal</p></div></div>
+            <nav id="cba-menu-principal" aria-label="Menu principal" className={`cba-mobile-sidebar fixed inset-y-0 left-0 z-50 md:relative transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-300 w-64 md:w-56 shrink-0 h-full flex flex-col items-stretch py-5 px-3 bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl border-r border-slate-200/50 dark:border-slate-700/50 shadow-2xl md:shadow-lg overflow-y-auto overscroll-contain hide-scrollbar gap-2`}>
+                <div className="flex items-center gap-3 px-2 mb-4"><img src="https://lh3.googleusercontent.com/d/131DvcfgiRLLp9irVnVY8m9qNuM-0y7f8" alt="Logo" className="w-12 h-12 rounded-full shrink-0" /><div className="min-w-0 flex-1"><p className="font-black text-slate-900 dark:text-white">Portal CBA</p><p className="text-[10px] uppercase tracking-wider font-black text-slate-400">Menu principal</p></div><button type="button" onClick={() => setIsSidebarOpen(false)} aria-label="Fechar menu" className="md:hidden rounded-xl p-2 text-slate-400 hover:text-white hover:bg-slate-800"><X className="w-5 h-5" /></button></div>
                 {isAdmin && <button type="button" onClick={() => { setIsSidebarOpen(false); setAdminOpen(true); }} className="flex w-full min-h-12 items-center gap-3 rounded-2xl border border-indigo-500/40 bg-indigo-500/10 px-3.5 text-left font-black text-sm text-indigo-400"><KeyRound className="h-5 w-5 shrink-0"/>Administração</button>}
                 {TABS.map(tab => {
                     const { Icon, activeBg, color, label } = TAB_CONFIG[tab];
                     return (
-                        <button key={tab} title={label} onClick={() => { setActiveTab(tab); setIsSidebarOpen(false); }} className={`flex items-center gap-3 w-full min-h-12 px-3.5 rounded-2xl transition-all duration-300 text-left ${activeTab === tab ? `${activeBg} shadow-lg scale-110 md:scale-[1.02]` : `${color} hover:bg-slate-100 dark:hover:bg-slate-800`}`}>
+                        <button key={tab} title={label} onClick={() => { setActiveTab(tab); setIsSidebarOpen(false); }} className={`flex items-center gap-3 w-full min-h-12 px-3.5 rounded-2xl transition-all duration-300 text-left ${activeTab === tab ? `${activeBg} shadow-lg md:scale-[1.02]` : `${color} hover:bg-slate-100 dark:hover:bg-slate-800`}`}>
                             <Icon className="w-5 h-5 shrink-0" />
                             <span className="font-black text-sm truncate">{label}</span>
                         </button>
@@ -2886,7 +2706,7 @@ const MainApp = ({ user, onLogout, logoutPending }) => {
                         <button onClick={() => onLogout()} disabled={logoutPending} className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-rose-500 font-bold text-sm rounded-xl hover:bg-rose-50 dark:hover:bg-rose-900/20 border border-slate-200 dark:border-slate-700 flex items-center gap-2 disabled:opacity-50"><LogOut className="w-4 h-4 hidden sm:block"/> {logoutPending ? 'Saindo...' : 'Sair'}</button>
                     </div>
                 </header>
-                <main className="flex-1 min-w-0 overflow-y-auto hide-scrollbar p-4 md:p-8"><div className="max-w-7xl mx-auto min-h-full flex flex-col pb-24 md:pb-4"><div className="flex-1">{dataError && initialData && <div role="alert" className="mb-4 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">Não foi possível atualizar os dados. <button type="button" onClick={refetch} className="font-black underline">Tentar novamente</button></div>}{renderContent()}</div><footer className="mt-10 pt-4 border-t border-slate-200/30 dark:border-slate-700/40 text-center text-[10px] tracking-wide text-slate-500 dark:text-slate-400" aria-label={`Versão do Portal CBA ${SITE_VERSION}`}>Portal CBA · v{SITE_VERSION}</footer></div></main>
+                <main ref={mainScrollRef} className="flex-1 min-w-0 overflow-y-auto hide-scrollbar p-4 md:p-8"><div className="max-w-7xl mx-auto min-h-full flex flex-col pb-24 md:pb-4"><div className="flex-1">{dataError && initialData && <div role="alert" className="mb-4 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">Não foi possível atualizar os dados. <button type="button" onClick={refetch} className="font-black underline">Tentar novamente</button></div>}{renderContent()}</div><footer className="mt-10 pt-4 border-t border-slate-200/30 dark:border-slate-700/40 text-center text-[10px] tracking-wide text-slate-500 dark:text-slate-400" aria-label={`Versão do Portal CBA ${SITE_VERSION}`}>Portal CBA · v{SITE_VERSION}</footer></div></main>
                 <AnimatePresence>
                     {isPasswordModalOpen && (
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[120] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => !passwordStatus.loading && setIsPasswordModalOpen(false)}>
