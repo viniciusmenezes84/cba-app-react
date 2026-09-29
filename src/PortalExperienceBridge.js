@@ -374,6 +374,7 @@ export function EventsView({ data, refresh }) {
   const [view,setView]=useState('proximos');
   const [formEvent,setFormEvent]=useState(undefined);
   const [busy,setBusy]=useState(false);
+  const [notice,setNotice]=useState(null);
   const today=todayBahia();
   const events=data.events||[];
   const localDate=e=>bahiaDateTimeInput(e.startsAt).slice(0,10);
@@ -383,17 +384,32 @@ export function EventsView({ data, refresh }) {
   const list=view==='proximos'?upcoming.slice(1):history;
   const myEvents=upcoming.filter(e=>(e.attendees||[]).includes(ownName)).length;
   const openEvents=upcoming.filter(e=>e.deadline&&today<=String(e.deadline).slice(0,10)).length;
-  const attend=async e=>{setBusy(true);try{await gatewayPost('handleAttendanceUpdate',{itemId:e.id,actionType:(e.attendees||[]).includes(ownName)?'withdraw':'confirm',type:'event'});await refresh();}catch(err){window.alert(err.message);}finally{setBusy(false);}};
+  const attend=async e=>{
+    const withdrawing=(e.attendees||[]).includes(ownName);
+    setBusy(true);setNotice(null);
+    try {
+      await gatewayPost('handleAttendanceUpdate',{itemId:e.id,actionType:withdrawing?'withdraw':'confirm',type:'event'});
+    } catch (error) {
+      setNotice({ kind:'error', message:error?.message||'Não foi possível atualizar sua participação. Tente novamente.' });
+      setBusy(false);
+      return;
+    }
+    setNotice({ kind:'success', message:withdrawing?'Sua desistência foi registrada.':'Sua presença foi confirmada.' });
+    try { await refresh(); }
+    catch { setNotice({ kind:'error', message:'A alteração foi registrada, mas não foi possível atualizar a lista. Recarregue os eventos para conferir.' }); }
+    finally { setBusy(false); }
+  };
   const del=async e=>{if(!window.confirm(`Excluir o evento ${e.name}?`))return;setBusy(true);try{await gatewayPost('deleteEvent',{id:e.id});await refresh();}catch(err){window.alert(err.message);}finally{setBusy(false);}};
   const displayDateTime=value=>new Intl.DateTimeFormat('pt-BR',{timeZone:'America/Bahia',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}).format(new Date(value));
   const registrationOpen=e=>Boolean(e.deadline&&today<=String(e.deadline).slice(0,10)&&localDate(e)>=today);
-  const action=e=><button type="button" disabled={!registrationOpen(e)||busy} onClick={()=>attend(e)} className={cx('min-h-11 w-full rounded-xl px-4 py-2.5 text-sm font-black disabled:opacity-50',registrationOpen(e)&&(e.attendees||[]).includes(ownName)?'border border-rose-500/30 bg-rose-950/30 text-rose-300':registrationOpen(e)?'bg-emerald-500 text-slate-950':'bg-slate-800 text-slate-400')}>{!registrationOpen(e)?'Inscrições encerradas':(e.attendees||[]).includes(ownName)?'Desistir da participação':'Confirmar participação'}</button>;
+  const action=e=><button type="button" disabled={!registrationOpen(e)||busy} onClick={()=>attend(e)} className={cx('min-h-11 w-full rounded-xl px-4 py-2.5 text-sm font-black disabled:opacity-50',registrationOpen(e)&&(e.attendees||[]).includes(ownName)?'border border-rose-500/30 bg-rose-950/30 text-rose-300':registrationOpen(e)?'bg-emerald-500 text-slate-950':'bg-slate-800 text-slate-400')}>{busy?'Atualizando...':!registrationOpen(e)?'Inscrições encerradas':(e.attendees||[]).includes(ownName)?'Desistir da participação':'Confirmar participação'}</button>;
   const adminActions=e=>isAdmin&&<div className="flex gap-1"><button type="button" aria-label={`Editar evento ${e.name}`} onClick={()=>setFormEvent(e)} className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-800 text-slate-300"><Edit3 className="h-4 w-4"/></button><button type="button" aria-label={`Excluir evento ${e.name}`} onClick={()=>del(e)} className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-950/30 text-rose-300"><Trash2 className="h-4 w-4"/></button></div>;
 
   return <div className="space-y-5 pb-24 md:pb-8">
     <Header icon={PartyPopper} kicker="Eventos" title="Eventos & confraternizações" text="Tudo sobre os próximos encontros: data, prazo de inscrição, local e participantes.">
       {isAdmin&&<button type="button" onClick={()=>setFormEvent(null)} className="flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-5 py-3 font-black text-slate-950"><Plus className="h-4 w-4"/>Novo evento</button>}
     </Header>
+    {notice&&<div role={notice.kind==='error'?'alert':'status'} aria-live="polite" className={cx('rounded-xl border p-4 text-sm font-bold',notice.kind==='error'?'border-rose-500/30 bg-rose-950/30 text-rose-200':'border-emerald-500/30 bg-emerald-950/30 text-emerald-200')}>{notice.message}</div>}
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3">
       <SummaryTile icon={CalendarDays} label="Próximos" value={upcoming.length} detail="Eventos agendados" tone="text-amber-300"/>
       <SummaryTile icon={UserCheck} label="Minha agenda" value={myEvents} detail="Com sua confirmação" tone="text-blue-300"/>
@@ -460,17 +476,15 @@ function NotificationsView({ data, refresh }) {
 
 const VIEWS = {
   financas: FinanceView,
-  jogos: GamesView,
-  eventos: EventsView,
   halldafama: HallView,
   estatuto: StatuteView,
   notificacoes: NotificationsView,
 };
 const TITLES = {
-  financas:'Finanças', jogos:'Jogos', eventos:'Eventos', halldafama:'Hall da Fama', estatuto:'Estatuto', notificacoes:'Avisos'
+  financas:'Finanças', halldafama:'Hall da Fama', estatuto:'Estatuto', notificacoes:'Avisos'
 };
 const HEADING_MATCH = {
-  financas:'Situação Anual', jogos:'Calendário de Jogos', eventos:'Eventos & Confraternizações',
+  financas:'Situação Anual',
   halldafama:'Hall da Fama', estatuto:'Estatuto e Documentos Oficiais', notificacoes:'Disparar Push'
 };
 

@@ -309,3 +309,50 @@ test('Início abre diretamente, sem ponte pelo DOM, e os atalhos mudam de aba', 
     window.localStorage.removeItem('cba_last_tab_v1');
   }
 });
+
+test('Eventos abre a tela nova diretamente e confirma presença com resposta visível', async () => {
+  window.localStorage.setItem('cba_session_v1', JSON.stringify({
+    user: { role: 'MEMBER', email: 'atleta@cba.test', name: 'Atleta', token: 'sessao-de-teste' }, savedAt: Date.now()
+  }));
+  window.localStorage.setItem('cba_last_tab_v1', 'eventos');
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bahia', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  const future = new Date(`${today}T12:00:00Z`);
+  future.setUTCDate(future.getUTCDate() + 1);
+  const event = { id: 'event', name: 'Encontro CBA', startsAt: `${future.toISOString().slice(0, 10)}T18:00:00-03:00`, deadline: today, location: 'Clube', description: 'Evento de teste.', value: 20 };
+  const previousFetch = global.fetch;
+  let confirmed = false;
+  global.fetch = jest.fn(async (_, options) => {
+    const { action, itemId } = JSON.parse(options.body);
+    if (action === 'getInitialAppData') return { ok: true, json: async () => ({ data: { dashboard: { players: [], dates: [] }, finance: {} } }) };
+    if (action === 'bootstrap') return { ok: true, json: async () => ({ result: 'success', user: { name: 'Atleta', role: 'MEMBER', athleteId: 'own' }, games: [], events: [{ ...event, attendees: confirmed ? ['Atleta'] : [] }] }) };
+    if (action === 'handleAttendanceUpdate') {
+      expect(itemId).toBe('event');
+      confirmed = true;
+      return { ok: true, json: async () => ({ result: 'success', message: 'Presença atualizada.' }) };
+    }
+    throw new Error(`Ação inesperada: ${action}`);
+  });
+  try {
+    const { container } = render(<App />);
+    expect(await screen.findByRole('heading', { name: 'Eventos & confraternizações' })).toBeInTheDocument();
+    expect(screen.getByText('Encontro CBA')).toBeInTheDocument();
+    expect(screen.queryByText('Cota Individual')).not.toBeInTheDocument();
+    expect(container.querySelector('[data-portal-experience-v3]')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar participação' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('Sua presença foi confirmada.');
+    expect(await screen.findByRole('button', { name: 'Desistir da participação' })).toBeInTheDocument();
+    expect(global.fetch.mock.calls.map(([, options]) => JSON.parse(options.body).action)).toEqual([
+      'getInitialAppData', 'bootstrap', 'handleAttendanceUpdate', 'bootstrap'
+    ]);
+    fireEvent.click(screen.getByTitle('Jogos'));
+    expect(await screen.findByText('Nenhum jogo agendado')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Calendário de jogos' })).toBeInTheDocument();
+    expect(global.fetch.mock.calls.map(([, options]) => JSON.parse(options.body).action)).toEqual([
+      'getInitialAppData', 'bootstrap', 'handleAttendanceUpdate', 'bootstrap', 'bootstrap'
+    ]);
+  } finally {
+    global.fetch = previousFetch;
+    window.localStorage.removeItem('cba_session_v1');
+    window.localStorage.removeItem('cba_last_tab_v1');
+  }
+});

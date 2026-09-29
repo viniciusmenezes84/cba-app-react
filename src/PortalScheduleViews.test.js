@@ -88,3 +88,15 @@ test('Administradores mantêm edição e cancelamento no jogo destacado', () => 
   fireEvent.click(screen.getByRole('button', { name: 'Cancelar jogo' }));
   expect(screen.getByRole('heading', { name: 'Cancelar jogo' })).toBeInTheDocument();
 });
+
+test('Eventos mostra erro da API em vez de deixar o clique sem resposta', async () => {
+  gatewayPost.mockRejectedValueOnce(new Error('Conta sem atleta associado.'));
+  render(<EventsView refresh={jest.fn()} data={{ user: { name: 'Ana' }, events: [
+    { id: 'event', name: 'Confraternização', startsAt: `${dateOffset(1)}T18:00:00-03:00`, deadline: today, location: 'Clube', description: 'Encontro.', value: 20, attendees: [] }
+  ] }}/ >);
+  fireEvent.click(screen.getByRole('button', { name: 'Confirmar participação' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Conta sem atleta associado.');
+  expect(gatewayPost).toHaveBeenCalledWith('handleAttendanceUpdate', {
+    itemId: 'event', actionType: 'confirm', type: 'event'
+  });
+});

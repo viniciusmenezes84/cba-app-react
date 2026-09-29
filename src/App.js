@@ -6,13 +6,14 @@ import { InitialDataContext } from './InitialDataContext';
 import { gatewayPost } from './cbaApi';
 import { 
     Activity, CalendarDays, BookOpen, DollarSign, Users, PartyPopper, BarChart, BellRing, 
-    X, Menu, Copy, LogOut, RefreshCw, Trophy, Flame, MapPin, ChevronDown, CheckCircle, AlertCircle, Trash, Edit, ClipboardList, Minus, Award, Crown, Star,
+    X, Menu, Copy, LogOut, RefreshCw, Trophy, Flame, MapPin, ChevronDown, CheckCircle, AlertCircle, ClipboardList, Minus, Award, Crown, Star,
     Stethoscope, KeyRound, Home, Eye, EyeOff
 } from 'lucide-react';
 const AdminDashboardBridge = lazy(() => import('./AdminDashboardBridge'));
 const PresenceDashboardBridge = lazy(() => import('./PresenceDashboardBridge'));
 const ReportsDashboard = lazy(() => import('./ReportsDashboard'));
 const HomeDashboard = lazy(() => import('./HomeDashboard'));
+const ScheduleDashboard = lazy(() => import('./ScheduleDashboard'));
 const MesarioDashboard = lazy(() => import('./MesarioDashboard'));
 const SorteioDashboard = lazy(() => import('./SorteioDashboard'));
 const DmDashboard = lazy(() => import('./DmDashboard'));
@@ -20,7 +21,7 @@ const PortalExperienceBridge = lazy(() => import('./PortalExperienceBridge'));
 
 function ActiveBridges({ tab }) {
     return <Suspense fallback={null}>
-        {['financas', 'jogos', 'eventos', 'halldafama', 'estatuto', 'notificacoes'].includes(tab) && <PortalExperienceBridge />}
+        {['financas', 'halldafama', 'estatuto', 'notificacoes'].includes(tab) && <PortalExperienceBridge />}
     </Suspense>;
 }
 
@@ -178,63 +179,6 @@ const Loader = ({ message }) => (
         {message && <p className="text-lg font-medium animate-pulse">{message}</p>}
     </motion.div>
 );
-
-const Modal = ({ isOpen, onClose, title, children }) => {
-    const dialogRef = useRef(null);
-
-    useEffect(() => {
-        if (!isOpen) return;
-        const getFocusable = () => dialogRef.current?.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
-        const handleKeyDown = (e) => {
-            if (e.key === 'Escape') { onClose(); return; }
-            if (e.key !== 'Tab') return;
-            const focusable = getFocusable();
-            if (!focusable || focusable.length === 0) return;
-            const first = focusable[0];
-            const last = focusable[focusable.length - 1];
-            if (e.shiftKey && document.activeElement === first) {
-                e.preventDefault(); last.focus();
-            } else if (!e.shiftKey && document.activeElement === last) {
-                e.preventDefault(); first.focus();
-            }
-        };
-
-        document.addEventListener('keydown', handleKeyDown);
-        const focusTimer = setTimeout(() => getFocusable()?.[0]?.focus(), 50);
-
-        return () => {
-            document.removeEventListener('keydown', handleKeyDown);
-            clearTimeout(focusTimer);
-        };
-    }, [isOpen, onClose]);
-
-    return (
-        <AnimatePresence>
-            {isOpen && (
-                <div className="fixed inset-0 z-[100] flex justify-center items-center p-4" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-                    <motion.div 
-                        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                        className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm"
-                        onClick={onClose}
-                    />
-                    <motion.div 
-                        ref={dialogRef}
-                        initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                        className="relative bg-white dark:bg-slate-800 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-700 p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto z-10"
-                    >
-                        <div className="flex justify-between items-center pb-4 border-b border-slate-200 dark:border-slate-700 mb-5">
-                            <h2 id="modal-title" className="text-2xl font-extrabold text-slate-800 dark:text-slate-100">{title}</h2>
-                            <button onClick={onClose} aria-label="Fechar modal" className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 bg-slate-100 dark:bg-slate-700 p-2 rounded-full transition-colors">
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-                        {children}
-                    </motion.div>
-                </div>
-            )}
-        </AnimatePresence>
-    );
-};
 
 const AccordionItem = ({ title, children, isOpen, onClick }) => {
     return (
@@ -526,275 +470,6 @@ const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin, pixC
         </div>
     );
 };
-
-// 4. ABA JOGOS
-const JogosTab = ({ currentUser, isAdmin, refreshKey }) => {
-    const { data: gamesData, isLoading, refetch } = useDataQuery((signal) => api.post({ action: 'getGames' }, signal), [refreshKey]);
-    const games = [...(gamesData?.data || [])].sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
-    
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [editingGame, setEditingGame] = useState(null);
-    const [confirmDelete, setConfirmDelete] = useState(null);
-    const [infoModal, setInfoModal] = useState({ isOpen: false, title: '', message: '' });
-
-    const handleFormSubmit = async (e) => {
-        e.preventDefault(); 
-        setIsSubmitting(true);
-        const formData = new FormData(e.currentTarget);
-        const payload = { 
-            action: editingGame ? 'updateGame' : 'createGame', 
-            id: editingGame ? editingGame.id : undefined,
-            data: formData.get('data'), 
-            horario: formData.get('horario'), 
-            local: formData.get('local') 
-        };
-        try {
-            const res = await api.post(payload);
-            if (res.result === 'success') { 
-                setIsModalOpen(false); 
-                setEditingGame(null);
-                refetch(); 
-            }
-            else throw new Error(res.message);
-        } catch (err) { 
-            setInfoModal({ isOpen: true, title: 'Erro', message: err.message }); 
-        } finally { 
-            setIsSubmitting(false); 
-        }
-    };
-
-    const handleDeleteGame = async () => {
-        if (!confirmDelete) return;
-        try {
-            const res = await api.post({ action: 'deleteGame', id: confirmDelete.id });
-            if (res.result === 'success') {
-                setConfirmDelete(null);
-                refetch();
-            } else throw new Error(res.message);
-        } catch (err) {
-            setInfoModal({ isOpen: true, title: 'Erro', message: err.message });
-        }
-    };
-
-    const handleAttendance = async (gameId, actionType) => {
-        await api.post({ action: 'handleAttendanceUpdate', itemId: gameId, playerName: currentUser.name, actionType, type: 'game' });
-        refetch();
-    };
-
-    if (isLoading) return <Loader message="Carregando jogos..." />;
-    
-    return (
-        <div className="space-y-8 animate-fade-in-up">
-            <div className="flex justify-between items-center">
-                <h2 className="text-3xl font-bold">Calendário de Jogos</h2>
-                {isAdmin && <button onClick={() => { setEditingGame(null); setIsModalOpen(true); }} className="bg-indigo-600 text-white font-bold py-2 px-6 rounded-xl hover:bg-indigo-700 transition shadow-md">Criar Jogo</button>}
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                {games.map(game => (
-                    <GlassCard key={game.id} className="flex flex-col border-t-4 border-t-indigo-500 relative">
-                        {isAdmin && (
-                            <div className="absolute top-2 right-2 flex gap-1 bg-white/50 dark:bg-slate-800/50 rounded-lg p-1 backdrop-blur-sm">
-                                <button onClick={() => { setEditingGame(game); setIsModalOpen(true); }} aria-label="Editar jogo" className="p-1.5 text-slate-500 hover:text-indigo-600"><Edit className="w-4 h-4"/></button>
-                                <button onClick={() => setConfirmDelete(game)} aria-label="Excluir jogo" className="p-1.5 text-slate-500 hover:text-red-600"><Trash className="w-4 h-4"/></button>
-                            </div>
-                        )}
-                        <div className="flex justify-between items-start mb-4 mt-2">
-                            <div><p className="text-2xl font-black">{new Date(game.data + 'T00:00:00').toLocaleDateString('pt-BR')}</p><p className="text-sm font-semibold text-slate-500">{game.horario} @ {game.local}</p></div>
-                            <div className="text-right bg-indigo-50 dark:bg-indigo-900/30 p-2 rounded-xl"><p className="text-2xl font-black text-indigo-600">{game.confirmados.length}</p><p className="text-[10px] uppercase font-bold text-slate-500">Confir.</p></div>
-                        </div>
-                        <div className="flex-grow mb-6 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-700">
-                            <h4 className="font-bold text-xs uppercase text-slate-500 mb-2">Presença</h4>
-                            <div className="flex flex-wrap gap-1.5">{game.confirmados.map(name => <span key={name} className="bg-white dark:bg-slate-700 border dark:border-slate-600 px-2.5 py-1 text-xs font-bold rounded-lg">{name}</span>)}</div>
-                        </div>
-                        <button onClick={() => handleAttendance(game.id, game.confirmados.includes(currentUser.name) ? 'withdraw' : 'confirm')} className={`w-full font-bold py-3 px-4 rounded-xl transition-all ${game.confirmados.includes(currentUser.name) ? 'bg-red-50 text-red-600 dark:bg-red-900/20' : 'bg-indigo-600 text-white'}`}>
-                            {game.confirmados.includes(currentUser.name) ? 'Desistir' : 'Confirmar Presença'}
-                        </button>
-                    </GlassCard>
-                ))}
-            </div>
-
-            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingGame ? "Editar Jogo" : "Novo Jogo"}>
-                <form onSubmit={handleFormSubmit} className="space-y-4">
-                    <div>
-                        <label htmlFor="game-data" className="sr-only">Data</label>
-                        <input id="game-data" name="data" type="date" defaultValue={editingGame?.data} className="w-full p-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" required />
-                    </div>
-                    <div>
-                        <label htmlFor="game-horario" className="sr-only">Horário</label>
-                        <input id="game-horario" name="horario" type="time" defaultValue={editingGame?.horario} className="w-full p-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" required />
-                    </div>
-                    <div>
-                        <label htmlFor="game-local" className="sr-only">Local</label>
-                        <input id="game-local" name="local" type="text" placeholder="Local" defaultValue={editingGame?.local} className="w-full p-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" required />
-                    </div>
-                    <button type="submit" disabled={isSubmitting} className="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl hover:bg-indigo-700 disabled:opacity-50">{isSubmitting ? 'Salvando...' : 'Agendar'}</button>
-                </form>
-            </Modal>
-
-            <Modal isOpen={!!confirmDelete} onClose={() => setConfirmDelete(null)} title="Confirmar Exclusão">
-                <p className="text-lg">Tem a certeza que quer apagar o jogo do dia <strong>{confirmDelete ? new Date(confirmDelete.data + 'T00:00:00').toLocaleDateString('pt-BR') : ''}</strong>?</p>
-                <div className="flex justify-end gap-4 mt-8">
-                    <button onClick={() => setConfirmDelete(null)} className="py-3 px-6 bg-slate-200 dark:bg-slate-700 font-bold rounded-xl hover:bg-slate-300">Cancelar</button>
-                    <button onClick={handleDeleteGame} className="py-3 px-6 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 shadow-lg">Sim, Apagar</button>
-                </div>
-            </Modal>
-
-            <Modal isOpen={infoModal.isOpen} onClose={() => setInfoModal({ isOpen: false, title: '', message: '' })} title={infoModal.title}><p>{infoModal.message}</p></Modal>
-        </div>
-    );
-};
-
-// 5. ABA EVENTOS
-const EventosTab = ({ currentUser, isAdmin, refreshKey }) => {
-    const { data: eventsData, isLoading, refetch } = useDataQuery((signal) => api.post({ action: 'getEvents' }, signal), [refreshKey]);
-    const events = (eventsData?.data || []).map(e => ({ ...e, attendees: typeof e.attendees === 'string' ? e.attendees.split(',').filter(Boolean) : [] }));
-    
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [editingEvent, setEditingEvent] = useState(null);
-    const [confirmDelete, setConfirmDelete] = useState(null);
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [infoModal, setInfoModal] = useState({ isOpen: false, title: '', message: '' });
-
-    const formatCurrency = (val) => typeof val === 'number' ? val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ 0,00';
-
-    const handleFormSubmit = async (e) => {
-        e.preventDefault(); 
-        setIsSubmitting(true);
-        const formData = new FormData(e.currentTarget);
-        const payload = { 
-            action: editingEvent ? 'updateEvent' : 'createEvent', 
-            id: editingEvent ? editingEvent.id : undefined, 
-            name: formData.get('name'), 
-            date: formData.get('date'), 
-            deadline: formData.get('deadline'), 
-            location: formData.get('location'), 
-            value: formData.get('value'), 
-            description: formData.get('description') 
-        };
-        try {
-            const res = await api.post(payload);
-            if (res.result === 'success') { setIsModalOpen(false); setEditingEvent(null); refetch(); }
-            else throw new Error(res.message);
-        } catch (err) { setInfoModal({ isOpen: true, title: 'Erro', message: err.message }); } finally { setIsSubmitting(false); }
-    };
-
-    const handleDeleteEvent = async () => {
-        if (!confirmDelete) return;
-        try {
-            const res = await api.post({ action: 'deleteEvent', id: confirmDelete.id });
-            if (res.result === 'success') { setConfirmDelete(null); refetch(); }
-            else throw new Error(res.message);
-        } catch (err) { setInfoModal({ isOpen: true, title: 'Erro', message: err.message }); }
-    };
-
-    const handleAttendance = async (eventId, actionType) => {
-        await api.post({ action: 'handleAttendanceUpdate', itemId: eventId, playerName: currentUser.name, actionType, type: 'event' });
-        refetch();
-    };
-
-    if (isLoading) return <Loader message="Carregando eventos..." />;
-    
-    return (
-        <div className="space-y-8 animate-fade-in-up">
-            <Modal isOpen={infoModal.isOpen} onClose={() => setInfoModal({ isOpen: false, title: '', message: '' })} title={infoModal.title}>
-                <p>{infoModal.message}</p>
-            </Modal>
-            
-            <div className="flex justify-between items-center">
-                <h2 className="text-3xl font-bold">Eventos & Confraternizações</h2>
-                {isAdmin && <button onClick={() => { setEditingEvent(null); setIsModalOpen(true); }} className="bg-indigo-600 text-white font-bold py-2 px-6 rounded-xl hover:bg-indigo-700 transition">Criar Evento</button>}
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {events.map(event => {
-                    const isConfirmed = event.attendees.includes(currentUser.name);
-                    const isDeadlinePassed = new Date() > new Date(event.deadline);
-                    const totalCollected = event.attendees.length * event.value;
-
-                    return (
-                        <GlassCard key={event.id} className="flex flex-col relative">
-                            {isAdmin && (
-                                <div className="absolute top-4 right-4 flex gap-1 bg-slate-100 dark:bg-slate-700 rounded-lg p-1">
-                                    <button onClick={() => { setEditingEvent(event); setIsModalOpen(true); }} aria-label="Editar evento" className="p-1.5 text-slate-500 hover:text-indigo-600"><Edit className="w-4 h-4"/></button>
-                                    <button onClick={() => setConfirmDelete(event)} aria-label="Excluir evento" className="p-1.5 text-slate-500 hover:text-red-600"><Trash className="w-4 h-4"/></button>
-                                </div>
-                            )}
-                            <h3 className="text-2xl font-black text-indigo-600 dark:text-indigo-400 w-3/4">{event.name}</h3>
-                            <p className="font-bold mt-2 text-slate-700 dark:text-slate-300">📅 {new Date(event.date).toLocaleDateString('pt-BR')}</p>
-                            <p className="text-slate-600 dark:text-slate-400 text-sm mt-2 mb-4 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl border border-slate-100 dark:border-slate-700">{event.description}</p>
-                            
-                            <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl mb-4 border border-slate-100 dark:border-slate-700">
-                                <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-700 pb-2 mb-2">
-                                    <span className="font-bold text-slate-500 text-xs uppercase tracking-widest">Cota Individual</span>
-                                    <span className="font-black text-emerald-600 dark:text-emerald-400 text-lg">{formatCurrency(event.value)}</span>
-                                </div>
-                                <div className="flex justify-between items-center text-sm">
-                                    <span className="font-semibold text-slate-500">Arrecadado:</span>
-                                    <span className="font-bold text-slate-700 dark:text-slate-300">{formatCurrency(totalCollected)}</span>
-                                </div>
-                            </div>
-
-                            <div className="mb-6 flex-grow">
-                                <div className="flex justify-between items-end mb-2">
-                                    <h4 className="font-bold text-sm text-slate-800 dark:text-slate-200">Confirmados ({event.attendees.length})</h4>
-                                    <p className="text-[10px] uppercase font-bold text-red-500 bg-red-50 dark:bg-red-900/20 px-2 py-1 rounded">Limite: {new Date(event.deadline).toLocaleDateString('pt-BR')}</p>
-                                </div>
-                                <div className="flex flex-wrap gap-1.5 mt-2">{event.attendees.map(name => <span key={name} className="bg-slate-100 dark:bg-slate-700 px-2 py-1 text-xs font-bold rounded-lg">{name}</span>)}</div>
-                            </div>
-                            
-                            <button onClick={() => handleAttendance(event.id, isConfirmed ? 'withdraw' : 'confirm')} disabled={isDeadlinePassed} className={`w-full font-bold py-3 px-4 mt-auto rounded-xl ${isDeadlinePassed ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : isConfirmed ? 'bg-red-50 text-red-600 dark:bg-red-900/20' : 'bg-indigo-600 text-white shadow-lg'}`}>
-                                {isDeadlinePassed ? 'Inscrições Encerradas' : isConfirmed ? 'Desistir' : 'Confirmar Presença'}
-                            </button>
-                        </GlassCard>
-                    );
-                })}
-            </div>
-
-            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingEvent ? "Editar Evento" : "Criar Evento"}>
-                <form onSubmit={handleFormSubmit} className="space-y-4">
-                    <div>
-                        <label htmlFor="event-name" className="sr-only">Nome do Evento</label>
-                        <input id="event-name" name="name" type="text" placeholder="Nome do Evento" defaultValue={editingEvent?.name} className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none" required />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label htmlFor="event-date" className="sr-only">Data e Hora</label>
-                            <input id="event-date" name="date" type="datetime-local" defaultValue={editingEvent?.date ? new Date(editingEvent.date).toISOString().substring(0,16) : ''} className="w-full p-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none" required />
-                        </div>
-                        <div>
-                            <label htmlFor="event-deadline" className="sr-only">Prazo</label>
-                            <input id="event-deadline" name="deadline" type="date" defaultValue={editingEvent?.deadline} className="w-full p-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none" required />
-                        </div>
-                    </div>
-                    <div>
-                        <label htmlFor="event-location" className="sr-only">Local</label>
-                        <input id="event-location" name="location" type="text" placeholder="Local" defaultValue={editingEvent?.location} className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none" required />
-                    </div>
-                    <div>
-                        <label htmlFor="event-value" className="sr-only">Valor</label>
-                        <input id="event-value" name="value" type="number" step="0.01" placeholder="Valor (R$)" defaultValue={editingEvent?.value} className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none" required />
-                    </div>
-                    <div>
-                        <label htmlFor="event-description" className="sr-only">Descrição</label>
-                        <textarea id="event-description" name="description" placeholder="Detalhes..." defaultValue={editingEvent?.description} className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none" rows={3} required></textarea>
-                    </div>
-                    <button type="submit" disabled={isSubmitting} className="w-full bg-indigo-600 text-white font-bold py-4 rounded-xl hover:bg-indigo-700 disabled:opacity-50">{isSubmitting ? 'A salvar...' : 'Salvar Evento'}</button>
-                </form>
-            </Modal>
-
-            <Modal isOpen={!!confirmDelete} onClose={() => setConfirmDelete(null)} title="Confirmar">
-                <p className="text-lg">Deseja apagar o evento <strong>{confirmDelete?.name}</strong>?</p>
-                <div className="flex justify-end gap-4 mt-6">
-                    <button onClick={() => setConfirmDelete(null)} className="py-3 px-6 bg-slate-200 dark:bg-slate-700 font-bold rounded-xl text-slate-800 dark:text-white">Cancelar</button>
-                    <button onClick={handleDeleteEvent} className="py-3 px-6 bg-red-600 text-white font-bold rounded-xl">Apagar</button>
-                </div>
-            </Modal>
-        </div>
-    );
-};
-
 
 // 7. ABA ESTATUTO
 const EstatutoTab = () => {
@@ -1314,8 +989,8 @@ const MainApp = ({ user, onLogout, logoutPending }) => {
                     {activeTab === 'atleta' && <AthleteDashboard {...props} dataError={dataError} />}
                     {activeTab === 'mesario' && <Suspense fallback={<Loader message="Carregando Mesário..." />}><MesarioDashboard data={initialData} onStatsSaved={handleForceRefresh} /></Suspense>}
                     {activeTab === 'financas' && <FinancasTab {...props} />}
-                    {activeTab === 'jogos' && <JogosTab {...props} />}
-                    {activeTab === 'eventos' && <EventosTab {...props} />}
+                    {activeTab === 'jogos' && <Suspense fallback={<Loader message="Carregando Jogos..." />}><ScheduleDashboard tab="jogos" refreshKey={refreshTrigger} /></Suspense>}
+                    {activeTab === 'eventos' && <Suspense fallback={<Loader message="Carregando Eventos..." />}><ScheduleDashboard tab="eventos" refreshKey={refreshTrigger} /></Suspense>}
                     {activeTab === 'sorteio' && <Suspense fallback={<Loader message="Carregando Sorteio..." />}><SorteioDashboard players={props.allPlayersData} dates={props.dates} isAdmin={isAdmin} /></Suspense>}
                     {activeTab === 'dm' && <Suspense fallback={<Loader message="Carregando Departamento Médico..." />}><DmDashboard /></Suspense>}
                     {activeTab === 'halldafama' && <HallDaFamaTab {...props} />}
