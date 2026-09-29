@@ -4,7 +4,7 @@
 /* O estado ao vivo é identificado pela presença do placar sticky. */
 [data-mesario-v2-root]:has(> .sticky.top-2) {
   padding-top: 0 !important;
-  padding-bottom: 5rem !important;
+  padding-bottom: 10rem !important;
 }
 
 [data-mesario-v2-root]:has(> .sticky.top-2) > * + * {

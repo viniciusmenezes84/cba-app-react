@@ -1,10 +1,8 @@
-import React, { useContext, useEffect, useMemo, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { InitialDataContext } from './InitialDataContext';
+import React, { useEffect, useMemo, useState } from 'react';
 import { gatewayPost } from './cbaApi';
 import {
   AlertCircle, CalendarDays, CheckCircle, ClipboardList, History, Minus,
-  Play, RefreshCw, Save, Search, Trash, Trophy, Users, X
+  Play, RefreshCw, Save, Search, Trash, Trophy, X
 } from 'lucide-react';
 
 const BACKUP_KEY = 'cba_mesario_backup_v2';
@@ -75,9 +73,8 @@ function Modal({ open, onClose, children, width = 'max-w-lg' }) {
   );
 }
 
-function MesarioExperience({ data }) {
-  const appData = data?.data || data || {};
-  const players = useMemo(() => [...(appData?.dashboard?.players || [])].sort((a, b) => a.name.localeCompare(b.name)), [appData]);
+export default function MesarioDashboard({ data, onStatsSaved }) {
+  const players = useMemo(() => [...(data?.data?.dashboard?.players || data?.dashboard?.players || [])].sort((a, b) => a.name.localeCompare(b.name)), [data]);
 
   const [bootBackup] = useState(() => readBackup());
   const [recovery, setRecovery] = useState(bootBackup);
@@ -292,6 +289,7 @@ function MesarioExperience({ data }) {
       resetSession();
       setModal(null);
       setNotice({ title: 'Súmula salva', message: 'As estatísticas da sessão foram enviadas com sucesso para a planilha.' });
+      onStatsSaved?.();
     } catch (error) {
       setNotice({ title: 'Erro ao salvar', message: error.message || 'Falha inesperada ao salvar a sessão.' });
     } finally {
@@ -327,7 +325,7 @@ function MesarioExperience({ data }) {
   };
 
   return (
-    <div data-mesario-v2-root="true" className="space-y-5 pt-2 pb-28 lg:pb-8 text-slate-100">
+    <div data-mesario-v2-root="true" className="space-y-5 pt-2 pb-48 md:pb-8 text-slate-100">
       <div className="rounded-3xl overflow-hidden border border-cyan-500/15 bg-gradient-to-br from-slate-950 via-cyan-950/60 to-slate-900 p-5 sm:p-7 shadow-2xl">
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-5">
           <div>
@@ -382,7 +380,7 @@ function MesarioExperience({ data }) {
             </Card>
           </div>
 
-          <div className="fixed lg:static bottom-0 inset-x-0 z-50 bg-slate-950/95 border-t lg:border border-slate-800 p-3 lg:rounded-3xl backdrop-blur-xl">
+          <div className="fixed md:static inset-x-0 z-50 bg-slate-950/95 border-t md:border border-slate-800 p-3 md:rounded-3xl backdrop-blur-xl" style={{ bottom: 'calc(4.25rem + env(safe-area-inset-bottom, 0px))' }}>
             <div className="max-w-7xl mx-auto grid grid-cols-2 gap-2">
               <button onClick={undoLast} disabled={!lastGameEvents.length} className="py-3.5 rounded-2xl bg-slate-800 text-white font-black disabled:opacity-30">↶ Desfazer</button>
               <button onClick={requestFinishGame} className="py-3.5 rounded-2xl bg-cyan-600 text-white font-black shadow-lg shadow-cyan-900/30">Finalizar partida</button>
@@ -419,7 +417,7 @@ function MesarioExperience({ data }) {
 
           {gameHistory.length > 0 && <Card className="p-5"><div className="flex items-center justify-between mb-3"><div><p className="text-xs uppercase font-black text-slate-500">Histórico da sessão</p><h2 className="font-black">Partidas finalizadas</h2></div><Trophy className="w-5 h-5 text-amber-400" /></div><div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">{gameHistory.slice().reverse().map(game => <div key={game.number} className="rounded-2xl bg-slate-900/60 p-3 flex items-center justify-between"><div><p className="text-xs font-black text-slate-500">Jogo {game.number}</p><p className="text-sm font-black mt-1">Preto {game.blackScore} × {game.greenScore} Verde</p></div><span className={`text-[10px] font-black px-2 py-1 rounded-full ${game.winner === 'black' ? 'bg-white/10 text-white' : 'bg-emerald-500/15 text-emerald-300'}`}>{game.winner === 'black' ? 'PRETO' : 'VERDE'}</span></div>)}</div></Card>}
 
-          <div className="fixed lg:static bottom-0 inset-x-0 z-50 bg-slate-950/95 border-t lg:border border-slate-800 p-3 lg:p-4 lg:rounded-3xl backdrop-blur-xl">
+          <div className="fixed md:static inset-x-0 z-50 bg-slate-950/95 border-t md:border border-slate-800 p-3 md:p-4 md:rounded-3xl backdrop-blur-xl" style={{ bottom: 'calc(4.25rem + env(safe-area-inset-bottom, 0px))' }}>
             <div className="max-w-7xl mx-auto flex flex-col sm:flex-row gap-2">
               <button onClick={startGame} className="flex-1 py-3.5 rounded-2xl bg-cyan-600 text-white font-black flex items-center justify-center gap-2 shadow-lg shadow-cyan-900/30"><Play className="w-5 h-5" /> Ir para a quadra</button>
               {dayRows.length > 0 && <button onClick={() => setModal({ type: 'summary' })} className="sm:w-auto px-5 py-3.5 rounded-2xl bg-emerald-600 text-white font-black flex items-center justify-center gap-2"><Save className="w-5 h-5" /> Encerrar sessão</button>}
@@ -458,49 +456,4 @@ function MesarioExperience({ data }) {
       </Modal>
     </div>
   );
-}
-
-export default function MesarioDashboardBridge() {
-  const [mountNode, setMountNode] = useState(null);
-  const [active, setActive] = useState(false);
-  const data = useContext(InitialDataContext);
-
-  useEffect(() => {
-    let node = null;
-    let legacyCard = null;
-
-    const sync = () => {
-      const tabButton = document.querySelector('button[title="Mesário"]');
-      const isMesario = Boolean(tabButton?.className?.includes('scale-110'));
-      setActive(isMesario);
-
-      const heading = [...document.querySelectorAll('h2')]
-        .find(element => element.textContent?.trim() === 'Modo Mesário' && !element.closest('[data-mesario-v2-root="true"]'));
-      const card = heading?.closest('.rounded-3xl');
-      if (!card) return;
-      legacyCard = card;
-
-      if (!node || !node.isConnected) {
-        node = document.createElement('div');
-        node.dataset.mesarioV2Mount = 'true';
-        card.insertAdjacentElement('beforebegin', node);
-        setMountNode(node);
-      }
-
-      legacyCard.style.display = isMesario ? 'none' : '';
-      node.style.display = isMesario ? '' : 'none';
-    };
-
-    sync();
-    const observer = new MutationObserver(sync);
-    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
-    return () => {
-      observer.disconnect();
-      if (legacyCard) legacyCard.style.display = '';
-      if (node?.isConnected) node.remove();
-    };
-  }, []);
-
-  if (!active || !mountNode || !data) return null;
-  return createPortal(<MesarioExperience data={data} />, mountNode);
 }
