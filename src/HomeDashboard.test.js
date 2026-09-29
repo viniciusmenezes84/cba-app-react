@@ -27,6 +27,11 @@ test('Início consulta o portal uma vez, mostra a situação própria e navega p
   expect(screen.getByText('Aviso do clube')).toBeInTheDocument();
   expect(portalPost).toHaveBeenCalledTimes(1);
   expect(portalPost).toHaveBeenCalledWith('bootstrap', {}, expect.objectContaining({ signal: expect.any(Object) }));
+  fireEvent.click(screen.getByRole('button', { name: 'Abrir minha agenda' }));
+  expect(screen.getByRole('heading', { name: 'Minha agenda' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Confirmados · 0' })).toBeInTheDocument();
+  expect(portalPost).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole('button', { name: 'Voltar ao Início' }));
   fireEvent.click(screen.getByRole('button', { name: 'Ver jogo' }));
   fireEvent.click(screen.getByRole('button', { name: 'Ver financeiro' }));
   fireEvent.click(screen.getByRole('button', { name: 'Ver eventos' }));

@@ -301,6 +301,11 @@ test('Início abre diretamente, sem ponte pelo DOM, e os atalhos mudam de aba', 
     expect(container.querySelector('[data-cba-home-anchor]')).toBeNull();
     expect(container.querySelector('[data-portal-experience-v3]')).toBeNull();
     expect(global.fetch.mock.calls.map(([, options]) => JSON.parse(options.body).action)).toEqual(['getInitialAppData', 'bootstrap']);
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir minha agenda' }));
+    expect(screen.getByRole('heading', { name: 'Minha agenda' })).toBeInTheDocument();
+    expect(screen.queryByTitle('Minha agenda')).not.toBeInTheDocument();
+    expect(global.fetch.mock.calls.map(([, options]) => JSON.parse(options.body).action)).toEqual(['getInitialAppData', 'bootstrap']);
+    fireEvent.click(screen.getByRole('button', { name: 'Voltar ao Início' }));
     fireEvent.click(screen.getByRole('button', { name: 'Ver financeiro' }));
     expect(await screen.findByText('Situação Anual')).toBeInTheDocument();
   } finally {
