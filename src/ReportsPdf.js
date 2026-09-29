@@ -1,85 +1,25 @@
-import React, { useMemo, useState } from 'react';
-import { medicalPost } from './cbaApi';
+import React, { useEffect, useMemo, useState } from 'react';
+import { jsPDF } from 'jspdf';
+import { autoTable } from 'jspdf-autotable';
 import { BookOpen, CalendarDays, RefreshCw } from 'lucide-react';
+import { medicalPost } from './cbaApi';
 
 const EMPTY_LIST = [];
-
-const LOGO_URL = 'https://lh3.googleusercontent.com/d/131DvcfgiRLLp9irVnVY8m9qNuM-0y7f8';
 const MONTHS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-
-let html2pdfPromise = null;
-const loadHtml2Pdf = () => {
-  if (window.html2pdf) return Promise.resolve();
-  if (html2pdfPromise) return html2pdfPromise;
-  html2pdfPromise = new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-    script.crossOrigin = 'anonymous';
-    script.referrerPolicy = 'no-referrer';
-    script.onload = resolve;
-    script.onerror = error => {
-      html2pdfPromise = null;
-      reject(error);
-    };
-    document.head.appendChild(script);
-  });
-  return html2pdfPromise;
-};
-
+const NAVY = [15, 23, 42];
+const INDIGO = [67, 56, 202];
 const num = value => Number(value || 0);
-const calcPts = stats => (num(stats?.pts2) * 2) + (num(stats?.pts3) * 3);
-const fmtDate = date => date ? date.split('-').reverse().join('/') : '--';
+const points = stats => num(stats?.pts2) * 2 + num(stats?.pts3) * 3;
+const fmtDate = value => value ? String(value).slice(0, 10).split('-').reverse().join('/') : '—';
+const filenamePart = value => String(value || '').replace(/[^a-zA-Z0-9_-]+/g, '_');
 const validStatus = status => Boolean(status) && status !== 'N/A';
 const isFault = status => ['NÃO JUSTIFICOU', 'NAO JUSTIFICOU'].includes(String(status || '').trim().toUpperCase());
-const safeFilename = value => String(value || '').replace(/[^a-zA-Z0-9_-]+/g, '_');
-const paginate = (items, size) => {
-  if (!items.length) return [[]];
-  return Array.from({ length: Math.ceil(items.length / size) }, (_, index) => items.slice(index * size, index * size + size));
-};
 
-function MedicalSummary({ medical }) {
-  const records = (medical?.records || [])
-    .filter(record => !record?.dischargedAt && String(record?.status || '').toLowerCase() !== 'alta')
-    .sort((a, b) => String(a?.expectedReturn || '9999-12-31').localeCompare(String(b?.expectedReturn || '9999-12-31'))
-      || String(a?.playerName || '').localeCompare(String(b?.playerName || '')));
-  return (
-    <div className="mb-6 border border-blue-100 rounded-xl overflow-hidden">
-      <div className="p-3 bg-blue-50 border-b border-blue-100">
-        <p className="text-[11px] font-black uppercase text-blue-900">{medical?.error ? 'Situação atual do Departamento Médico' : `${records.length} atleta${records.length === 1 ? '' : 's'} em acompanhamento`}</p>
-        <p className="text-[9px] text-slate-600 mt-1">{medical?.error ? 'Não foi possível consultar o Departamento Médico durante a geração deste relatório.' : 'Situação atual na data de geração.'}</p>
-      </div>
-      {medical?.error ? <p className="p-4 text-[10px] font-bold text-rose-700">Dados médicos indisponíveis.</p>
-        : records.length ? <table className="w-full text-[10px] border-collapse"><thead><tr className="text-left text-slate-500 uppercase text-[9px]"><th className="p-2">Atleta</th><th className="p-2">Situação</th><th className="p-2 text-right">Retorno previsto</th></tr></thead><tbody>{records.map((record, index) => <tr key={record.id || `${record.playerName}-${index}`} className="border-t border-slate-100"><td className="p-2 font-bold">{record.playerName || 'Atleta'}</td><td className="p-2">{record.status || 'Em acompanhamento'}</td><td className="p-2 text-right">{record.expectedReturn ? fmtDate(String(record.expectedReturn).slice(0, 10)) : '—'}</td></tr>)}</tbody></table>
-        : <p className="p-4 text-[10px] text-center text-slate-500">Nenhum atleta está no Departamento Médico no momento.</p>}
-    </div>
-  );
-}
-
-function getHighs(entries) {
-  const result = {
-    pts: { val: 0, date: '' }, reb: { val: 0, date: '' },
-    ast: { val: 0, date: '' }, blk: { val: 0, date: '' }
-  };
-  entries.forEach(([date, stats]) => {
-    const values = { pts: calcPts(stats), reb: num(stats?.reb), ast: num(stats?.ast), blk: num(stats?.blk) };
-    Object.entries(values).forEach(([key, value]) => {
-      if (value > result[key].val) result[key] = { val: value, date };
-    });
-  });
-  return result;
-}
-
-function deriveReport(players, dates, year) {
+export function deriveReport(players, dates, year) {
   const playedDates = [...new Set(dates || [])]
-    .filter(date => date.startsWith(year))
-    .filter(date => players.some(player => player.attendance?.[date]?.includes('✅')))
-    .sort();
-
+    .filter(date => date.startsWith(year) && players.some(player => player.attendance?.[date]?.includes('✅'))).sort();
   const reportData = players.map(player => {
-    let validGames = 0;
-    let presences = 0;
-    let faults = 0;
-
+    let validGames = 0; let presences = 0; let faults = 0;
     playedDates.forEach(date => {
       const status = player.attendance?.[date]?.trim() || '';
       if (!validStatus(status)) return;
@@ -87,328 +27,267 @@ function deriveReport(players, dates, year) {
       if (status.includes('✅')) presences += 1;
       if (isFault(status)) faults += 1;
     });
-
     const statEntries = Object.entries(player.dailyStats || {})
-      .filter(([date]) => date.startsWith(year))
-      .sort(([a], [b]) => a.localeCompare(b));
-
-    const totals = statEntries.reduce((acc, [, stats]) => ({
-      pts: acc.pts + calcPts(stats),
-      reb: acc.reb + num(stats?.reb),
-      ast: acc.ast + num(stats?.ast),
-      blk: acc.blk + num(stats?.blk)
+      .filter(([date]) => date.startsWith(year)).sort(([a], [b]) => a.localeCompare(b));
+    const totals = statEntries.reduce((sum, [, stats]) => ({
+      pts: sum.pts + points(stats), reb: sum.reb + num(stats?.reb),
+      ast: sum.ast + num(stats?.ast), blk: sum.blk + num(stats?.blk)
     }), { pts: 0, reb: 0, ast: 0, blk: 0 });
-
     const gamesWithStats = statEntries.length;
-    return {
-      ...player,
-      validGames,
-      presences,
-      faults,
-      percentage: validGames ? (presences / validGames) * 100 : 0,
-      statEntries,
-      gamesWithStats,
-      yearlyPoints: totals.pts,
-      yearlyReb: totals.reb,
-      yearlyAst: totals.ast,
-      yearlyBlk: totals.blk,
+    return { ...player, validGames, presences, faults, statEntries, gamesWithStats,
+      percentage: validGames ? presences / validGames * 100 : 0,
+      yearlyPoints: totals.pts, yearlyReb: totals.reb, yearlyAst: totals.ast, yearlyBlk: totals.blk,
       ppjYear: gamesWithStats ? totals.pts / gamesWithStats : 0,
       rpjYear: gamesWithStats ? totals.reb / gamesWithStats : 0,
       apjYear: gamesWithStats ? totals.ast / gamesWithStats : 0,
-      tpjYear: gamesWithStats ? totals.blk / gamesWithStats : 0
-    };
+      tpjYear: gamesWithStats ? totals.blk / gamesWithStats : 0 };
   });
-
   const validPlayerGames = reportData.reduce((sum, player) => sum + player.validGames, 0);
   const totalPresences = reportData.reduce((sum, player) => sum + player.presences, 0);
-  const averageAttendance = validPlayerGames ? (totalPresences / validPlayerGames) * 100 : 0;
-  const activePlayers = reportData.filter(player => player.validGames > 0).length;
-  const statDates = new Set();
-  reportData.forEach(player => player.statEntries.forEach(([date]) => statDates.add(date)));
+  const statDates = new Set(reportData.flatMap(player => player.statEntries.map(([date]) => date)));
   const statGameDates = [...statDates].filter(date => playedDates.includes(date));
-  const coveragePct = playedDates.length ? (statGameDates.length / playedDates.length) * 100 : 0;
-
-  return { playedDates, reportData, averageAttendance, activePlayers, statGameDates, coveragePct };
+  return { playedDates, reportData, activePlayers: reportData.filter(player => player.validGames > 0).length,
+    averageAttendance: validPlayerGames ? totalPresences / validPlayerGames * 100 : 0,
+    statGameDates, coveragePct: playedDates.length ? statGameDates.length / playedDates.length * 100 : 0 };
 }
 
-const PdfHeader = ({ title, subtitle, year }) => (
-  <div className="flex items-end justify-between border-b-4 border-indigo-900 pb-4 mb-6">
-    <div className="flex items-center gap-4">
-      <img src={LOGO_URL} alt="Logo CBA" className="w-14 h-14 rounded-full border border-slate-200" crossOrigin="anonymous" />
-      <div>
-        <p className="text-xs font-black uppercase tracking-[0.22em] text-indigo-700">Portal CBA</p>
-        <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tight">{title}</h2>
-        <p className="text-xs font-bold text-slate-500 mt-1">{subtitle} • Temporada {year}</p>
-      </div>
-    </div>
-    <div className="text-right">
-      <p className="text-[10px] uppercase font-black text-slate-400">Gerado em</p>
-      <p className="text-sm font-black text-slate-700">{new Date().toLocaleDateString('pt-BR')}</p>
-    </div>
-  </div>
-);
+function header(doc, title, subtitle, year) {
+  const width = doc.internal.pageSize.getWidth();
+  doc.setFillColor(...NAVY);
+  doc.rect(0, 0, width, 29, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(16);
+  doc.text(title, 13, 14);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+  doc.text(`${subtitle}  |  Temporada ${year}`, 13, 22);
+  doc.setTextColor(...NAVY);
+  return 37;
+}
 
-const Section = ({ number, children }) => (
-  <h3 className="text-sm font-black uppercase tracking-wider text-slate-900 bg-slate-100 border-l-4 border-indigo-600 px-3 py-2 mb-4">
-    {number ? `${number}. ` : ''}{children}
-  </h3>
-);
+function section(doc, title, y) {
+  if (y > doc.internal.pageSize.getHeight() - 28) {
+    doc.addPage();
+    y = 17;
+  }
+  doc.setFillColor(238, 242, 255);
+  doc.roundedRect(13, y - 5, doc.internal.pageSize.getWidth() - 26, 10, 2, 2, 'F');
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...INDIGO);
+  doc.text(title, 17, y + 1.5);
+  doc.setTextColor(...NAVY);
+  return y + 12;
+}
 
-const Metric = ({ label, value, detail, accent = 'text-slate-900' }) => (
-  <div className="border border-slate-200 rounded-xl p-3 bg-white text-center">
-    <p className="text-[9px] uppercase font-black tracking-wider text-slate-500">{label}</p>
-    <p className={`text-2xl font-black mt-1 ${accent}`}>{value}</p>
-    {detail && <p className="text-[9px] text-slate-400 mt-1">{detail}</p>}
-  </div>
-);
-
-async function savePdf(element, filename, orientation, footerLabel) {
-  await loadHtml2Pdf();
-  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-
-  const options = {
-    margin: orientation === 'landscape' ? [0.28, 0.25, 0.38, 0.25] : [0.32, 0.36, 0.42, 0.36],
-    filename,
-    image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2, useCORS: true, scrollX: 0, scrollY: 0, backgroundColor: '#ffffff' },
-    jsPDF: { unit: 'in', format: 'a4', orientation },
-    pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-  };
-
-  const worker = window.html2pdf().set(options).from(element).toPdf();
-  await worker.get('pdf').then(pdf => {
-    const totalPages = pdf.internal.getNumberOfPages();
-    for (let page = 1; page <= totalPages; page += 1) {
-      pdf.setPage(page);
-      pdf.setFontSize(8);
-      pdf.setTextColor(130);
-      const text = `${footerLabel} | Página ${page} de ${totalPages}`;
-      pdf.text(text, (pdf.internal.pageSize.getWidth() - pdf.getTextWidth(text)) / 2, pdf.internal.pageSize.getHeight() - 0.18);
-    }
+function summary(doc, items, y) {
+  const width = doc.internal.pageSize.getWidth();
+  const gap = 3;
+  const card = (width - 26 - (items.length - 1) * gap) / items.length;
+  items.forEach(([label, value], index) => {
+    const x = 13 + index * (card + gap);
+    doc.setFillColor(248, 250, 252); doc.setDrawColor(226, 232, 240);
+    doc.roundedRect(x, y, card, 21, 2, 2, 'FD');
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(100, 116, 139);
+    doc.text(label, x + 3, y + 7);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(...NAVY);
+    doc.text(String(value), x + 3, y + 16);
   });
-  await worker.save();
+  return y + 27;
 }
 
-function AnnualGeneral({ year, derived, medical }) {
+function table(doc, columns, rows, y, options = {}) {
+  autoTable(doc, {
+    startY: y, margin: { left: 13, right: 13, top: 17, bottom: 17 },
+    head: [columns], body: rows.length ? rows : [columns.map((_, index) => index ? '' : 'Sem registros.')],
+    theme: 'striped', showHead: 'everyPage',
+    headStyles: { fillColor: NAVY, textColor: [255, 255, 255], fontSize: options.fontSize || 8, cellPadding: 2 },
+    bodyStyles: { textColor: NAVY, fontSize: options.fontSize || 8, cellPadding: 2, overflow: 'linebreak' },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
+    styles: { valign: 'middle' },
+    ...options
+  });
+  return doc.lastAutoTable.finalY + 8;
+}
+
+function footer(doc, label) {
+  const total = doc.getNumberOfPages();
+  for (let page = 1; page <= total; page += 1) {
+    doc.setPage(page);
+    const width = doc.internal.pageSize.getWidth();
+    const height = doc.internal.pageSize.getHeight();
+    doc.setDrawColor(226, 232, 240); doc.line(13, height - 13, width - 13, height - 13);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(100, 116, 139);
+    doc.text(`${label}  •  ${new Date().toLocaleDateString('pt-BR')}`, 13, height - 8);
+    doc.text(`${page}/${total}`, width - 13, height - 8, { align: 'right' });
+  }
+}
+
+function medicalRows(medical) {
+  return (medical?.records || [])
+    .filter(record => !record?.dischargedAt && String(record?.status || '').toLowerCase() !== 'alta')
+    .sort((a, b) => String(a?.expectedReturn || '9999-12-31').localeCompare(String(b?.expectedReturn || '9999-12-31'))
+      || String(a?.playerName || '').localeCompare(String(b?.playerName || '')))
+    .map(record => [record.playerName || 'Atleta', record.status || 'Em acompanhamento', fmtDate(record.expectedReturn)]);
+}
+
+export function buildAnnualGeneral(year, derived, medical) {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
   const { reportData, playedDates, activePlayers, averageAttendance, statGameDates, coveragePct } = derived;
-  const attendance = [...reportData].filter(player => player.validGames > 0).sort((a, b) => b.percentage - a.percentage || b.presences - a.presences);
-  const performancePages = paginate(attendance, 18);
-
-  return (
-    <div id="pdf-v2-annual" style={{ width: 760, backgroundColor: '#fff', color: '#1e293b' }} className="font-sans">
-      <div style={{ minHeight: 1040, pageBreakAfter: 'always' }} className="border-[10px] border-indigo-950 p-14 flex flex-col items-center justify-center text-center bg-slate-50">
-        <img src={LOGO_URL} alt="Logo CBA" className="w-36 h-36 rounded-full border-4 border-white shadow mb-8" crossOrigin="anonymous" />
-        <p className="text-sm font-black uppercase tracking-[0.35em] text-indigo-700">Basquete dos Aposentados</p>
-        <h1 className="text-5xl font-black text-slate-950 uppercase tracking-tight mt-4">Relatório Executivo Anual</h1>
-        <p className="text-3xl font-black text-indigo-700 mt-6">Temporada {year}</p>
-        <div className="w-24 h-1.5 bg-indigo-600 my-8" />
-        <p className="text-base text-slate-500 max-w-lg">Assiduidade, produção em quadra e qualidade da base estatística em um único documento oficial do CBA.</p>
-        <div className="mt-12 grid grid-cols-3 gap-3 w-full max-w-lg">
-          <Metric label="Jogos" value={playedDates.length} />
-          <Metric label="Participantes" value={activePlayers} />
-          <Metric label="Cobertura súmulas" value={`${coveragePct.toFixed(0)}%`} />
-        </div>
-        <p className="mt-auto text-[10px] uppercase font-bold tracking-widest text-slate-400">Documento oficial • Portal CBA • {new Date().toLocaleDateString('pt-BR')}</p>
-      </div>
-
-      <div className="p-7">
-        <PdfHeader title="Relatório Executivo Anual" subtitle="Visão consolidada do elenco" year={year} />
-        <Section number="1">Resumo Executivo</Section>
-        <div className="grid grid-cols-4 gap-3 mb-6">
-          <Metric label="Jogos computados" value={playedDates.length} />
-          <Metric label="Atletas participantes" value={activePlayers} detail={`${reportData.length} cadastrados`} />
-          <Metric label="Assiduidade média" value={`${averageAttendance.toFixed(0)}%`} accent="text-indigo-700" />
-          <Metric label="Cobertura de súmulas" value={`${coveragePct.toFixed(0)}%`} detail={`${statGameDates.length}/${playedDates.length || 0} jogos`} accent="text-violet-700" />
-        </div>
-        <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-4 mb-7">
-          <p className="text-[10px] font-black uppercase text-indigo-800">Qualidade dos dados</p>
-          <p className="text-[10px] text-indigo-700 mt-1">As médias técnicas usam somente jogos com súmula. O número de súmulas acompanha cada média para evidenciar o tamanho da amostra.</p>
-        </div>
-
-        <Section number="2">Destaques de Assiduidade</Section>
-        <div className="space-y-2 mb-7">
-          {attendance.slice(0, 10).map((player, index) => (
-            <div key={player.name} className="flex items-center gap-3 text-[10px]">
-              <span className="w-7 text-right font-black text-slate-400">{index + 1}º</span>
-              <span className="w-40 truncate font-black text-slate-800">{player.name}</span>
-              <div className="flex-1 h-3 rounded-full bg-slate-100 overflow-hidden"><div className="h-full bg-indigo-600" style={{ width: `${player.percentage}%` }} /></div>
-              <span className="w-12 text-right font-black text-indigo-700">{player.percentage.toFixed(0)}%</span>
-              <span className="w-16 text-right text-slate-500">{player.presences}/{player.validGames}</span>
-            </div>
-          ))}
-        </div>
-
-        <Section number="3">Departamento Médico</Section>
-        <MedicalSummary medical={medical} />
-      </div>
-
-      {performancePages.map((pagePlayers, pageIndex) => (
-        <div key={pageIndex} style={{ pageBreakBefore: 'always' }} className="p-7">
-          <PdfHeader title="Desempenho Geral do Elenco" subtitle={`Dados ${pageIndex + 1}/${performancePages.length}`} year={year} />
-          <table className="w-full text-[9px] border-collapse">
-            <thead className="bg-slate-900 text-white"><tr><th className="text-left p-2">Atleta</th><th className="p-2">Pres.</th><th className="p-2">Assid.</th><th className="p-2">Súm.</th><th className="p-2">PTS/J</th><th className="p-2">REB/J</th><th className="p-2">AST/J</th><th className="p-2">TOC/J</th></tr></thead>
-            <tbody>
-              {pagePlayers.length ? pagePlayers.map((player, index) => (
-                <tr key={player.name} className={index % 2 ? 'bg-slate-50' : 'bg-white'}>
-                  <td className="p-2 border-b border-slate-100 font-black truncate max-w-[150px]">{player.name}</td>
-                  <td className="p-2 border-b border-slate-100 text-center">{player.presences}/{player.validGames}</td>
-                  <td className="p-2 border-b border-slate-100 text-center font-black text-indigo-700">{player.percentage.toFixed(0)}%</td>
-                  <td className="p-2 border-b border-slate-100 text-center">{player.gamesWithStats}</td>
-                  <td className="p-2 border-b border-slate-100 text-center font-black text-orange-700">{player.ppjYear.toFixed(1)}</td>
-                  <td className="p-2 border-b border-slate-100 text-center font-black text-emerald-700">{player.rpjYear.toFixed(1)}</td>
-                  <td className="p-2 border-b border-slate-100 text-center font-black text-cyan-700">{player.apjYear.toFixed(1)}</td>
-                  <td className="p-2 border-b border-slate-100 text-center font-black text-purple-700">{player.tpjYear.toFixed(1)}</td>
-                </tr>
-              )) : <tr><td colSpan="8" className="p-4 text-center text-slate-400">Nenhum atleta com participação válida em {year}.</td></tr>}
-            </tbody>
-          </table>
-          {pageIndex === performancePages.length - 1 && <div className="mt-7 rounded-xl bg-slate-100 p-4 text-[9px] text-slate-600"><p className="font-black uppercase text-slate-800 mb-1">Metodologia</p><p>Assiduidade = presenças ÷ jogos válidos. Registros vazios e N/A não entram no denominador. PTS/J, REB/J, AST/J e TOC/J usam exclusivamente jogos com súmula na temporada.</p></div>}
-        </div>
-      ))}
-    </div>
-  );
+  const attendance = [...reportData].filter(player => player.validGames > 0)
+    .sort((a, b) => b.percentage - a.percentage || b.presences - a.presences);
+  doc.setFillColor(...NAVY); doc.rect(0, 0, 210, 297, 'F');
+  doc.setTextColor(165, 180, 252); doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
+  doc.text('BASQUETE DOS APOSENTADOS  /  PORTAL CBA', 18, 75);
+  doc.setTextColor(255, 255, 255); doc.setFontSize(31); doc.text('RELATÓRIO', 18, 96); doc.text('EXECUTIVO ANUAL', 18, 109);
+  doc.setTextColor(165, 180, 252); doc.setFontSize(19); doc.text(`Temporada ${year}`, 18, 128);
+  doc.setDrawColor(99, 102, 241); doc.setLineWidth(1.5); doc.line(18, 139, 68, 139);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(12); doc.setTextColor(203, 213, 225);
+  doc.text('Assiduidade, desempenho e cobertura das súmulas', 18, 151);
+  doc.text(`${playedDates.length} jogos  •  ${activePlayers} participantes  •  ${coveragePct.toFixed(0)}% de cobertura`, 18, 172);
+  doc.addPage();
+  let y = header(doc, 'RELATÓRIO EXECUTIVO ANUAL', 'Visão consolidada do elenco', year);
+  y = section(doc, '1. RESUMO EXECUTIVO', y);
+  y = summary(doc, [['Jogos', playedDates.length], ['Participantes', activePlayers], ['Assiduidade', `${averageAttendance.toFixed(0)}%`], ['Súmulas', `${statGameDates.length}/${playedDates.length}`]], y);
+  y = section(doc, '2. DESTAQUES DE ASSIDUIDADE', y);
+  y = table(doc, ['#', 'Atleta', 'Presenças', 'Assiduidade'], attendance.slice(0, 10)
+    .map((player, index) => [index + 1, player.name, `${player.presences}/${player.validGames}`, `${player.percentage.toFixed(0)}%`]), y);
+  y = section(doc, '3. DEPARTAMENTO MÉDICO', y);
+  if (medical?.error) {
+    doc.setFontSize(9); doc.setTextColor(185, 28, 28);
+    doc.text('Dados médicos indisponíveis nesta geração.', 17, y); y += 9;
+  } else {
+    const rows = medicalRows(medical);
+    y = table(doc, ['Atleta', 'Situação', 'Retorno previsto'], rows, y);
+    doc.setFontSize(8); doc.setTextColor(100, 116, 139);
+    if (y > 274) { doc.addPage(); y = 17; }
+    doc.text(rows.length ? 'Situação operacional na data de geração.' : 'Nenhum atleta em acompanhamento no momento.', 17, y);
+  }
+  doc.addPage();
+  y = header(doc, 'DESEMPENHO GERAL DO ELENCO', 'Dados da temporada', year);
+  y = table(doc, ['Atleta', 'Pres.', 'Assid.', 'Súm.', 'PTS/J', 'REB/J', 'AST/J', 'TOC/J'], attendance.map(player => [
+    player.name, `${player.presences}/${player.validGames}`, `${player.percentage.toFixed(0)}%`, player.gamesWithStats,
+    player.ppjYear.toFixed(1), player.rpjYear.toFixed(1), player.apjYear.toFixed(1), player.tpjYear.toFixed(1)
+  ]), y, { fontSize: 7, columnStyles: { 0: { cellWidth: 48 } } });
+  if (y > 268) { doc.addPage(); y = 17; }
+  doc.setFontSize(8); doc.setTextColor(100, 116, 139);
+  doc.text('Assiduidade: presenças / jogos válidos. Médias técnicas: somente jogos com súmula.', 13, y);
+  footer(doc, 'Portal CBA  |  Relatório anual');
+  return doc;
 }
 
-function AnnualPlayer({ year, player }) {
-  const seasonHighs = getHighs(player.statEntries);
-  const careerHighs = getHighs(Object.entries(player.dailyStats || {}).sort(([a], [b]) => a.localeCompare(b)));
-  const recent = player.statEntries.slice(-5).reverse();
-  return (
-    <div id="pdf-v2-annual" style={{ width: 760, backgroundColor: '#fff', color: '#1e293b' }} className="font-sans p-7">
-      <PdfHeader title="Relatório Individual do Atleta" subtitle={player.name} year={year} />
-      <div className="rounded-2xl bg-gradient-to-r from-indigo-950 to-slate-900 text-white p-6 mb-6">
-        <p className="text-[10px] uppercase tracking-[0.22em] font-black text-indigo-200">Perfil da temporada</p>
-        <div className="flex items-center justify-between mt-3"><div><h1 className="text-3xl font-black uppercase">{player.name}</h1><p className="text-sm text-slate-300 mt-1">{player.posicao || 'Jogador'} • #{player.numero || '--'} • {player.altura || '--'} m</p></div><div className="text-right"><p className="text-4xl font-black">{player.percentage.toFixed(0)}%</p><p className="text-[10px] uppercase font-black text-indigo-200">Assiduidade</p></div></div>
-      </div>
-
-      <Section number="1">Resumo da Temporada</Section>
-      <div className="grid grid-cols-4 gap-3 mb-6">
-        <Metric label="Presenças" value={`${player.presences}/${player.validGames}`} />
-        <Metric label="Súmulas" value={player.gamesWithStats} detail="base das médias" />
-        <Metric label="Faltas NJ" value={player.faults} accent={player.faults ? 'text-rose-700' : 'text-emerald-700'} />
-        <Metric label="Membro desde" value={player.dataEntrada ? new Date(player.dataEntrada).getFullYear() : '--'} />
-      </div>
-
-      <Section number="2">Médias Técnicas</Section>
-      <div className="grid grid-cols-4 gap-3 mb-2"><Metric label="PTS / Jogo" value={player.ppjYear.toFixed(1)} accent="text-orange-700" /><Metric label="REB / Jogo" value={player.rpjYear.toFixed(1)} accent="text-emerald-700" /><Metric label="AST / Jogo" value={player.apjYear.toFixed(1)} accent="text-cyan-700" /><Metric label="TOC / Jogo" value={player.tpjYear.toFixed(1)} accent="text-purple-700" /></div>
-      <p className="text-[9px] text-slate-500 mb-6">As médias usam {player.gamesWithStats} súmula(s) registradas em {year}.</p>
-
-      <Section number="3">Recordes: Temporada x Carreira</Section>
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        {[['Temporada', seasonHighs], ['Carreira', careerHighs]].map(([label, highs]) => <div key={label} className="border border-slate-200 rounded-xl p-4"><p className="text-[10px] uppercase font-black text-slate-500 mb-3">{label}</p><div className="grid grid-cols-4 gap-2 text-center">{[['pts','PTS','text-orange-700'],['reb','REB','text-emerald-700'],['ast','AST','text-cyan-700'],['blk','TOC','text-purple-700']].map(([key, metric, color]) => <div key={key}><p className="text-[8px] font-black text-slate-400">{metric}</p><p className={`text-xl font-black ${color}`}>{highs[key].val}</p><p className="text-[8px] text-slate-400">{fmtDate(highs[key].date)}</p></div>)}</div></div>)}
-      </div>
-
-      <Section number="4">Últimas 5 Súmulas da Temporada</Section>
-      <div className="grid grid-cols-5 gap-2 mb-7">{recent.length ? recent.map(([date, stats]) => <div key={date} className="border border-slate-200 rounded-xl p-3"><p className="text-[9px] font-black text-slate-500">{fmtDate(date)}</p><p className="text-xl font-black text-orange-700 mt-1">{calcPts(stats)} PTS</p><p className="text-[8px] text-slate-500 mt-1">{num(stats?.reb)} REB • {num(stats?.ast)} AST • {num(stats?.blk)} TOC</p></div>) : <p className="col-span-5 text-sm text-slate-400">Sem súmulas registradas nesta temporada.</p>}</div>
-
-      <Section number="5">Detalhamento das Súmulas</Section>
-      <table className="w-full text-[9px] border-collapse"><thead className="bg-slate-900 text-white"><tr><th className="p-2 text-left">Data</th><th className="p-2">PTS</th><th className="p-2">REB</th><th className="p-2">AST</th><th className="p-2">TOC</th></tr></thead><tbody>{player.statEntries.length ? player.statEntries.map(([date, stats], index) => <tr key={date} className={index % 2 ? 'bg-slate-50' : 'bg-white'}><td className="p-2 border-b border-slate-100 font-bold">{fmtDate(date)}</td><td className="p-2 border-b border-slate-100 text-center font-black text-orange-700">{calcPts(stats)}</td><td className="p-2 border-b border-slate-100 text-center">{num(stats?.reb)}</td><td className="p-2 border-b border-slate-100 text-center">{num(stats?.ast)}</td><td className="p-2 border-b border-slate-100 text-center">{num(stats?.blk)}</td></tr>) : <tr><td colSpan="5" className="p-4 text-center text-slate-400">Sem súmulas em {year}.</td></tr>}</tbody></table>
-      <div className="mt-6 rounded-xl bg-slate-100 p-4 text-[9px] text-slate-600"><p className="font-black text-slate-800 uppercase mb-1">Nota de leitura</p><p>Assiduidade considera apenas jogos válidos. As médias técnicas consideram exclusivamente as súmulas existentes na temporada selecionada.</p></div>
-    </div>
-  );
-}
-
-function Monthly({ year, derived }) {
-  const { reportData, playedDates, activePlayers, averageAttendance } = derived;
-  const sorted = [...reportData].filter(player => player.validGames > 0).sort((a, b) => b.percentage - a.percentage || b.presences - a.presences);
-  const pages = paginate(sorted, 16);
-  const monthly = MONTHS.map((month, monthIndex) => {
-    const monthDates = playedDates.filter(date => Number(date.substring(5, 7)) - 1 === monthIndex);
-    let valid = 0;
-    let present = 0;
-    reportData.forEach(player => monthDates.forEach(date => {
-      const status = player.attendance?.[date]?.trim() || '';
-      if (!validStatus(status)) return;
-      valid += 1;
-      if (status.includes('✅')) present += 1;
-    }));
-    return { month, games: monthDates.length, percentage: valid ? (present / valid) * 100 : null };
+function highs(entries) {
+  const best = { pts: 0, reb: 0, ast: 0, blk: 0 };
+  entries.forEach(([, stats]) => {
+    best.pts = Math.max(best.pts, points(stats));
+    best.reb = Math.max(best.reb, num(stats?.reb));
+    best.ast = Math.max(best.ast, num(stats?.ast));
+    best.blk = Math.max(best.blk, num(stats?.blk));
   });
+  return best;
+}
 
-  return (
-    <div id="pdf-v2-monthly" style={{ width: 1120, backgroundColor: '#fff', color: '#1e293b' }} className="font-sans">
-      {pages.map((pagePlayers, pageIndex) => (
-        <div key={pageIndex} style={{ pageBreakAfter: pageIndex < pages.length - 1 ? 'always' : 'auto' }} className="p-7">
-          <PdfHeader title="Resumo Mensal de Assiduidade" subtitle={`Elenco CBA • Tabela ${pageIndex + 1}/${pages.length}`} year={year} />
-          {pageIndex === 0 && <><div className="grid grid-cols-4 gap-3 mb-5"><Metric label="Jogos no ano" value={playedDates.length} /><Metric label="Atletas participantes" value={activePlayers} /><Metric label="Assiduidade média" value={`${averageAttendance.toFixed(0)}%`} accent="text-indigo-700" /><Metric label="Critério" value="Jogos válidos" detail="N/A não entra no cálculo" /></div><div className="rounded-xl border border-slate-200 bg-slate-50 p-3 mb-5 flex gap-5 text-[9px] text-slate-600"><span><strong>—</strong> = não houve jogo</span><span><strong>N/A</strong> = sem registro válido</span><span><strong>3/4 · 75%</strong> = 3 presenças em 4 jogos válidos</span></div></>}
-          <table className="w-full border-collapse text-[8px]" style={{ tableLayout: 'fixed' }}>
-            <thead className="bg-slate-900 text-white"><tr><th className="p-2 text-left w-32">Atleta</th>{MONTHS.map((month, index) => <th key={month} className="p-1 text-center"><div>{month}</div><div className="text-[7px] text-slate-300 font-normal">{monthly[index].games}J</div></th>)}<th className="p-1 text-center w-12">Pres.</th><th className="p-1 text-center w-12">Faltas NJ</th><th className="p-1 text-center w-12">Assid.</th></tr></thead>
-            <tbody>
-              {pagePlayers.length ? pagePlayers.map((player, rowIndex) => <tr key={player.name} className={rowIndex % 2 ? 'bg-slate-50' : 'bg-white'}><td className="p-2 border-b border-r border-slate-200 font-black truncate">{player.name}</td>{MONTHS.map((_, monthIndex) => {
-                const monthDates = playedDates.filter(date => Number(date.substring(5, 7)) - 1 === monthIndex);
-                if (!monthDates.length) return <td key={monthIndex} className="p-1 border-b border-r border-slate-200 text-center text-slate-300">—</td>;
-                let valid = 0; let present = 0;
-                monthDates.forEach(date => { const status = player.attendance?.[date]?.trim() || ''; if (validStatus(status)) { valid += 1; if (status.includes('✅')) present += 1; } });
-                if (!valid) return <td key={monthIndex} className="p-1 border-b border-r border-slate-200 text-center text-slate-400">N/A</td>;
-                const pct = (present / valid) * 100;
-                const tone = pct >= 80 ? 'text-emerald-700 bg-emerald-50' : pct >= 60 ? 'text-amber-700 bg-amber-50' : 'text-rose-700 bg-rose-50';
-                return <td key={monthIndex} className={`p-1 border-b border-r border-slate-200 text-center font-black ${tone}`}><div>{present}/{valid}</div><div className="text-[7px]">{pct.toFixed(0)}%</div></td>;
-              })}<td className="p-1 border-b border-r border-slate-200 text-center font-black text-emerald-700">{player.presences}</td><td className="p-1 border-b border-r border-slate-200 text-center font-black text-rose-700">{player.faults || '—'}</td><td className={`p-1 border-b border-slate-200 text-center font-black ${player.percentage >= 80 ? 'text-emerald-700' : player.percentage >= 60 ? 'text-amber-700' : 'text-rose-700'}`}>{player.percentage.toFixed(0)}%</td></tr>) : <tr><td colSpan="16" className="p-5 text-center text-slate-400">Nenhum atleta com participação válida em {year}.</td></tr>}
-              {pageIndex === pages.length - 1 && <tr className="bg-indigo-50 text-indigo-900 font-black"><td className="p-2 border-t-2 border-indigo-200">Média do elenco</td>{monthly.map(summary => <td key={summary.month} className="p-1 border-t-2 border-indigo-200 text-center">{summary.percentage === null ? '—' : `${summary.percentage.toFixed(0)}%`}</td>)}<td className="p-1 border-t-2 border-indigo-200 text-center" colSpan="3">{averageAttendance.toFixed(0)}% no ano</td></tr>}
-            </tbody>
-          </table>
-        </div>
-      ))}
-    </div>
-  );
+export function buildAnnualPlayer(year, player) {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
+  let y = header(doc, 'RELATÓRIO INDIVIDUAL', player.name, year);
+  y = section(doc, '1. PERFIL DA TEMPORADA', y);
+  y = summary(doc, [['Presenças', `${player.presences}/${player.validGames}`], ['Assiduidade', `${player.percentage.toFixed(0)}%`], ['Súmulas', player.gamesWithStats], ['Faltas NJ', player.faults]], y);
+  y = section(doc, '2. MÉDIAS TÉCNICAS', y);
+  y = summary(doc, [['PTS/J', player.ppjYear.toFixed(1)], ['REB/J', player.rpjYear.toFixed(1)], ['AST/J', player.apjYear.toFixed(1)], ['TOC/J', player.tpjYear.toFixed(1)]], y);
+  y = section(doc, '3. RECORDES', y);
+  const season = highs(player.statEntries);
+  const career = highs(Object.entries(player.dailyStats || {}));
+  y = table(doc, ['Período', 'PTS', 'REB', 'AST', 'TOC'], [
+    ['Temporada', season.pts, season.reb, season.ast, season.blk],
+    ['Carreira', career.pts, career.reb, career.ast, career.blk]
+  ], y);
+  y = section(doc, '4. ÚLTIMAS 5 SÚMULAS', y);
+  y = table(doc, ['Data', 'PTS', 'REB', 'AST', 'TOC'], player.statEntries.slice(-5).reverse().map(([date, stats]) =>
+    [fmtDate(date), points(stats), num(stats?.reb), num(stats?.ast), num(stats?.blk)]), y);
+  y = section(doc, '5. DETALHAMENTO DAS SÚMULAS', y);
+  table(doc, ['Data', 'PTS', 'REB', 'AST', 'TOC'], player.statEntries.map(([date, stats]) =>
+    [fmtDate(date), points(stats), num(stats?.reb), num(stats?.ast), num(stats?.blk)]), y);
+  footer(doc, 'Portal CBA  |  Relatório individual');
+  return doc;
+}
+
+export function buildMonthly(year, derived) {
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4', compress: true });
+  const { reportData, playedDates, activePlayers, averageAttendance } = derived;
+  let y = header(doc, 'RESUMO MENSAL DE ASSIDUIDADE', 'Elenco CBA', year);
+  y = summary(doc, [['Jogos no ano', playedDates.length], ['Participantes', activePlayers], ['Assiduidade média', `${averageAttendance.toFixed(0)}%`]], y);
+  y = section(doc, 'PRESENÇAS POR MÊS', y);
+  const sorted = [...reportData].filter(player => player.validGames > 0)
+    .sort((a, b) => b.percentage - a.percentage || b.presences - a.presences);
+  const monthDates = MONTHS.map((_, index) => playedDates.filter(date => Number(date.slice(5, 7)) - 1 === index));
+  const rows = sorted.map(player => [player.name, ...monthDates.map(dates => {
+    if (!dates.length) return '—';
+    const valid = dates.filter(date => validStatus(player.attendance?.[date]?.trim()));
+    if (!valid.length) return 'N/A';
+    const present = valid.filter(date => player.attendance?.[date]?.includes('✅')).length;
+    return `${present}/${valid.length}`;
+  }), player.presences, player.faults, `${player.percentage.toFixed(0)}%`]);
+  table(doc, ['Atleta', ...MONTHS, 'Pres.', 'NJ', '%'], rows, y, {
+    fontSize: 7, columnStyles: { 0: { cellWidth: 43 } },
+    styles: { halign: 'center', valign: 'middle' },
+    didParseCell: data => { if (data.column.index === 0) data.cell.styles.halign = 'left'; }
+  });
+  footer(doc, 'Portal CBA  |  Resumo mensal');
+  return doc;
 }
 
 export default function ReportsPdf({ data, year, selectedPlayer }) {
-  const [annualBusy, setAnnualBusy] = useState(false);
-  const [monthlyBusy, setMonthlyBusy] = useState(false);
-  const [medical, setMedical] = useState({ records: [] });
-
+  const [busy, setBusy] = useState('');
+  const [error, setError] = useState('');
+  const [ready, setReady] = useState(null);
   const appData = data?.data || data || {};
   const players = appData?.dashboard?.players || EMPTY_LIST;
   const dates = appData?.dashboard?.dates || EMPTY_LIST;
   const derived = useMemo(() => deriveReport(players, dates, year), [players, dates, year]);
   const selected = derived.reportData.find(player => player.name === selectedPlayer);
 
-  const generateAnnual = async () => {
-    if (!data) return;
-    setAnnualBusy(true);
-    try {
-      if (selectedPlayer === 'todos') {
-        try {
-          const response = await medicalPost('bootstrap');
-          setMedical({ records: Array.isArray(response?.records) ? response.records : [] });
-        } catch (error) {
-          console.error('Erro ao consultar o Departamento Médico:', error);
-          setMedical({ error: true, records: [] });
-        }
-      }
-      await new Promise(resolve => setTimeout(resolve, 100));
-      const element = document.getElementById('pdf-v2-annual');
-      if (!element) throw new Error('Template anual indisponível');
-      const suffix = selectedPlayer === 'todos' ? 'Geral' : safeFilename(selectedPlayer);
-      await savePdf(element, `Relatorio_CBA_${year}_${suffix}.pdf`, 'portrait', `Basquete dos Aposentados - ${selectedPlayer === 'todos' ? 'Relatório Anual' : 'Relatório Individual'}`);
-    } catch (error) {
-      console.error('Erro ao gerar relatório anual:', error);
-      window.alert('Não foi possível gerar o relatório anual. Tente novamente.');
-    } finally {
-      setAnnualBusy(false);
-    }
-  };
+  useEffect(() => () => {
+    if (ready?.url) URL.revokeObjectURL(ready.url);
+  }, [ready?.url]);
 
-  const generateMonthly = async () => {
-    if (!data) return;
-    setMonthlyBusy(true);
+  const generate = async type => {
+    if (!data || busy) return;
+    setError(''); setReady(null); setBusy(type);
     try {
-      await new Promise(resolve => setTimeout(resolve, 100));
-      const element = document.getElementById('pdf-v2-monthly');
-      if (!element) throw new Error('Template mensal indisponível');
-      await savePdf(element, `Resumo_Mensal_Assiduidade_${year}.pdf`, 'landscape', 'Basquete dos Aposentados - Resumo Mensal de Assiduidade');
-    } catch (error) {
-      console.error('Erro ao gerar resumo mensal:', error);
-      window.alert('Não foi possível gerar o resumo mensal. Tente novamente.');
+      let doc;
+      let filename;
+      if (type === 'monthly') {
+        doc = buildMonthly(year, derived);
+        filename = `Resumo_Mensal_Assiduidade_${year}.pdf`;
+      } else if (selectedPlayer !== 'todos') {
+        if (!selected) throw new Error('Atleta não encontrado.');
+        doc = buildAnnualPlayer(year, selected);
+        filename = `Relatorio_CBA_${year}_${filenamePart(selectedPlayer)}.pdf`;
+      } else {
+        let medical;
+        try {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 12000);
+          try { medical = await medicalPost('bootstrap', {}, { signal: controller.signal }); }
+          finally { clearTimeout(timer); }
+        } catch (cause) {
+          console.error('Erro ao consultar Departamento Médico:', cause);
+          medical = { error: true, records: [] };
+        }
+        doc = buildAnnualGeneral(year, derived, medical);
+        filename = `Relatorio_CBA_${year}_Geral.pdf`;
+      }
+      const url = URL.createObjectURL(doc.output('blob'));
+      setReady({ url, filename });
+    } catch (cause) {
+      console.error('Erro ao gerar PDF:', cause);
+      setError('Não foi possível preparar o PDF. Tente novamente.');
     } finally {
-      setMonthlyBusy(false);
+      setBusy('');
     }
   };
 
   return <>
-    <button onClick={generateMonthly} disabled={monthlyBusy} className="p-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md disabled:opacity-50" title="Resumo Mensal de Assiduidade">{monthlyBusy ? <RefreshCw className="animate-spin h-5 w-5" /> : <CalendarDays className="h-5 w-5" />}<span>{monthlyBusy ? 'Gerando...' : 'Resumo Mensal'}</span></button>
-    <button onClick={generateAnnual} disabled={annualBusy || (selectedPlayer !== 'todos' && !selected)} className="p-3 bg-rose-500 hover:bg-rose-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md disabled:opacity-50" title="Relatório Anual">{annualBusy ? <RefreshCw className="animate-spin h-5 w-5" /> : <BookOpen className="h-5 w-5" />}<span>{annualBusy ? 'Gerando...' : 'Relatório Anual'}</span></button>
-    {(annualBusy || monthlyBusy) && <div style={{ position: 'fixed', left: '-12000px', top: 0, zIndex: -100, opacity: 1, pointerEvents: 'none' }}>{annualBusy && (selectedPlayer === 'todos' ? <AnnualGeneral year={year} derived={derived} medical={medical} /> : selected ? <AnnualPlayer year={year} player={selected} /> : null)}{monthlyBusy && <Monthly year={year} derived={derived} />}</div>}
+    <button type="button" onClick={() => generate('monthly')} disabled={Boolean(busy)} className="p-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md disabled:opacity-50" title="Resumo Mensal de Assiduidade">{busy === 'monthly' ? <RefreshCw className="animate-spin h-5 w-5" /> : <CalendarDays className="h-5 w-5" />}<span>{busy === 'monthly' ? 'Gerando...' : 'Resumo Mensal'}</span></button>
+    <button type="button" onClick={() => generate('annual')} disabled={Boolean(busy) || (selectedPlayer !== 'todos' && !selected)} className="p-3 bg-rose-500 hover:bg-rose-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md disabled:opacity-50" title="Relatório Anual">{busy === 'annual' ? <RefreshCw className="animate-spin h-5 w-5" /> : <BookOpen className="h-5 w-5" />}<span>{busy === 'annual' ? 'Gerando...' : 'Relatório Anual'}</span></button>
+    {ready && <a href={ready.url} download={ready.filename} target="_blank" rel="noopener noreferrer" className="w-full rounded-xl bg-emerald-600 px-4 py-3 text-center text-sm font-black text-white shadow-md">PDF pronto: abrir ou baixar {ready.filename}</a>}
+    {error && <p role="alert" className="w-full text-sm font-bold text-rose-500">{error}</p>}
   </>;
 }
