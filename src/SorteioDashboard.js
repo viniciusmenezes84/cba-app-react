@@ -1,6 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { gatewayPost, readSession } from './cbaApi';
+import React, { useEffect, useMemo, useState } from 'react';
+import { gatewayPost } from './cbaApi';
 import {
   ArrowLeft, Check, ChevronRight, Clipboard, RotateCcw, Save, Search,
   Share2, Shuffle, Sparkles, Trophy, UserCheck, Users, X
@@ -122,7 +121,7 @@ function TeamCard({ title, players, green = false }) {
   </div>;
 }
 
-function SorteioExperience({ players, dates, isAdmin }) {
+export default function SorteioDashboard({ players, dates, isAdmin }) {
   const [step, setStep] = useState('selection');
   const [selected, setSelected] = useState([]);
   const [query, setQuery] = useState('');
@@ -354,63 +353,4 @@ function SorteioExperience({ players, dates, isAdmin }) {
       <div className="grid sm:grid-cols-2 gap-2.5"><button onClick={share} className="rounded-2xl border border-slate-700 bg-slate-800 py-3.5 font-black text-white flex items-center justify-center gap-2"><Share2 className="w-5 h-5"/> Compartilhar</button><button onClick={repeatDraw} className="rounded-2xl bg-white py-3.5 font-black text-black flex items-center justify-center gap-2"><RotateCcw className="w-5 h-5"/> Sortear novamente</button></div>
     </div>}
   </div>;
-}
-
-export default function SorteioDashboardBridge() {
-  const [mountNode, setMountNode] = useState(null);
-  const [active, setActive] = useState(false);
-  const [data, setData] = useState(null);
-  const [error, setError] = useState('');
-
-  const refresh = useCallback(async () => {
-    try {
-      setError('');
-      const payload = await postBackend('getInitialAppData');
-      setData(payload?.data || payload || {});
-    } catch (err) { setError(err?.message || 'Falha ao carregar o Sorteio.'); }
-  }, []);
-
-  useEffect(() => { if (active) refresh(); }, [active, refresh]);
-
-  useEffect(() => {
-    let node = null;
-    let hiddenRoot = null;
-    const sync = () => {
-      const button = document.querySelector('button[title="Sorteio"]');
-      const isActive = Boolean(button?.className?.includes('scale-110'));
-      setActive(isActive);
-
-      const heading = [...document.querySelectorAll('h2')].find(element => element.textContent?.trim() === 'Sorteador Automático');
-      const legacyRoot = heading?.closest('.space-y-8');
-      if (!legacyRoot?.parentElement) return;
-
-      if (hiddenRoot && hiddenRoot !== legacyRoot && hiddenRoot.isConnected) hiddenRoot.style.display = '';
-      hiddenRoot = legacyRoot;
-
-      if (!node || !node.isConnected) {
-        node = document.createElement('div');
-        node.dataset.sorteioDashboardV2 = 'true';
-        legacyRoot.insertAdjacentElement('afterend', node);
-        setMountNode(node);
-      }
-      legacyRoot.style.display = isActive ? 'none' : '';
-      node.style.display = isActive ? '' : 'none';
-    };
-
-    sync();
-    const observer = new MutationObserver(sync);
-    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
-    return () => {
-      observer.disconnect();
-      if (hiddenRoot?.isConnected) hiddenRoot.style.display = '';
-      if (node?.isConnected) node.remove();
-    };
-  }, []);
-
-  if (!active || !mountNode) return null;
-  if (error) return createPortal(<div className="rounded-2xl border border-rose-500/30 bg-rose-950/30 p-4 text-sm font-bold text-rose-300">{error}</div>, mountNode);
-  if (!data) return createPortal(<div className="rounded-3xl border border-slate-700 bg-slate-800 p-8 text-center text-sm font-bold text-slate-500">Carregando Sorteio...</div>, mountNode);
-
-  const { role } = readSession();
-  return createPortal(<SorteioExperience players={data?.dashboard?.players || []} dates={data?.dashboard?.dates || []} isAdmin={String(role).toUpperCase() === 'ADMIN'} />, mountNode);
 }

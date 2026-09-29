@@ -25,6 +25,7 @@ npm run build
 - `src/InitialDataContext.js`: dados iniciais compartilhados com os painéis de Presença, Relatórios e Mesário. Novos painéis devem reutilizá-los antes de iniciar outra consulta.
 - `src/cbaApi.js`: cliente único das funções Supabase. Lê a sessão local e envia o token de acesso às funções `cba-gateway`, `cba-admin`, `cba-portal` e `cba-medical` diretamente.
 - `src/athleteCardCanvas.js` e `src/AthleteCardModal.js`: card para post e Stories, com download e compartilhamento nativo quando disponível.
+- `src/SorteioDashboard.js`: painel de Sorteio renderizado diretamente pela aba e alimentado pelos dados iniciais já carregados, sem observador de DOM ou consulta duplicada.
 - `src/tailwind.source.css` e `scripts/build-tailwind.js`: classes CSS produzidas durante a compilação, sem depender do CDN no navegador.
 
 ## Backend e segurança
