@@ -2,7 +2,6 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './tailwind.generated.css';
 import './index.css';
-import './reports-pdf-v2.css';
 import './mesario-compact.css';
 import App from './App';
 import './ReportsStatsLayoutFix';
