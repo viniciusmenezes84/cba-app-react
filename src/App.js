@@ -12,6 +12,7 @@ import {
 const AdminDashboardBridge = lazy(() => import('./AdminDashboardBridge'));
 const PresenceDashboardBridge = lazy(() => import('./PresenceDashboardBridge'));
 const ReportsDashboard = lazy(() => import('./ReportsDashboard'));
+const HomeDashboard = lazy(() => import('./HomeDashboard'));
 const MesarioDashboard = lazy(() => import('./MesarioDashboard'));
 const SorteioDashboard = lazy(() => import('./SorteioDashboard'));
 const DmDashboard = lazy(() => import('./DmDashboard'));
@@ -19,7 +20,7 @@ const PortalExperienceBridge = lazy(() => import('./PortalExperienceBridge'));
 
 function ActiveBridges({ tab }) {
     return <Suspense fallback={null}>
-        {['inicio', 'financas', 'jogos', 'eventos', 'halldafama', 'estatuto', 'notificacoes'].includes(tab) && <PortalExperienceBridge />}
+        {['financas', 'jogos', 'eventos', 'halldafama', 'estatuto', 'notificacoes'].includes(tab) && <PortalExperienceBridge />}
     </Suspense>;
 }
 
@@ -1224,11 +1225,6 @@ const MainApp = ({ user, onLogout, logoutPending }) => {
     const TABS = useMemo(() => isAdmin ? ['inicio', 'presenca', 'relatorios', 'atleta', 'mesario', 'financas', 'jogos', 'eventos', 'sorteio', 'dm', 'halldafama', 'estatuto', 'notificacoes'] : ['inicio', 'presenca', 'relatorios', 'atleta', 'financas', 'jogos', 'eventos', 'sorteio', 'dm', 'halldafama', 'estatuto'], [isAdmin]);
 
     useEffect(() => {
-        window.navigateToTab = (tabName) => { if (TABS.includes(tabName)) setActiveTab(tabName); };
-        return () => delete window.navigateToTab;
-    }, [TABS]);
-    
-    useEffect(() => {
         if (!TABS.includes(activeTab)) {
             setActiveTab('inicio');
             return;
@@ -1312,7 +1308,7 @@ const MainApp = ({ user, onLogout, logoutPending }) => {
         return (
             <AnimatePresence mode="wait">
                 <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
-                    {activeTab === 'inicio' && <div data-cba-home-anchor="true" />}
+                    {activeTab === 'inicio' && <Suspense fallback={<Loader message="Carregando Início..." />}><HomeDashboard isAdmin={isAdmin} onNavigate={tab => { if (TABS.includes(tab)) setActiveTab(tab); }} refreshKey={refreshTrigger} /></Suspense>}
                     {activeTab === 'presenca' && <PresencaTab {...props} onAttendanceUpdate={handleForceRefresh} />}
                     {activeTab === 'relatorios' && <Suspense fallback={<Loader message="Carregando Relatórios..." />}><ReportsDashboard data={initialData} /></Suspense>}
                     {activeTab === 'atleta' && <AthleteDashboard {...props} dataError={dataError} />}
