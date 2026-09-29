@@ -1,13 +1,16 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import { gatewayPost, portalPost, readSession } from './cbaApi';
+import { buildRoundRecap } from './roundRecap';
 import {
   Activity, AlertTriangle, BarChart3, BellRing, BookOpen, CalendarDays,
   Check, CheckCircle2, Copy, CreditCard, DollarSign, Edit3,
   FileText, MapPin, PartyPopper, Plus, RefreshCw, Search,
-  Send, ShieldCheck, Star, Trash2, Trophy, UserCheck, Users, WalletCards, X
+  Send, Share2, ShieldCheck, Star, Trash2, Trophy, UserCheck, Users, WalletCards, X
 } from 'lucide-react';
+
+const RoundRecapModal = React.lazy(() => import('./RoundRecapModal'));
 
 const MONTHS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
@@ -235,11 +238,12 @@ function GameForm({ item, onClose, onSaved }) {
   return <form onSubmit={submit} className="space-y-4">{[['Data','date','date'],['Horário','time','time'],['Local','location','text']].map(([label,key,type])=><label key={key} className="block"><span className="text-[10px] uppercase font-black text-slate-500">{label}</span><input type={type} value={form[key]} onChange={e=>setForm({...form,[key]:e.target.value})} className="mt-1.5 w-full rounded-2xl border border-slate-700 bg-slate-950 p-3.5 text-white outline-none" required/></label>)}<GameLocationLink location={form.location}/><button disabled={busy} className="w-full rounded-2xl bg-emerald-500 text-slate-950 py-3.5 font-black">{busy?'Salvando...':item?'Atualizar jogo':'Criar jogo'}</button></form>;
 }
 
-export function GamesView({ data, refresh }) {
+export function GamesView({ data, refresh, players = [] }) {
   const isAdmin=String(data.user?.role).toUpperCase()==='ADMIN';
   const [view,setView]=useState('proximos');
   const [formGame,setFormGame]=useState(undefined);
   const [cancelGame,setCancelGame]=useState(null);
+  const [roundRecap,setRoundRecap]=useState(null);
   const [reason,setReason]=useState('');
   const [busy,setBusy]=useState(false);
   const games=data.games||[];
@@ -279,12 +283,14 @@ export function GamesView({ data, refresh }) {
     {view!=='proximos'&&!list.length&&<Empty icon={CalendarDays} title={view==='historico'?'Nenhum jogo realizado':'Nenhum jogo cancelado'} text="Quando houver registros nesta categoria, eles aparecerão aqui."/>}
     <Modal open={formGame!==undefined} title={formGame?'Editar jogo':'Novo jogo'} onClose={()=>setFormGame(undefined)}><GameForm item={formGame||null} onClose={()=>setFormGame(undefined)} onSaved={refresh}/></Modal>
     <Modal open={Boolean(cancelGame)} title="Cancelar jogo" onClose={()=>{setCancelGame(null);setReason('');}}><p className="mb-4 text-sm text-slate-400">O jogo será mantido no histórico, junto com as confirmações.</p><textarea value={reason} onChange={e=>setReason(e.target.value)} placeholder="Motivo do cancelamento..." className="min-h-28 w-full rounded-2xl border border-slate-700 bg-slate-950 p-3.5 text-white"/><button disabled={busy||!reason.trim()} onClick={cancel} className="mt-4 w-full rounded-2xl bg-amber-500 py-3.5 font-black text-slate-950 disabled:opacity-40">Confirmar cancelamento</button></Modal>
+    {roundRecap&&<Suspense fallback={null}><RoundRecapModal recap={roundRecap} onClose={()=>setRoundRecap(null)}/></Suspense>}
   </div>;
 
   function renderGame(g) {
     const confirmed=g.confirmed||[];
     const future=!g.cancelledAt&&g.date>=today;
-    return <Panel key={g.id} className="flex min-w-0 flex-col p-4 sm:p-5"><div className="flex items-start gap-3"><DateBadge value={g.date}/><div className="min-w-0 flex-1"><Pill tone={g.cancelledAt?'rose':future?'emerald':'slate'}>{g.cancelledAt?'Cancelado':future?'Agendado':'Realizado'}</Pill><h4 className="mt-2 text-lg font-black text-white">{fmtDate(g.date)} · {g.time||'--'}</h4><p className="mt-1 text-xs text-slate-400">{g.location||'Local a definir'}</p><GameLocationLink location={g.location}/></div></div><div className="mt-4 border-t border-slate-700/70 pt-3"><AttendeePreview names={confirmed}/></div>{g.cancelledAt&&<div className="mt-3 rounded-xl border border-rose-500/20 bg-rose-950/20 p-3 text-xs text-rose-300">{g.cancelReason||'Sem motivo informado'}</div>}<div className="mt-auto flex gap-2 pt-4">{future&&<button type="button" disabled={busy} onClick={()=>attend(g)} className={cx('min-h-10 flex-1 rounded-xl px-3 py-2.5 text-xs font-black disabled:opacity-50',confirmed.includes(ownName)?'bg-rose-950/30 text-rose-300':'bg-emerald-500 text-slate-950')}>{confirmed.includes(ownName)?'Desistir':'Confirmar'}</button>}{isAdmin&&!g.cancelledAt&&<><button type="button" aria-label={`Editar jogo de ${fmtDate(g.date)}`} onClick={()=>setFormGame(g)} className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-800 text-slate-300"><Edit3 className="h-4 w-4"/></button><button type="button" aria-label={`Cancelar jogo de ${fmtDate(g.date)}`} onClick={()=>setCancelGame(g)} className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-950/30 text-amber-300"><X className="h-4 w-4"/></button></>}{isAdmin&&g.cancelledAt&&<><button type="button" disabled={busy} onClick={()=>restore(g)} className="min-h-10 flex-1 rounded-xl bg-emerald-950/30 py-2.5 text-xs font-black text-emerald-300">Reativar</button><button type="button" aria-label={`Excluir jogo de ${fmtDate(g.date)}`} onClick={()=>del(g)} className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-950/30 text-rose-300"><Trash2 className="h-4 w-4"/></button></>}</div></Panel>;
+    const recap=!future&&!g.cancelledAt ? buildRoundRecap(players,g.date,data.roundMatches||[]) : null;
+    return <Panel key={g.id} className="flex min-w-0 flex-col p-4 sm:p-5"><div className="flex items-start gap-3"><DateBadge value={g.date}/><div className="min-w-0 flex-1"><Pill tone={g.cancelledAt?'rose':future?'emerald':'slate'}>{g.cancelledAt?'Cancelado':future?'Agendado':'Realizado'}</Pill><h4 className="mt-2 text-lg font-black text-white">{fmtDate(g.date)} · {g.time||'--'}</h4><p className="mt-1 text-xs text-slate-400">{g.location||'Local a definir'}</p><GameLocationLink location={g.location}/></div></div><div className="mt-4 border-t border-slate-700/70 pt-3"><AttendeePreview names={confirmed}/></div>{g.cancelledAt&&<div className="mt-3 rounded-xl border border-rose-500/20 bg-rose-950/20 p-3 text-xs text-rose-300">{g.cancelReason||'Sem motivo informado'}</div>}{recap&&<p className="mt-3 text-xs text-slate-400">{recap.players} atletas com súmula · {recap.totals.pts} pontos registrados no dia</p>}{!future&&!g.cancelledAt&&!recap&&<p className="mt-3 text-xs text-slate-500">Sem súmula registrada para esta data.</p>}<div className="mt-auto flex flex-wrap gap-2 pt-4">{recap&&<button type="button" onClick={()=>setRoundRecap(recap)} className="flex min-h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-orange-500 px-3 py-2.5 text-xs font-black text-slate-950"><Share2 className="h-4 w-4"/>Ver resumo da rodada</button>}{future&&<button type="button" disabled={busy} onClick={()=>attend(g)} className={cx('min-h-10 flex-1 rounded-xl px-3 py-2.5 text-xs font-black disabled:opacity-50',confirmed.includes(ownName)?'bg-rose-950/30 text-rose-300':'bg-emerald-500 text-slate-950')}>{confirmed.includes(ownName)?'Desistir':'Confirmar'}</button>}{isAdmin&&!g.cancelledAt&&<><button type="button" aria-label={`Editar jogo de ${fmtDate(g.date)}`} onClick={()=>setFormGame(g)} className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-800 text-slate-300"><Edit3 className="h-4 w-4"/></button><button type="button" aria-label={`Cancelar jogo de ${fmtDate(g.date)}`} onClick={()=>setCancelGame(g)} className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-950/30 text-amber-300"><X className="h-4 w-4"/></button></>}{isAdmin&&g.cancelledAt&&<><button type="button" disabled={busy} onClick={()=>restore(g)} className="min-h-10 flex-1 rounded-xl bg-emerald-950/30 py-2.5 text-xs font-black text-emerald-300">Reativar</button><button type="button" aria-label={`Excluir jogo de ${fmtDate(g.date)}`} onClick={()=>del(g)} className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-950/30 text-rose-300"><Trash2 className="h-4 w-4"/></button></>}</div></Panel>;
   }
 }
 

@@ -230,6 +230,7 @@ export default function MesarioDashboard({ data, onStatsSaved }) {
       winner,
       teamBlack: [...teamBlack],
       teamGreen: [...teamGreen],
+      playerStats: Object.fromEntries([...teamBlack, ...teamGreen].map(name => [name, { ...(matchStats[name] || emptyStats()) }])),
       endedAt: Date.now()
     }]);
     if (winner === 'black') setTeamGreen([]);
@@ -284,7 +285,15 @@ export default function MesarioDashboard({ data, onStatsSaved }) {
         ast: row.ast,
         blk: row.blk
       }));
-      const result = await post({ action: 'saveMatchStats', date, stats });
+      const result = await post({
+        action: 'saveMatchStats', date, stats,
+        sessionKey: String(sessionStartedAt || ''),
+        matches: gameHistory.map(game => ({
+          number: game.number, blackScore: game.blackScore, greenScore: game.greenScore,
+          winner: game.winner, teamBlack: game.teamBlack, teamGreen: game.teamGreen,
+          playerStats: game.playerStats || {}, endedAt: game.endedAt
+        }))
+      });
       if (result.result !== 'success') throw new Error(result.message || 'Não foi possível salvar a súmula.');
       resetSession();
       setModal(null);
