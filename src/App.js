@@ -989,7 +989,7 @@ const MainApp = ({ user, onLogout, logoutPending }) => {
                     {activeTab === 'atleta' && <AthleteDashboard {...props} dataError={dataError} />}
                     {activeTab === 'mesario' && <Suspense fallback={<Loader message="Carregando Mesário..." />}><MesarioDashboard data={initialData} onStatsSaved={handleForceRefresh} /></Suspense>}
                     {activeTab === 'financas' && <FinancasTab {...props} />}
-                    {activeTab === 'jogos' && <Suspense fallback={<Loader message="Carregando Jogos..." />}><ScheduleDashboard tab="jogos" refreshKey={refreshTrigger} /></Suspense>}
+                    {activeTab === 'jogos' && <Suspense fallback={<Loader message="Carregando Jogos..." />}><ScheduleDashboard tab="jogos" refreshKey={refreshTrigger} players={props.allPlayersData} /></Suspense>}
                     {activeTab === 'eventos' && <Suspense fallback={<Loader message="Carregando Eventos..." />}><ScheduleDashboard tab="eventos" refreshKey={refreshTrigger} /></Suspense>}
                     {activeTab === 'sorteio' && <Suspense fallback={<Loader message="Carregando Sorteio..." />}><SorteioDashboard players={props.allPlayersData} dates={props.dates} isAdmin={isAdmin} /></Suspense>}
                     {activeTab === 'dm' && <Suspense fallback={<Loader message="Carregando Departamento Médico..." />}><DmDashboard /></Suspense>}

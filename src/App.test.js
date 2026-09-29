@@ -144,6 +144,11 @@ test('Mesário recupera a sessão antiga, mantém o placar e atualiza os dados a
       expect(body.stats).toEqual(expect.arrayContaining([
         expect.objectContaining({ playerName: 'Atleta Um', pts2: 1, pts3: 0 })
       ]));
+      expect(body.sessionKey).toMatch(/^\d{10,16}$/);
+      expect(body.matches).toEqual([expect.objectContaining({
+        number: 1, blackScore: 2, greenScore: 0, winner: 'black',
+        playerStats: expect.objectContaining({ 'Atleta Um': expect.objectContaining({ pts2: 1 }) })
+      })]);
       return { ok: true, json: async () => ({ result: 'success' }) };
     }
     if (body.action === 'getInitialAppData') return { ok: true, json: async () => ({ data: {

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { portalPost } from './cbaApi';
 import { EventsView, GamesView } from './PortalExperienceBridge';
 
-export default function ScheduleDashboard({ tab, refreshKey = 0 }) {
+export default function ScheduleDashboard({ tab, refreshKey = 0, players = [] }) {
   const controllerRef = useRef(null);
   const [state, setState] = useState({ data: null, error: '', loading: true });
 
@@ -33,6 +33,6 @@ export default function ScheduleDashboard({ tab, refreshKey = 0 }) {
   const View = tab === 'jogos' ? GamesView : EventsView;
   return <div>
     {state.error && <div role="alert" className="mb-4 rounded-xl border border-amber-500/30 bg-amber-950/30 p-4 text-sm text-amber-200">Não foi possível atualizar os dados: {state.error} <button type="button" onClick={() => load({ quiet: true }).catch(() => {})} className="ml-2 font-black underline">Tentar novamente</button></div>}
-    <View data={state.data} refresh={() => load({ quiet: true })}/>
+    <View data={state.data} refresh={() => load({ quiet: true })} {...(tab === 'jogos' ? { players } : {})}/>
   </div>;
 }

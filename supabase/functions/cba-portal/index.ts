@@ -55,7 +55,7 @@ Deno.serve(async (req: Request) => {
       const [
         athletesQ, attendanceQ, statsQ, periodsQ, duesQ, entriesQ,
         gamesQ, gameConfirmationsQ, eventsQ, eventAttendeesQ,
-        statutesQ, notificationsQ, settingsQ, accountsQ, medicalQ
+        statutesQ, notificationsQ, settingsQ, accountsQ, medicalQ, matchesQ
       ] = await Promise.all([
         sb.from('athletes').select('id,name,photo_url,position,jersey_number,eligible_for_hof,active,birth_date').order('name'),
         sb.from('attendance_records').select('athlete_id,attendance_date,status').order('attendance_date'),
@@ -71,9 +71,10 @@ Deno.serve(async (req: Request) => {
         sb.from('notifications').select('id,title,message,target_tab,push_accepted,push_failed,created_at,sent_by').order('created_at',{ascending:false}).limit(200),
         sb.from('app_settings').select('key,value'),
         sb.from('accounts').select('id,email,role,status,athlete_id'),
-        sb.from('medical_records').select('athlete_id,status,discharged_at').is('discharged_at',null)
+        sb.from('medical_records').select('athlete_id,status,discharged_at').is('discharged_at',null),
+        sb.from('round_matches').select('match_date,session_key,match_number,black_score,green_score,winner,team_black,team_green,player_stats').order('match_date',{ascending:false}).order('match_number').limit(1000)
       ]);
-      const queries:any[] = [athletesQ,attendanceQ,statsQ,periodsQ,duesQ,entriesQ,gamesQ,gameConfirmationsQ,eventsQ,eventAttendeesQ,statutesQ,notificationsQ,settingsQ,accountsQ,medicalQ];
+      const queries:any[] = [athletesQ,attendanceQ,statsQ,periodsQ,duesQ,entriesQ,gamesQ,gameConfirmationsQ,eventsQ,eventAttendeesQ,statutesQ,notificationsQ,settingsQ,accountsQ,medicalQ,matchesQ];
       for (const q of queries) if (q.error) throw q.error;
 
       const athletes:any[] = athletesQ.data || [];
@@ -179,6 +180,11 @@ Deno.serve(async (req: Request) => {
           pixCode:String(settings.pix_code || '')
         },
         games, events, hall,
+        roundMatches:(matchesQ.data || []).map((match:any) => ({
+          date:match.match_date, sessionKey:match.session_key, number:match.match_number,
+          blackScore:match.black_score, greenScore:match.green_score, winner:match.winner,
+          teamBlack:match.team_black, teamGreen:match.team_green, playerStats:match.player_stats
+        })),
         statutes:statutesQ.data || [],
         notifications,
         notificationAudience:approvedAccounts.length,

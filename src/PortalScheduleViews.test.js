@@ -3,6 +3,7 @@ import { EventsView, GamesView } from './PortalExperienceBridge';
 import { gatewayPost } from './cbaApi';
 
 jest.mock('./cbaApi', () => ({ gatewayPost: jest.fn(), portalPost: jest.fn(), readSession: () => null }));
+jest.mock('./RoundRecapModal', () => ({ __esModule: true, default: ({ recap, onClose }) => <div role="dialog" aria-label="Resumo da rodada"><span>{recap.totals.pts} pontos na data</span><button onClick={onClose}>Fechar resumo</button></div> }));
 
 const today = new Intl.DateTimeFormat('en-CA', {
   timeZone: 'America/Bahia', year: 'numeric', month: '2-digit', day: '2-digit'
@@ -87,6 +88,29 @@ test('Administradores mantêm edição e cancelamento no jogo destacado', () => 
   fireEvent.keyDown(document, { key: 'Escape' });
   fireEvent.click(screen.getByRole('button', { name: 'Cancelar jogo' }));
   expect(screen.getByRole('heading', { name: 'Cancelar jogo' })).toBeInTheDocument();
+});
+
+test('Resumo da rodada só aparece no histórico com súmula registrada naquela data', async () => {
+  const withStats = dateOffset(-2);
+  const withoutStats = dateOffset(-1);
+  const players = [
+    { name: 'Ana', dailyStats: { [withStats]: { pts2: 3, pts3: 1, reb: 2, ast: 1 } } },
+    { name: 'Bia', dailyStats: { [withStats]: { pts2: 2, reb: 4 } } }
+  ];
+  render(<GamesView refresh={jest.fn()} players={players} data={{ user: { name: 'Ana' }, games: [
+    { id: 'with', date: withStats, time: '18:00', location: 'Ginásio', confirmed: [] },
+    { id: 'without', date: withoutStats, time: '18:00', location: 'Quadra', confirmed: [] },
+    { id: 'cancelled', date: withStats, time: '20:00', cancelledAt: '2026-01-01', confirmed: [] }
+  ] }}/ >);
+  fireEvent.click(screen.getByRole('button', { name: 'Histórico · 2' }));
+  expect(screen.getByText('Sem súmula registrada para esta data.')).toBeInTheDocument();
+  expect(screen.getAllByRole('button', { name: 'Ver resumo da rodada' })).toHaveLength(1);
+  fireEvent.click(screen.getByRole('button', { name: 'Ver resumo da rodada' }));
+  expect(await screen.findByRole('dialog', { name: 'Resumo da rodada' })).toHaveTextContent('13 pontos na data');
+  fireEvent.click(screen.getByRole('button', { name: 'Fechar resumo' }));
+  expect(screen.queryByRole('dialog', { name: 'Resumo da rodada' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Cancelados · 1' }));
+  expect(screen.queryByRole('button', { name: 'Ver resumo da rodada' })).not.toBeInTheDocument();
 });
 
 test('Eventos mostra erro da API em vez de deixar o clique sem resposta', async () => {

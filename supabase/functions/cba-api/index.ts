@@ -409,6 +409,7 @@ Deno.serve(async (req: Request) => {
         return json({ result: 'success', message: 'Presença atualizada.' });
       }
       case 'saveMatchStats': {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(text(params.date))) return fail('Data da súmula inválida.', 'VALIDATION_ERROR');
         if (!Array.isArray(params.stats) || params.stats.length < 1 || params.stats.length > 200) return fail('Informe de 1 a 200 registros de estatísticas.', 'VALIDATION_ERROR');
         const rows: any[] = [];
         const names = new Set<string>();
@@ -421,10 +422,48 @@ Deno.serve(async (req: Request) => {
           if (vals.some(v => !Number.isInteger(v) || v < 0 || v > 100000)) return fail(`Estatística inválida para ${name}.`, 'VALIDATION_ERROR');
           rows.push({ athlete_id: athlete.id, stat_date: params.date, pts2: vals[0], pts3: vals[1], reb: vals[2], ast: vals[3], blk: vals[4] });
         }
+        const matches = params.matches === undefined ? [] : params.matches;
+        if (!Array.isArray(matches) || matches.length > 50) return fail('Lista de partidas inválida.', 'VALIDATION_ERROR');
+        const sessionKey = text(params.sessionKey);
+        if (matches.length && !/^\d{10,16}$/.test(sessionKey)) return fail('Identificador da sessão inválido.', 'VALIDATION_ERROR');
+        const matchNumbers = new Set<number>();
+        const matchRows: any[] = [];
+        for (const match of matches) {
+          const number = Number(match?.number);
+          const blackScore = Number(match?.blackScore), greenScore = Number(match?.greenScore);
+          const teamBlack = match?.teamBlack, teamGreen = match?.teamGreen;
+          const winner = match?.winner;
+          if (!Number.isInteger(number) || number < 1 || number > 200 || matchNumbers.has(number)
+            || ![blackScore, greenScore].every(score => Number.isInteger(score) && score >= 0 && score <= 10000)
+            || blackScore === greenScore || winner !== (blackScore > greenScore ? 'black' : 'green')
+            || !Array.isArray(teamBlack) || !Array.isArray(teamGreen)
+            || !teamBlack.length || !teamGreen.length || teamBlack.length > 30 || teamGreen.length > 30
+            || ![...teamBlack, ...teamGreen].every(name => typeof name === 'string' && name.length > 0 && name.length <= 120)) {
+            return fail('Partida com placar ou equipes inválidas.', 'VALIDATION_ERROR');
+          }
+          matchNumbers.add(number);
+          const playerStats = match.playerStats && typeof match.playerStats === 'object' && !Array.isArray(match.playerStats) ? match.playerStats : {};
+          if (Object.keys(playerStats).length > 60 || Object.keys(playerStats).some(name => ![...teamBlack,...teamGreen].includes(name))) return fail('Estatísticas da partida inválidas.', 'VALIDATION_ERROR');
+          const matchPoints = (names: string[]) => names.reduce((sum, name) => {
+            const stat = playerStats[name] || {};
+            return sum + Number(stat.pts2 || 0) * 2 + Number(stat.pts3 || 0) * 3;
+          }, 0);
+          if (Object.keys(playerStats).length && (matchPoints(teamBlack) !== blackScore || matchPoints(teamGreen) !== greenScore)) return fail('O placar não confere com a súmula da partida.', 'VALIDATION_ERROR');
+          for (const stat of Object.values(playerStats) as any[]) {
+            if (!stat || ['pts2','pts3','reb','ast','blk'].some(key => !Number.isInteger(Number(stat[key] || 0)) || Number(stat[key] || 0) < 0 || Number(stat[key] || 0) > 10000)) return fail('Estatística individual inválida.', 'VALIDATION_ERROR');
+          }
+          matchRows.push({ match_date:params.date, session_key:sessionKey, match_number:number,
+            black_score:blackScore, green_score:greenScore, winner, team_black:teamBlack,
+            team_green:teamGreen, player_stats:playerStats, recorded_by:actor.id });
+        }
         const { error } = await sb.from('daily_stats').upsert(rows, { onConflict: 'athlete_id,stat_date' });
         if (error) throw error;
+        if (matchRows.length) {
+          const { error: matchError } = await sb.from('round_matches').upsert(matchRows, { onConflict: 'match_date,session_key,match_number' });
+          if (matchError) throw matchError;
+        }
         await audit('save_match_stats', 'daily_stats', String(params.date), { count: rows.length });
-        return json({ result: 'success', message: 'Totais diários salvos sem duplicação.' });
+        return json({ result: 'success', message: 'Súmula e partidas salvas sem duplicação.' });
       }
       case 'saveTeams': {
         const parseTeam = (value: any) => Array.from(new Set((Array.isArray(value) ? value : String(value || '').split(',')).map((v: any) => text(v)).filter(Boolean)));
