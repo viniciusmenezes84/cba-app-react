@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import App from './App';
 
 jest.mock('react-chartjs-2', () => ({ Bar: () => null, Doughnut: () => null, Line: () => null }));
@@ -125,7 +125,62 @@ test('Departamento Médico abre diretamente e preserva a restrição dos detalhe
   }
 });
 
-test('menu móvel abre o Sorteio diretamente, rola até o fim e volta sem nova consulta', async () => {
+test('Mesário recupera a sessão antiga, mantém o placar e atualiza os dados após salvar', async () => {
+  const token = 'sessao-mesario-de-teste';
+  window.localStorage.setItem('cba_session_v1', JSON.stringify({
+    user: { role: 'ADMIN', email: 'admin@cba.test', name: 'Admin', token }, savedAt: Date.now()
+  }));
+  window.localStorage.setItem('cba_last_tab_v1', 'mesario');
+  window.localStorage.setItem('cba_mesario_backup', JSON.stringify({
+    date: '2026-09-29', isLive: false, teamBlack: ['Atleta Um'], teamGreen: ['Atleta Dois'], dayStats: {}, matchStats: {}
+  }));
+  const previousFetch = global.fetch;
+  global.fetch = jest.fn(async (url, options) => {
+    const body = JSON.parse(options.body);
+    expect(url).toContain('/cba-gateway');
+    expect(body.token).toBe(token);
+    if (body.action === 'saveMatchStats') {
+      expect(body.date).toBe('2026-09-29');
+      expect(body.stats).toEqual(expect.arrayContaining([
+        expect.objectContaining({ playerName: 'Atleta Um', pts2: 1, pts3: 0 })
+      ]));
+      return { ok: true, json: async () => ({ result: 'success' }) };
+    }
+    if (body.action === 'getInitialAppData') return { ok: true, json: async () => ({ data: {
+      dashboard: { players: [{ name: 'Atleta Um', attendance: {} }, { name: 'Atleta Dois', attendance: {} }], dates: [] }, finance: {}
+    } }) };
+    return { ok: true, json: async () => ({ result: 'success' }) };
+  });
+  try {
+    render(<App />);
+    expect(await screen.findByText('Sessão não encerrada encontrada')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar sessão' }));
+    expect(window.localStorage.getItem('cba_mesario_backup')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Ir para a quadra' }));
+    const card = screen.getByText('Atleta Um').closest('.rounded-2xl');
+    fireEvent.click(within(card).getByRole('button', { name: /\+2/ }));
+    await waitFor(() => expect(JSON.parse(window.localStorage.getItem('cba_mesario_backup_v2')).matchStats['Atleta Um'].pts2).toBe(1));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Presença' }).at(-1));
+    await waitFor(() => expect(screen.queryByText('Mesa digital CBA')).not.toBeInTheDocument());
+    fireEvent.click(screen.getByTitle('Mesário'));
+    expect(await screen.findByText('Sessão não encerrada encontrada')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar sessão' }));
+    expect(screen.getByRole('button', { name: /\+2 1/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Finalizar partida' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar resultado' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Encerrar sessão' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar súmula' }));
+    expect(await screen.findByText('Súmula salva')).toBeInTheDocument();
+    expect(window.localStorage.getItem('cba_mesario_backup_v2')).toBeNull();
+    await waitFor(() => expect(global.fetch.mock.calls.filter(([, options]) => JSON.parse(options.body).action === 'getInitialAppData')).toHaveLength(2));
+    expect(global.fetch.mock.calls.filter(([, options]) => JSON.parse(options.body).action === 'saveMatchStats')).toHaveLength(1);
+  } finally {
+    global.fetch = previousFetch;
+    ['cba_session_v1', 'cba_last_tab_v1', 'cba_mesario_backup', 'cba_mesario_backup_v2'].forEach(key => window.localStorage.removeItem(key));
+  }
+}, 15000);
+
+test('menu móvel abre o Sorteio diretamente e usa os dados iniciais', async () => {
   window.localStorage.setItem('cba_session_v1', JSON.stringify({
     user: { role: 'MEMBER', email: 'atleta@cba.test', name: 'Atleta', token: 'sessao-de-teste' }, savedAt: Date.now()
   }));
@@ -145,11 +200,11 @@ test('menu móvel abre o Sorteio diretamente, rola até o fim e volta sem nova c
     expect(screen.getByText('Atleta Teste')).toBeInTheDocument();
     expect(container.querySelector('main').scrollTop).toBe(0);
     expect(screen.getByRole('button', { name: 'Abrir menu de navegação' })).toHaveAttribute('aria-expanded', 'false');
-    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(global.fetch.mock.calls.filter(([, options]) => JSON.parse(options.body).action === 'getInitialAppData')).toHaveLength(1);
     fireEvent.click(screen.getAllByRole('button', { name: 'Jogos' }).at(-1));
     expect(await screen.findByRole('button', { name: 'Abrir menu de navegação' })).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByText('Monte os times em poucos toques')).not.toBeInTheDocument());
-    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(global.fetch.mock.calls.filter(([, options]) => JSON.parse(options.body).action === 'getInitialAppData')).toHaveLength(1);
   } finally {
     global.fetch = previousFetch;
     window.localStorage.removeItem('cba_session_v1');
