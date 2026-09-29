@@ -22,6 +22,7 @@ npm run build
 
 - `src/App.js`: autenticação, navegação e telas principais. O acesso à Administração faz parte da navegação do aplicativo.
 - `src/HomeDashboard.js`: Início renderizado diretamente no React, com atalhos de navegação e consulta ao `cba-portal` cancelável e atualizável; a situação financeira mostra apenas a conta vinculada.
+- `src/PortalExperienceBridge.js`: Jogos e Eventos exibem resumo, próximo compromisso, filtros de histórico e estados vazios úteis, além dos formulários e confirmações existentes.
 - `src/AdminDashboardBridge.js`: painel administrativo usado diretamente pelo aplicativo e pelos testes.
 - `src/InitialDataContext.js`: dados iniciais compartilhados com o painel de Presença. Novos painéis devem reutilizá-los antes de iniciar outra consulta.
 - `src/cbaApi.js`: cliente único das funções Supabase. Lê a sessão local e envia o token de acesso às funções `cba-gateway`, `cba-admin`, `cba-portal` e `cba-medical` diretamente.
