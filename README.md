@@ -22,6 +22,7 @@ npm run build
 
 - `src/App.js`: autenticação, navegação e telas principais. O acesso à Administração faz parte da navegação do aplicativo.
 - `src/HomeDashboard.js`: Início renderizado diretamente no React, com atalhos de navegação e consulta ao `cba-portal` cancelável e atualizável; a situação financeira mostra apenas a conta vinculada.
+- `src/AgendaView.js` e `src/agendaCalendar.js`: Minha Agenda reúne jogos e eventos futuros dentro do Início, filtra confirmações e gera compromissos `.ics` ou links para o Google Agenda; não adiciona uma aba ao menu lateral.
 - `src/ScheduleDashboard.js` e `src/PortalExperienceBridge.js`: Jogos e Eventos são abertos diretamente no React, com resumo, próximo compromisso, histórico e resposta visível ao confirmar participação; o restante do portal ainda usa a ponte de experiência.
 - `src/AdminDashboardBridge.js`: painel administrativo usado diretamente pelo aplicativo e pelos testes.
 - `src/InitialDataContext.js`: dados iniciais compartilhados com o painel de Presença. Novos painéis devem reutilizá-los antes de iniciar outra consulta.
