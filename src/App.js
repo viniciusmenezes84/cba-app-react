@@ -7,7 +7,7 @@ import { gatewayPost } from './cbaApi';
 import { 
     Activity, CalendarDays, BookOpen, DollarSign, Users, PartyPopper, BarChart, BellRing, 
     X, Menu, Copy, LogOut, RefreshCw, Trophy, Flame, MapPin, ChevronDown, CheckCircle, AlertCircle, Share2, ArrowLeft, Trash, Edit, ClipboardList, Minus, Award, Crown, Star,
-    Stethoscope, HeartPulse, PlusSquare, KeyRound, Home, Eye, EyeOff
+    Stethoscope, KeyRound, Home, Eye, EyeOff
 } from 'lucide-react';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, 
@@ -28,14 +28,13 @@ const ReportsRankingCompactBridge = lazy(() => import('./ReportsRankingCompactBr
 const ReportsLegacyRankingHider = lazy(() => import('./ReportsLegacyRankingHider'));
 const MesarioDashboardBridge = lazy(() => import('./MesarioDashboardBridge'));
 const SorteioDashboard = lazy(() => import('./SorteioDashboard'));
-const DmDashboardBridge = lazy(() => import('./DmDashboardBridge'));
+const DmDashboard = lazy(() => import('./DmDashboard'));
 const PortalExperienceBridge = lazy(() => import('./PortalExperienceBridge'));
 
 function ActiveBridges({ tab }) {
     return <Suspense fallback={null}>
         {tab === 'relatorios' && <><ReportsDashboardBridge /><ReportsStatsByDateBridge /><ReportsPdfBridgeV2 /><AnnualReportMedicalBridge /><ReportsRankingCompactBridge /><ReportsLegacyRankingHider /></>}
         {tab === 'mesario' && <MesarioDashboardBridge />}
-        {tab === 'dm' && <DmDashboardBridge />}
         {['inicio', 'financas', 'jogos', 'eventos', 'halldafama', 'estatuto', 'notificacoes'].includes(tab) && <PortalExperienceBridge />}
     </Suspense>;
 }
@@ -2237,153 +2236,6 @@ const MesarioTab = ({ allPlayersData, onStatsSaved }) => {
     );
 };
 
-// 11. ABA DEPARTAMENTO MÉDICO
-const DmTab = ({ allPlayersData, isAdmin }) => {
-    // Mock data para demonstração inicial
-    const [injuries, setInjuries] = useState([
-        { id: 1, playerName: allPlayersData[0]?.name || 'Jogador Teste', injury: 'Entorse no Tornozelo Direito', date: '2026-04-10', expectedReturn: '2026-05-15', status: 'Fisioterapia' }
-    ]);
-    const [isModalOpen, setIsModalOpen] = useState(false);
-
-    const handleAddInjury = (e) => {
-        e.preventDefault();
-        const formData = new FormData(e.currentTarget);
-        const newInjury = {
-            id: Date.now(),
-            playerName: formData.get('playerName'),
-            injury: formData.get('injury'),
-            date: formData.get('date'),
-            expectedReturn: formData.get('expectedReturn'),
-            status: formData.get('status')
-        };
-        setInjuries([...injuries, newInjury]);
-        setIsModalOpen(false);
-    };
-
-    const handleAlta = (id) => {
-        setInjuries(injuries.filter(i => i.id !== id));
-    };
-
-    return (
-        <div className="space-y-8 animate-fade-in-up pb-10">
-            <div className="flex flex-col md:flex-row justify-between md:items-end mb-8 gap-4 border-b border-slate-200 dark:border-slate-700 pb-6">
-                <div>
-                    <h2 className="text-3xl font-extrabold text-slate-800 dark:text-slate-100 flex items-center gap-3">
-                        <Stethoscope className="w-8 h-8 text-red-500" /> Departamento Médico
-                    </h2>
-                    <p className="text-slate-500 mt-1 font-medium">Gestão de lesões e previsão de retorno ao elenco.</p>
-                </div>
-                {isAdmin && (
-                    <button onClick={() => setIsModalOpen(true)} className="bg-red-600 text-white font-bold py-3 px-6 rounded-xl hover:bg-red-700 transition shadow-md flex items-center gap-2 whitespace-nowrap">
-                        <PlusSquare className="w-5 h-5"/> Registrar Lesão
-                    </button>
-                )}
-            </div>
-
-            {injuries.length === 0 ? (
-                <GlassCard className="text-center py-16 border-t-4 border-t-emerald-500 bg-gradient-to-b from-white to-emerald-50/30 dark:from-slate-800 dark:to-emerald-900/10">
-                    <HeartPulse className="w-16 h-16 mx-auto mb-4 text-emerald-500 opacity-80" />
-                    <h3 className="text-2xl font-bold text-slate-800 dark:text-white">DM Vazio!</h3>
-                    <p className="text-slate-500 mt-2">Nenhum atleta lesionado no momento. Excelente notícia para a equipa!</p>
-                </GlassCard>
-            ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {injuries.map(inj => {
-                        const playerInfo = allPlayersData.find(p => p.name === inj.playerName);
-                        return (
-                            <GlassCard key={inj.id} className="relative overflow-hidden border-t-4 border-t-red-500">
-                                <div className="flex items-center gap-4 mb-4 pb-4 border-b border-slate-200 dark:border-slate-700/50">
-                                    {playerInfo?.fotoUrl ? (
-                                        <img src={playerInfo.fotoUrl} alt={inj.playerName} className="w-14 h-14 rounded-full object-cover shadow-sm ring-2 ring-red-100 dark:ring-red-900/30" crossOrigin="anonymous" />
-                                    ) : (
-                                        <div className="w-14 h-14 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-xl font-bold text-slate-400 border border-slate-200 dark:border-slate-600">{inj.playerName?.charAt(0)}</div>
-                                    )}
-                                    <div>
-                                        <h3 className="font-black text-lg text-slate-800 dark:text-white leading-tight">{inj.playerName}</h3>
-                                        <span className="text-[10px] uppercase font-bold text-red-600 bg-red-100 dark:bg-red-900/30 px-2 py-0.5 rounded-md mt-1 inline-block">Afastado</span>
-                                    </div>
-                                </div>
-                                
-                                <div className="space-y-4 mb-6">
-                                    <div>
-                                        <p className="text-[10px] uppercase font-bold text-slate-400">Diagnóstico / Lesão</p>
-                                        <p className="font-bold text-slate-700 dark:text-slate-200 text-sm">{inj.injury}</p>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="bg-slate-50 dark:bg-slate-800/50 p-2 rounded-lg border border-slate-100 dark:border-slate-700 text-center">
-                                            <p className="text-[10px] uppercase font-bold text-slate-400">Data Lesão</p>
-                                            <p className="font-bold text-slate-800 dark:text-slate-200 text-sm mt-0.5">{new Date(inj.date).toLocaleDateString('pt-BR')}</p>
-                                        </div>
-                                        <div className="bg-emerald-50 dark:bg-emerald-900/20 p-2 rounded-lg border border-emerald-100 dark:border-emerald-800/50 text-center">
-                                            <p className="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-500">Retorno Previsto</p>
-                                            <p className="font-black text-emerald-700 dark:text-emerald-400 text-sm mt-0.5">{new Date(inj.expectedReturn).toLocaleDateString('pt-BR')}</p>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <p className="text-[10px] uppercase font-bold text-slate-400">Status do Tratamento</p>
-                                        <p className="font-bold text-amber-600 dark:text-amber-400 text-sm flex items-center gap-1.5 mt-0.5">
-                                            <Activity className="w-3.5 h-3.5" /> {inj.status}
-                                        </p>
-                                    </div>
-                                </div>
-
-                                {isAdmin && (
-                                    <button onClick={() => handleAlta(inj.id)} className="w-full bg-emerald-100 hover:bg-emerald-200 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 dark:hover:bg-emerald-800/60 font-bold py-3 rounded-xl transition-all flex justify-center items-center gap-2 border border-emerald-200 dark:border-emerald-800/50 hover:shadow-md">
-                                        <CheckCircle className="w-5 h-5"/> Dar Alta Médica
-                                    </button>
-                                )}
-                            </GlassCard>
-                        )
-                    })}
-                </div>
-            )}
-
-            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Registrar Nova Lesão">
-                <form onSubmit={handleAddInjury} className="space-y-4">
-                    <div>
-                        <label htmlFor="dm-player" className="block text-xs font-bold uppercase text-slate-500 mb-1">Atleta Lesionado</label>
-                        <select id="dm-player" name="playerName" className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none font-bold text-slate-800 dark:text-white" required>
-                            {[...allPlayersData].sort((a,b)=>a.name.localeCompare(b.name)).map(p => (
-                                <option key={p.name} value={p.name}>{p.name}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div>
-                        <label htmlFor="dm-injury" className="block text-xs font-bold uppercase text-slate-500 mb-1">Diagnóstico / Lesão</label>
-                        <input id="dm-injury" name="injury" type="text" placeholder="Ex: Estiramento no joelho direito" className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none text-slate-800 dark:text-white" required />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label htmlFor="dm-date" className="block text-xs font-bold uppercase text-slate-500 mb-1">Data do Ocorrido</label>
-                            <input id="dm-date" name="date" type="date" className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none text-slate-800 dark:text-white" required />
-                        </div>
-                        <div>
-                            <label htmlFor="dm-return" className="block text-xs font-bold uppercase text-slate-500 mb-1">Previsão Retorno</label>
-                            <input id="dm-return" name="expectedReturn" type="date" className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none text-slate-800 dark:text-white" required />
-                        </div>
-                    </div>
-                    <div>
-                        <label htmlFor="dm-status" className="block text-xs font-bold uppercase text-slate-500 mb-1">Fase do Tratamento</label>
-                        <select id="dm-status" name="status" className="w-full p-4 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl outline-none font-bold text-slate-800 dark:text-white" required>
-                            <option value="Aguardando Exames">Aguardando Exames</option>
-                            <option value="Repouso Absoluto">Repouso Absoluto</option>
-                            <option value="Fisioterapia">Fisioterapia</option>
-                            <option value="Transição Física">Transição Física</option>
-                            <option value="Afastado por Recomendação">Afastado por Recomendação</option>
-                        </select>
-                    </div>
-                    
-                    <div className="pt-4">
-                        <button type="submit" className="w-full bg-red-600 text-white font-bold py-4 rounded-xl hover:bg-red-700 shadow-lg shadow-red-600/30 transition-transform active:scale-95 flex justify-center items-center gap-2">
-                            <PlusSquare className="w-5 h-5"/> Adicionar ao DM
-                        </button>
-                    </div>
-                </form>
-            </Modal>
-        </div>
-    )
-};
-
 // 10. ABA HALL DA FAMA
 const HallDaFamaTab = ({ allPlayersData, dates }) => {
     
@@ -2661,7 +2513,7 @@ const MainApp = ({ user, onLogout, logoutPending }) => {
                     {activeTab === 'jogos' && <JogosTab {...props} />}
                     {activeTab === 'eventos' && <EventosTab {...props} />}
                     {activeTab === 'sorteio' && <Suspense fallback={<Loader message="Carregando Sorteio..." />}><SorteioDashboard players={props.allPlayersData} dates={props.dates} isAdmin={isAdmin} /></Suspense>}
-                    {activeTab === 'dm' && <DmTab {...props} />}
+                    {activeTab === 'dm' && <Suspense fallback={<Loader message="Carregando Departamento Médico..." />}><DmDashboard /></Suspense>}
                     {activeTab === 'halldafama' && <HallDaFamaTab {...props} />}
                     {activeTab === 'estatuto' && <EstatutoTab />}
                     {activeTab === 'notificacoes' && <NotificacoesTab {...props} />}

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { medicalPost } from './cbaApi';
 import {
-  Activity, CalendarDays, CheckCircle2, ChevronRight, Clock3, Edit3,
+  Activity, CheckCircle2, ChevronRight, Clock3, Edit3,
   HeartPulse, Plus, RefreshCw, Search, ShieldCheck, Stethoscope, X
 } from 'lucide-react';
 
@@ -164,7 +164,7 @@ function DmExperience({ initial, refresh }) {
       </button>)}
     </div>}
 
-    {isAdmin && <button onClick={openNew} className="sm:hidden fixed bottom-5 right-5 z-40 w-14 h-14 rounded-full bg-rose-600 text-white shadow-2xl flex items-center justify-center" aria-label="Registrar ocorrência"><Plus className="w-6 h-6"/></button>}
+    {isAdmin && <button onClick={openNew} style={{ bottom: 'calc(6rem + env(safe-area-inset-bottom, 0px))' }} className="sm:hidden fixed right-5 z-40 w-14 h-14 rounded-full bg-rose-600 text-white shadow-2xl flex items-center justify-center" aria-label="Registrar ocorrência"><Plus className="w-6 h-6"/></button>}
 
     <ModalShell open={Boolean(selectedRecord)} title={selectedRecord?.playerName || 'Detalhes'} onClose={() => setSelectedRecord(null)}>
       {selectedRecord && <div className="space-y-5">
@@ -191,9 +191,7 @@ function DmExperience({ initial, refresh }) {
   </div>;
 }
 
-export default function DmDashboardBridge() {
-  const [mountNode, setMountNode] = useState(null);
-  const [active, setActive] = useState(false);
+export default function DmDashboard() {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
 
@@ -202,44 +200,9 @@ export default function DmDashboardBridge() {
     catch (err) { setError(err?.message || 'Falha ao carregar o Departamento Médico.'); }
   }, []);
 
-  useEffect(() => { if (active) refresh(); }, [active, refresh]);
+  useEffect(() => { refresh(); }, [refresh]);
 
-  useEffect(() => {
-    let node = null;
-    let hiddenRoot = null;
-    const sync = () => {
-      const button = document.querySelector('button[title="Departamento Médico"]');
-      const isActive = Boolean(button?.className?.includes('scale-110'));
-      setActive(isActive);
-
-      const heading = [...document.querySelectorAll('h2')].find(element => element.textContent?.trim().includes('Departamento Médico'));
-      const legacyRoot = heading?.closest('.space-y-8');
-      if (!legacyRoot?.parentElement) return;
-
-      if (hiddenRoot && hiddenRoot !== legacyRoot && hiddenRoot.isConnected) hiddenRoot.style.display = '';
-      hiddenRoot = legacyRoot;
-      if (!node || !node.isConnected) {
-        node = document.createElement('div');
-        node.dataset.dmDashboardV2 = 'true';
-        legacyRoot.insertAdjacentElement('afterend', node);
-        setMountNode(node);
-      }
-      legacyRoot.style.display = isActive ? 'none' : '';
-      node.style.display = isActive ? '' : 'none';
-    };
-
-    sync();
-    const observer = new MutationObserver(sync);
-    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
-    return () => {
-      observer.disconnect();
-      if (hiddenRoot?.isConnected) hiddenRoot.style.display = '';
-      if (node?.isConnected) node.remove();
-    };
-  }, []);
-
-  if (!active || !mountNode) return null;
-  if (error) return createPortal(<div className="rounded-2xl border border-rose-500/30 bg-rose-950/30 p-4 text-sm font-bold text-rose-300">{error}</div>, mountNode);
-  if (!data) return createPortal(<div className="rounded-3xl border border-slate-700 bg-slate-900 p-8 text-center text-sm font-bold text-slate-500">Carregando Departamento Médico...</div>, mountNode);
-  return createPortal(<DmExperience initial={data} refresh={refresh} />, mountNode);
+  if (error) return <div role="alert" className="rounded-2xl border border-rose-500/30 bg-rose-950/30 p-4 text-sm font-bold text-rose-300">{error} <button onClick={refresh} className="ml-2 underline">Tentar novamente</button></div>;
+  if (!data) return <div className="rounded-3xl border border-slate-700 bg-slate-900 p-8 text-center text-sm font-bold text-slate-500">Carregando Departamento Médico...</div>;
+  return <DmExperience initial={data} refresh={refresh} />;
 }
