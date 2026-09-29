@@ -258,3 +258,26 @@ test('falha na revogação limpa a sessão local e avisa o usuário', async () =
     window.localStorage.removeItem('cba_session_v1');
   }
 });
+
+test('Relatórios abre diretamente com dados iniciais e filtros compartilhados', async () => {
+  window.localStorage.setItem('cba_session_v1', JSON.stringify({
+    user: { role: 'MEMBER', email: 'atleta@cba.test', name: 'Atleta', token: 'sessao-de-teste' }, savedAt: Date.now()
+  }));
+  window.localStorage.setItem('cba_last_tab_v1', 'relatorios');
+  const previousFetch = global.fetch;
+  global.fetch = jest.fn(async () => ({ ok: true, json: async () => ({ data: {
+    dashboard: { players: [{ name: 'Ana', attendance: { '2026-04-05': '✅' }, dailyStats: {} }], dates: ['2026-04-05'] }, finance: {}
+  } }) }));
+  try {
+    render(<App />);
+    expect(await screen.findByRole('heading', { name: 'Central de Relatórios 2026' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Temporada')).toHaveValue('2026');
+    expect(screen.getByLabelText('Atleta')).toHaveValue('todos');
+    expect(screen.getByText('Súmulas por data')).toBeInTheDocument();
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  } finally {
+    global.fetch = previousFetch;
+    window.localStorage.removeItem('cba_session_v1');
+    window.localStorage.removeItem('cba_last_tab_v1');
+  }
+});

@@ -22,11 +22,12 @@ npm run build
 
 - `src/App.js`: autenticação, navegação e telas principais. O acesso à Administração faz parte da navegação do aplicativo.
 - `src/AdminDashboardBridge.js`: painel administrativo usado diretamente pelo aplicativo e pelos testes.
-- `src/InitialDataContext.js`: dados iniciais compartilhados com os painéis de Presença, Relatórios e Mesário. Novos painéis devem reutilizá-los antes de iniciar outra consulta.
+- `src/InitialDataContext.js`: dados iniciais compartilhados com o painel de Presença. Novos painéis devem reutilizá-los antes de iniciar outra consulta.
 - `src/cbaApi.js`: cliente único das funções Supabase. Lê a sessão local e envia o token de acesso às funções `cba-gateway`, `cba-admin`, `cba-portal` e `cba-medical` diretamente.
 - `src/athleteCardCanvas.js` e `src/AthleteCardModal.js`: card para post e Stories, com download e compartilhamento nativo quando disponível.
 - `src/SorteioDashboard.js`: painel de Sorteio renderizado diretamente pela aba e alimentado pelos dados iniciais já carregados, sem observador de DOM ou consulta duplicada.
 - `src/DmDashboard.js`: painel médico renderizado diretamente pela aba. Consulta `cba-medical` separadamente para receber os registros e permissões filtrados no servidor; também salva ocorrências e registra altas por essa função.
+- `src/ReportsDashboard.js`, `src/ReportsStatsByDate.js`, `src/ReportsRankingCompact.js` e `src/ReportsPdf.js`: aba de Relatórios renderizada diretamente no React com um filtro de temporada e atleta, súmulas por data, ranking e PDFs anual e mensal. O relatório anual consulta o status operacional do Departamento Médico na geração.
 - `src/MesarioDashboard.js`: painel do Mesário renderizado diretamente pela aba, com recuperação dos backups antigos e atuais, ações de súmula via gateway e atualização dos dados após salvar.
 - `src/tailwind.source.css` e `scripts/build-tailwind.js`: classes CSS produzidas durante a compilação, sem depender do CDN no navegador.
 

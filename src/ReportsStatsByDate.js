@@ -1,6 +1,5 @@
-import React, { useContext, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { InitialDataContext } from './InitialDataContext';
 import {
   BarChart3, CalendarDays, CheckCircle2, ChevronRight, Maximize2,
   Target, Trophy, Users, X
@@ -257,56 +256,6 @@ function StatsExperience({ data, year, selectedPlayer }) {
   return <DayView players={players} year={year} />;
 }
 
-export default function ReportsStatsByDateBridge() {
-  const [mountNode, setMountNode] = useState(null);
-  const [active, setActive] = useState(false);
-  const [year, setYear] = useState(String(new Date().getFullYear()));
-  const [selectedPlayer, setSelectedPlayer] = useState('todos');
-  const data = useContext(InitialDataContext);
-
-  useEffect(() => {
-    let node = null;
-    const sync = () => {
-      const reportButton = document.querySelector('button[title="Relatórios"]');
-      const isReports = Boolean(reportButton?.className?.includes('scale-110'));
-      setActive(isReports);
-
-      const heading = [...document.querySelectorAll('h2')].find(el => el.textContent?.trim() === 'Central de Relatórios');
-      const container = heading?.closest('.space-y-8');
-      if (!container) return;
-      const headerChild = [...container.children].find(child => child.contains(heading));
-      if (!headerChild) return;
-
-      const selects = [...container.querySelectorAll('select')];
-      const yearSelect = selects.find(select => /^\d{4}$/.test(select.value));
-      const athleteSelect = selects.find(select => select.value === 'todos' || [...select.options].some(option => option.value === 'todos'));
-      if (yearSelect) setYear(yearSelect.value);
-      if (athleteSelect) setSelectedPlayer(athleteSelect.value);
-
-      if (!node || !node.isConnected) {
-        node = document.createElement('div');
-        node.dataset.reportsStatsByDate = 'true';
-        node.className = 'mt-5 w-full min-w-0';
-        const dashboardNode = container.querySelector('[data-reports-dashboard-v2="true"]');
-        if (dashboardNode) dashboardNode.appendChild(node);
-        else headerChild.insertAdjacentElement('afterend', node);
-        setMountNode(node);
-      }
-      node.style.display = isReports ? '' : 'none';
-    };
-
-    sync();
-    const observer = new MutationObserver(sync);
-    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'value'] });
-    document.addEventListener('change', sync, true);
-    return () => {
-      observer.disconnect();
-      document.removeEventListener('change', sync, true);
-      if (node?.isConnected) node.remove();
-    };
-  }, []);
-
-  if (!active || !mountNode) return null;
-  if (!data) return createPortal(<Panel className="mt-5 p-4 text-sm font-bold text-slate-500">Carregando estatísticas por data...</Panel>, mountNode);
-  return createPortal(<StatsExperience data={data} year={year} selectedPlayer={selectedPlayer} />, mountNode);
+export default function ReportsStatsByDate({ data, year, selectedPlayer }) {
+  return <StatsExperience data={data} year={year} selectedPlayer={selectedPlayer} />;
 }
