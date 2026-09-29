@@ -1,7 +1,8 @@
-import React, { useContext, useEffect, useMemo, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { InitialDataContext } from './InitialDataContext';
-import { Activity, Award, BarChart3, CalendarDays, CheckCircle2, Flame, Medal, Shield, Star, Target, Trophy, User, Users, Zap } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Activity, BarChart3, CalendarDays, CheckCircle2, Flame, Target, Trophy, Users, Zap } from 'lucide-react';
+import ReportsRankingCompact from './ReportsRankingCompact';
+import ReportsStatsByDate from './ReportsStatsByDate';
+import ReportsPdf from './ReportsPdf';
 import { Doughnut, Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement,
@@ -10,6 +11,8 @@ import {
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Tooltip, Legend, Filler);
 
+
+const EMPTY_LIST = [];
 
 const Card = ({ children, className = '' }) => (
   <div className={`bg-white/85 dark:bg-slate-800/70 backdrop-blur-xl border border-slate-200/70 dark:border-slate-700/60 shadow-xl rounded-3xl p-5 sm:p-6 ${className}`}>{children}</div>
@@ -37,9 +40,8 @@ function buildHighs(entries) {
 
 function ReportsExperience({ data, year, selectedPlayer, onSelectPlayer }) {
   const appData = data?.data || data || {};
-  const players = appData?.dashboard?.players || [];
-  const dates = appData?.dashboard?.dates || [];
-  const [rankingTab, setRankingTab] = useState('presencas');
+  const players = appData?.dashboard?.players || EMPTY_LIST;
+  const dates = appData?.dashboard?.dates || EMPTY_LIST;
   const [metric, setMetric] = useState('pts');
 
   const playedDates = useMemo(() => [...new Set(dates)]
@@ -101,19 +103,6 @@ function ReportsExperience({ data, year, selectedPlayer, onSelectPlayer }) {
     return [...set].filter(date => playedDates.includes(date));
   }, [reportData, playedDates]);
   const coveragePct = playedDates.length ? (statGameDates.length / playedDates.length) * 100 : 0;
-
-  const rankingConfig = {
-    presencas: { label: 'Assiduidade', short: '%', color: 'indigo', sort: (a, b) => b.percentage - a.percentage || b.presences - a.presences, value: p => p.percentage, avg: p => `${p.presences}/${p.validGames}` },
-    pontos: { label: 'Cestinhas', short: 'PTS', color: 'orange', sort: (a, b) => b.yearlyPoints - a.yearlyPoints, value: p => p.yearlyPoints, avg: p => `${p.ppjYear.toFixed(1)} / jogo` },
-    rebotes: { label: 'Rei do Garrafão', short: 'REB', color: 'emerald', sort: (a, b) => b.yearlyReb - a.yearlyReb, value: p => p.yearlyReb, avg: p => `${p.rpjYear.toFixed(1)} / jogo` },
-    assistencias: { label: 'Garçom', short: 'AST', color: 'cyan', sort: (a, b) => b.yearlyAst - a.yearlyAst, value: p => p.yearlyAst, avg: p => `${p.apjYear.toFixed(1)} / jogo` },
-    tocos: { label: 'Muralha', short: 'TOC', color: 'purple', sort: (a, b) => b.yearlyBlk - a.yearlyBlk, value: p => p.yearlyBlk, avg: p => `${p.tpjYear.toFixed(1)} / jogo` }
-  };
-
-  const cfg = rankingConfig[rankingTab];
-  const ranking = useMemo(() => [...reportData]
-    .filter(player => rankingTab === 'presencas' ? player.validGames > 0 : player.gamesWithStats > 0)
-    .sort(cfg.sort), [reportData, rankingTab]);
 
   const selected = reportData.find(player => player.name === selectedPlayer);
 
@@ -217,8 +206,6 @@ function ReportsExperience({ data, year, selectedPlayer, onSelectPlayer }) {
     );
   }
 
-  const top3 = ranking.slice(0, 3);
-  const medals = ['🥇', '🥈', '🥉'];
   return (
     <div className="space-y-6 pt-2">
       <div className="rounded-3xl p-6 sm:p-8 bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900 text-white shadow-2xl border border-indigo-500/10 relative overflow-hidden">
@@ -239,87 +226,40 @@ function ReportsExperience({ data, year, selectedPlayer, onSelectPlayer }) {
         ].map(([Icon, label, value, detail, color]) => <Card key={label} className="!p-4 sm:!p-5 relative overflow-hidden"><Icon className={`absolute -right-2 -bottom-2 w-20 h-20 opacity-10 ${color}`} /><p className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-slate-500">{label}</p><p className={`text-3xl sm:text-4xl font-black mt-2 ${color}`}>{value}</p><p className="text-xs text-slate-500 mt-1">{detail}</p></Card>)}
       </div>
 
-      <Card>
-        <div className="flex gap-2 overflow-x-auto pb-4 mb-5 border-b border-slate-200 dark:border-slate-700">
-          {[
-            ['presencas','Assiduidade'],['pontos','Cestinhas 🔥'],['rebotes','Rei do Garrafão 🛡️'],['assistencias','Garçom 🎩'],['tocos','Muralha 🧱']
-          ].map(([key, label]) => <button key={key} onClick={() => setRankingTab(key)} className={`px-4 py-2 rounded-xl text-sm font-black whitespace-nowrap transition ${rankingTab === key ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}`}>{label}</button>)}
-        </div>
-
-        {top3.length > 0 && <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">{top3.map((player, index) => <button key={player.name} onClick={() => onSelectPlayer(player.name)} className={`text-left p-5 rounded-3xl border transition hover:-translate-y-1 ${index === 0 ? 'bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/10 border-amber-200/70 dark:border-amber-800/40' : 'bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-700'}`}><div className="flex items-start justify-between"><span className="text-3xl">{medals[index]}</span><span className="text-[10px] font-black uppercase tracking-wider text-slate-500">#{index + 1}</span></div><p className="text-xl font-black text-slate-900 dark:text-white mt-3 truncate">{player.name}</p><p className="text-3xl font-black text-indigo-600 dark:text-indigo-400 mt-2">{rankingTab === 'presencas' ? `${cfg.value(player).toFixed(0)}%` : cfg.value(player)}</p><p className="text-xs text-slate-500 mt-1">{cfg.avg(player)}{rankingTab !== 'presencas' ? ` • ${player.gamesWithStats} súmula(s)` : ''}</p></button>)}</div>}
-
-        <div className="space-y-1">
-          {ranking.map((player, index) => <button key={player.name} onClick={() => onSelectPlayer(player.name)} className="w-full flex items-center justify-between p-3 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-700/40 transition border-b border-slate-100 dark:border-slate-700/40 text-left"><div className="flex items-center gap-3 min-w-0"><span className="w-7 text-right text-xs font-black text-slate-400">{index + 1}º</span><div className="min-w-0"><p className="font-black text-slate-900 dark:text-white truncate">{player.name}</p><p className="text-[10px] text-slate-500">{rankingTab === 'presencas' ? `${player.presences}/${player.validGames} presenças` : `${player.gamesWithStats} súmula(s) • ${cfg.avg(player)}`}</p></div></div><div className="text-right shrink-0"><p className="font-black text-indigo-600 dark:text-indigo-400">{rankingTab === 'presencas' ? `${cfg.value(player).toFixed(0)}%` : `${cfg.value(player)} ${cfg.short}`}</p>{player.faults > 0 && rankingTab === 'presencas' && <p className="text-[10px] font-bold text-rose-500">{player.faults} falta(s) NJ</p>}</div></button>)}
-          {!ranking.length && <p className="py-8 text-center text-slate-500 font-bold">Nenhum dado disponível para este ranking em {year}.</p>}
-        </div>
-      </Card>
     </div>
   );
 }
 
-export default function ReportsDashboardBridge() {
-  const [mountNode, setMountNode] = useState(null);
-  const data = useContext(InitialDataContext);
-  const [active, setActive] = useState(false);
-  const [year, setYear] = useState(new Date().getFullYear().toString());
+export default function ReportsDashboard({ data }) {
+  const appData = data?.data || data || {};
+  const players = appData?.dashboard?.players || EMPTY_LIST;
+  const years = useMemo(() => {
+    const dates = data?.data?.dashboard?.dates || data?.dashboard?.dates || EMPTY_LIST;
+    const available = [...new Set(dates.map(date => String(date).slice(0, 4)))].filter(year => /^\d{4}$/.test(year));
+    return available.length ? available.sort((a, b) => b.localeCompare(a)) : [String(new Date().getFullYear())];
+  }, [data]);
+  const [year, setYear] = useState(years[0]);
   const [selectedPlayer, setSelectedPlayer] = useState('todos');
-  const [playerSelect, setPlayerSelect] = useState(null);
 
   useEffect(() => {
-    let node = null;
-    const sync = () => {
-      const reportButton = document.querySelector('button[title="Relatórios"]');
-      const isReports = Boolean(reportButton?.className?.includes('scale-110'));
-      setActive(isReports);
+    if (!years.includes(year)) setYear(years[0]);
+  }, [year, years]);
+  useEffect(() => {
+    if (selectedPlayer !== 'todos' && !players.some(player => player.name === selectedPlayer)) setSelectedPlayer('todos');
+  }, [players, selectedPlayer]);
 
-      const heading = [...document.querySelectorAll('h2')].find(el => el.textContent?.trim() === 'Central de Relatórios');
-      const container = heading?.closest('.space-y-8');
-      if (!container) return;
-
-      const selects = [...container.querySelectorAll('select')];
-      const yearSelect = selects.find(select => /^\d{4}$/.test(select.value));
-      const athleteSelect = selects.find(select => select.value === 'todos' || [...select.options].some(option => option.value === 'todos'));
-      if (yearSelect) setYear(yearSelect.value);
-      if (athleteSelect) {
-        setSelectedPlayer(athleteSelect.value);
-        setPlayerSelect(athleteSelect);
-      }
-
-      if (!node || !node.isConnected) {
-        node = document.createElement('div');
-        node.dataset.reportsDashboardV2 = 'true';
-        const headerChild = [...container.children].find(child => child.contains(heading));
-        headerChild?.insertAdjacentElement('afterend', node);
-        setMountNode(node);
-      }
-
-      const headerChild = [...container.children].find(child => child.contains(heading));
-      [...container.children].forEach(child => {
-        const isPdf = child.querySelector?.('#pdf-corporate-report') || child.querySelector?.('#pdf-monthly-report');
-        if (child === headerChild || child === node || isPdf) return;
-        child.style.display = isReports ? 'none' : '';
-      });
-      node.style.display = isReports ? '' : 'none';
-    };
-
-    sync();
-    const observer = new MutationObserver(sync);
-    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'value'] });
-    document.addEventListener('change', sync, true);
-    return () => {
-      observer.disconnect();
-      document.removeEventListener('change', sync, true);
-      if (node?.isConnected) node.remove();
-    };
-  }, []);
-
-  const onSelectPlayer = name => {
-    if (!playerSelect) return;
-    playerSelect.value = name;
-    playerSelect.dispatchEvent(new Event('change', { bubbles: true }));
-    setSelectedPlayer(name);
-  };
-
-  if (!active || !mountNode || !data) return null;
-  return createPortal(<ReportsExperience data={data} year={year} selectedPlayer={selectedPlayer} onSelectPlayer={onSelectPlayer} />, mountNode);
+  return <div className="space-y-5 pb-24 md:pb-8">
+    <div className="rounded-3xl border border-slate-200/70 dark:border-slate-700/60 bg-white/85 dark:bg-slate-800/70 p-4 sm:p-5 flex flex-col lg:flex-row lg:items-end gap-3">
+      <label className="flex-1 text-xs font-black text-slate-500">Temporada
+        <select aria-label="Temporada" value={year} onChange={event => setYear(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 text-sm font-bold text-slate-900 dark:text-white">{years.map(value => <option key={value} value={value}>{value}</option>)}</select>
+      </label>
+      <label className="flex-1 text-xs font-black text-slate-500">Atleta
+        <select aria-label="Atleta" value={selectedPlayer} onChange={event => setSelectedPlayer(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 text-sm font-bold text-slate-900 dark:text-white"><option value="todos">Todos os atletas</option>{players.map(player => <option key={player.name} value={player.name}>{player.name}</option>)}</select>
+      </label>
+      <div className="flex flex-wrap gap-2"><ReportsPdf data={data} year={year} selectedPlayer={selectedPlayer} /></div>
+    </div>
+    <ReportsExperience data={data} year={year} selectedPlayer={selectedPlayer} onSelectPlayer={setSelectedPlayer} />
+    {selectedPlayer === 'todos' && <ReportsRankingCompact data={data} year={year} onSelectPlayer={setSelectedPlayer} />}
+    <ReportsStatsByDate data={data} year={year} selectedPlayer={selectedPlayer} />
+  </div>;
 }

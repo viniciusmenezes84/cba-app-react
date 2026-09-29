@@ -1,7 +1,8 @@
-import React, { useContext, useEffect, useMemo, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { InitialDataContext } from './InitialDataContext';
+import React, { useMemo, useState } from 'react';
+import { medicalPost } from './cbaApi';
 import { BookOpen, CalendarDays, RefreshCw } from 'lucide-react';
+
+const EMPTY_LIST = [];
 
 const LOGO_URL = 'https://lh3.googleusercontent.com/d/131DvcfgiRLLp9irVnVY8m9qNuM-0y7f8';
 const MONTHS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -35,6 +36,24 @@ const paginate = (items, size) => {
   if (!items.length) return [[]];
   return Array.from({ length: Math.ceil(items.length / size) }, (_, index) => items.slice(index * size, index * size + size));
 };
+
+function MedicalSummary({ medical }) {
+  const records = (medical?.records || [])
+    .filter(record => !record?.dischargedAt && String(record?.status || '').toLowerCase() !== 'alta')
+    .sort((a, b) => String(a?.expectedReturn || '9999-12-31').localeCompare(String(b?.expectedReturn || '9999-12-31'))
+      || String(a?.playerName || '').localeCompare(String(b?.playerName || '')));
+  return (
+    <div className="mb-6 border border-blue-100 rounded-xl overflow-hidden">
+      <div className="p-3 bg-blue-50 border-b border-blue-100">
+        <p className="text-[11px] font-black uppercase text-blue-900">{medical?.error ? 'Situação atual do Departamento Médico' : `${records.length} atleta${records.length === 1 ? '' : 's'} em acompanhamento`}</p>
+        <p className="text-[9px] text-slate-600 mt-1">{medical?.error ? 'Não foi possível consultar o Departamento Médico durante a geração deste relatório.' : 'Situação atual na data de geração.'}</p>
+      </div>
+      {medical?.error ? <p className="p-4 text-[10px] font-bold text-rose-700">Dados médicos indisponíveis.</p>
+        : records.length ? <table className="w-full text-[10px] border-collapse"><thead><tr className="text-left text-slate-500 uppercase text-[9px]"><th className="p-2">Atleta</th><th className="p-2">Situação</th><th className="p-2 text-right">Retorno previsto</th></tr></thead><tbody>{records.map((record, index) => <tr key={record.id || `${record.playerName}-${index}`} className="border-t border-slate-100"><td className="p-2 font-bold">{record.playerName || 'Atleta'}</td><td className="p-2">{record.status || 'Em acompanhamento'}</td><td className="p-2 text-right">{record.expectedReturn ? fmtDate(String(record.expectedReturn).slice(0, 10)) : '—'}</td></tr>)}</tbody></table>
+        : <p className="p-4 text-[10px] text-center text-slate-500">Nenhum atleta está no Departamento Médico no momento.</p>}
+    </div>
+  );
+}
 
 function getHighs(entries) {
   const result = {
@@ -170,34 +189,10 @@ async function savePdf(element, filename, orientation, footerLabel) {
   await worker.save();
 }
 
-function AnnualGeneral({ year, derived }) {
+function AnnualGeneral({ year, derived, medical }) {
   const { reportData, playedDates, activePlayers, averageAttendance, statGameDates, coveragePct } = derived;
   const attendance = [...reportData].filter(player => player.validGames > 0).sort((a, b) => b.percentage - a.percentage || b.presences - a.presences);
-  const statPlayers = reportData.filter(player => player.gamesWithStats > 0);
-  const leaders = {
-    pts: [...statPlayers].sort((a, b) => b.yearlyPoints - a.yearlyPoints).slice(0, 3),
-    reb: [...statPlayers].sort((a, b) => b.yearlyReb - a.yearlyReb).slice(0, 3),
-    ast: [...statPlayers].sort((a, b) => b.yearlyAst - a.yearlyAst).slice(0, 3),
-    blk: [...statPlayers].sort((a, b) => b.yearlyBlk - a.yearlyBlk).slice(0, 3)
-  };
   const performancePages = paginate(attendance, 18);
-
-  const LeaderBox = ({ title, items, totalKey, avgKey, tone }) => (
-    <div className="border border-slate-200 rounded-xl overflow-hidden">
-      <div className={`px-3 py-2 text-[10px] uppercase font-black ${tone}`}>{title}</div>
-      <table className="w-full text-[9px]"><tbody>
-        {items.length ? items.map((player, index) => (
-          <tr key={player.name} className="border-t border-slate-100">
-            <td className="px-2 py-2 w-6 font-black text-slate-400">{index + 1}º</td>
-            <td className="px-1 py-2 font-bold text-slate-800 truncate">{player.name}</td>
-            <td className="px-1 py-2 text-right font-black">{player[totalKey]}</td>
-            <td className="px-2 py-2 text-right text-slate-500">{player[avgKey].toFixed(1)}/j</td>
-            <td className="px-2 py-2 text-right text-slate-400">{player.gamesWithStats}s</td>
-          </tr>
-        )) : <tr><td className="p-3 text-slate-400">Sem súmulas na temporada.</td></tr>}
-      </tbody></table>
-    </div>
-  );
 
   return (
     <div id="pdf-v2-annual" style={{ width: 760, backgroundColor: '#fff', color: '#1e293b' }} className="font-sans">
@@ -243,13 +238,8 @@ function AnnualGeneral({ year, derived }) {
           ))}
         </div>
 
-        <Section number="3">Líderes por Fundamento</Section>
-        <div className="grid grid-cols-2 gap-3 mb-6">
-          <LeaderBox title="Pontos" items={leaders.pts} totalKey="yearlyPoints" avgKey="ppjYear" tone="bg-orange-50 text-orange-800" />
-          <LeaderBox title="Rebotes" items={leaders.reb} totalKey="yearlyReb" avgKey="rpjYear" tone="bg-emerald-50 text-emerald-800" />
-          <LeaderBox title="Assistências" items={leaders.ast} totalKey="yearlyAst" avgKey="apjYear" tone="bg-cyan-50 text-cyan-800" />
-          <LeaderBox title="Tocos" items={leaders.blk} totalKey="yearlyBlk" avgKey="tpjYear" tone="bg-purple-50 text-purple-800" />
-        </div>
+        <Section number="3">Departamento Médico</Section>
+        <MedicalSummary medical={medical} />
       </div>
 
       {performancePages.map((pagePlayers, pageIndex) => (
@@ -363,68 +353,14 @@ function Monthly({ year, derived }) {
   );
 }
 
-export default function ReportsPdfBridgeV2() {
-  const [mountNode, setMountNode] = useState(null);
-  const [active, setActive] = useState(false);
-  const data = useContext(InitialDataContext);
-  const [year, setYear] = useState(new Date().getFullYear().toString());
-  const [selectedPlayer, setSelectedPlayer] = useState('todos');
+export default function ReportsPdf({ data, year, selectedPlayer }) {
   const [annualBusy, setAnnualBusy] = useState(false);
   const [monthlyBusy, setMonthlyBusy] = useState(false);
-
-  useEffect(() => {
-    let node = null;
-    let hiddenButtons = [];
-    const sync = () => {
-      const reportButton = document.querySelector('button[title="Relatórios"]');
-      const isReports = Boolean(reportButton?.className?.includes('scale-110'));
-      setActive(isReports);
-
-      const heading = [...document.querySelectorAll('h2')].find(element => element.textContent?.trim() === 'Central de Relatórios');
-      const container = heading?.closest('.space-y-8');
-      if (!container) return;
-
-      const selects = [...container.querySelectorAll('select')];
-      const yearSelect = selects.find(select => /^\d{4}$/.test(select.value));
-      const playerSelect = selects.find(select => [...select.options].some(option => option.value === 'todos'));
-      if (yearSelect) setYear(yearSelect.value);
-      if (playerSelect) setSelectedPlayer(playerSelect.value);
-
-      const oldPdfButtons = [...container.querySelectorAll('button')].filter(button => {
-        if (button.dataset.reportsPdfV2Button === 'true') return false;
-        const text = button.textContent || '';
-        return text.includes('Resumo Mensal') || text.includes('Relatório Anual');
-      });
-      hiddenButtons.forEach(button => { if (!oldPdfButtons.includes(button)) button.style.display = ''; });
-      hiddenButtons = oldPdfButtons;
-      oldPdfButtons.forEach(button => { button.style.display = isReports ? 'none' : ''; });
-
-      const buttonParent = oldPdfButtons[0]?.parentElement;
-      if (buttonParent && (!node || !node.isConnected)) {
-        node = document.createElement('div');
-        node.dataset.reportsPdfV2Mount = 'true';
-        node.style.display = 'contents';
-        buttonParent.appendChild(node);
-        setMountNode(node);
-      }
-      if (node) node.style.display = isReports ? 'contents' : 'none';
-    };
-
-    sync();
-    const observer = new MutationObserver(sync);
-    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'value'] });
-    document.addEventListener('change', sync, true);
-    return () => {
-      observer.disconnect();
-      document.removeEventListener('change', sync, true);
-      hiddenButtons.forEach(button => { button.style.display = ''; });
-      if (node?.isConnected) node.remove();
-    };
-  }, []);
+  const [medical, setMedical] = useState({ records: [] });
 
   const appData = data?.data || data || {};
-  const players = appData?.dashboard?.players || [];
-  const dates = appData?.dashboard?.dates || [];
+  const players = appData?.dashboard?.players || EMPTY_LIST;
+  const dates = appData?.dashboard?.dates || EMPTY_LIST;
   const derived = useMemo(() => deriveReport(players, dates, year), [players, dates, year]);
   const selected = derived.reportData.find(player => player.name === selectedPlayer);
 
@@ -432,6 +368,15 @@ export default function ReportsPdfBridgeV2() {
     if (!data) return;
     setAnnualBusy(true);
     try {
+      if (selectedPlayer === 'todos') {
+        try {
+          const response = await medicalPost('bootstrap');
+          setMedical({ records: Array.isArray(response?.records) ? response.records : [] });
+        } catch (error) {
+          console.error('Erro ao consultar o Departamento Médico:', error);
+          setMedical({ error: true, records: [] });
+        }
+      }
       await new Promise(resolve => setTimeout(resolve, 100));
       const element = document.getElementById('pdf-v2-annual');
       if (!element) throw new Error('Template anual indisponível');
@@ -461,11 +406,9 @@ export default function ReportsPdfBridgeV2() {
     }
   };
 
-  if (!active || !mountNode || !data) return null;
-
-  return createPortal(<>
-    <button data-reports-pdf-v2-button="true" onClick={generateMonthly} disabled={monthlyBusy} className="p-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md disabled:opacity-50" title="Resumo Mensal de Assiduidade v2">{monthlyBusy ? <RefreshCw className="animate-spin h-5 w-5" /> : <CalendarDays className="h-5 w-5" />}<span>{monthlyBusy ? 'Gerando...' : 'Resumo Mensal'}</span></button>
-    <button data-reports-pdf-v2-button="true" onClick={generateAnnual} disabled={annualBusy || (selectedPlayer !== 'todos' && !selected)} className="p-3 bg-rose-500 hover:bg-rose-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md disabled:opacity-50" title="Relatório Anual v2">{annualBusy ? <RefreshCw className="animate-spin h-5 w-5" /> : <BookOpen className="h-5 w-5" />}<span>{annualBusy ? 'Gerando...' : 'Relatório Anual'}</span></button>
-    {(annualBusy || monthlyBusy) && <div style={{ position: 'fixed', left: '-12000px', top: 0, zIndex: -100, opacity: 1, pointerEvents: 'none' }}>{annualBusy && (selectedPlayer === 'todos' ? <AnnualGeneral year={year} derived={derived} /> : selected ? <AnnualPlayer year={year} player={selected} /> : null)}{monthlyBusy && <Monthly year={year} derived={derived} />}</div>}
-  </>, mountNode);
+  return <>
+    <button onClick={generateMonthly} disabled={monthlyBusy} className="p-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md disabled:opacity-50" title="Resumo Mensal de Assiduidade">{monthlyBusy ? <RefreshCw className="animate-spin h-5 w-5" /> : <CalendarDays className="h-5 w-5" />}<span>{monthlyBusy ? 'Gerando...' : 'Resumo Mensal'}</span></button>
+    <button onClick={generateAnnual} disabled={annualBusy || (selectedPlayer !== 'todos' && !selected)} className="p-3 bg-rose-500 hover:bg-rose-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md disabled:opacity-50" title="Relatório Anual">{annualBusy ? <RefreshCw className="animate-spin h-5 w-5" /> : <BookOpen className="h-5 w-5" />}<span>{annualBusy ? 'Gerando...' : 'Relatório Anual'}</span></button>
+    {(annualBusy || monthlyBusy) && <div style={{ position: 'fixed', left: '-12000px', top: 0, zIndex: -100, opacity: 1, pointerEvents: 'none' }}>{annualBusy && (selectedPlayer === 'todos' ? <AnnualGeneral year={year} derived={derived} medical={medical} /> : selected ? <AnnualPlayer year={year} player={selected} /> : null)}{monthlyBusy && <Monthly year={year} derived={derived} />}</div>}
+  </>;
 }

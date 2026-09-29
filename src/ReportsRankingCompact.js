@@ -1,6 +1,4 @@
-import React, { useContext, useEffect, useMemo, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { InitialDataContext } from './InitialDataContext';
+import React, { useMemo, useState } from 'react';
 import { BarChart3, Search, Users } from 'lucide-react';
 import { Bar } from 'react-chartjs-2';
 import {
@@ -14,6 +12,8 @@ import {
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
 
+
+const EMPTY_LIST = [];
 
 const num = value => Number(value || 0);
 const calcPts = stats => (num(stats?.pts2) * 2) + (num(stats?.pts3) * 3);
@@ -133,8 +133,8 @@ const CONFIG = {
 
 function CompactRanking({ data, year, onSelectPlayer }) {
   const appData = data?.data || data || {};
-  const players = appData?.dashboard?.players || [];
-  const dates = appData?.dashboard?.dates || [];
+  const players = appData?.dashboard?.players || EMPTY_LIST;
+  const dates = appData?.dashboard?.dates || EMPTY_LIST;
   const [rankingTab, setRankingTab] = useState('presencas');
   const [search, setSearch] = useState('');
 
@@ -143,7 +143,7 @@ function CompactRanking({ data, year, onSelectPlayer }) {
 
   const ranking = useMemo(() => [...reportData]
     .filter(cfg.valid)
-    .sort(cfg.sort), [reportData, rankingTab]);
+    .sort(cfg.sort), [reportData, cfg]);
 
   const filteredRanking = useMemo(() => {
     const query = search.trim().toLocaleLowerCase('pt-BR');
@@ -329,87 +329,6 @@ function CompactRanking({ data, year, onSelectPlayer }) {
   );
 }
 
-function findRankingCard() {
-  const attendanceButton = [...document.querySelectorAll('button')]
-    .filter(button => button.textContent?.trim() === 'Assiduidade' && !button.closest('[data-compact-reports-ranking="true"]'))
-    .at(-1);
-  if (!attendanceButton) return null;
-
-  let element = attendanceButton.parentElement;
-  while (element && element !== document.body) {
-    const className = typeof element.className === 'string' ? element.className : '';
-    if (className.includes('rounded-3xl') && className.includes('shadow-xl')) return element;
-    element = element.parentElement;
-  }
-  return null;
-}
-
-export default function ReportsRankingCompactBridge() {
-  const [mountNode, setMountNode] = useState(null);
-  const [active, setActive] = useState(false);
-  const data = useContext(InitialDataContext);
-  const [year, setYear] = useState(new Date().getFullYear().toString());
-  const [playerSelect, setPlayerSelect] = useState(null);
-
-  useEffect(() => {
-    let node = null;
-    let hiddenCard = null;
-
-    const sync = () => {
-      const reportButton = document.querySelector('button[title="Relatórios"]');
-      const isReports = Boolean(reportButton?.className?.includes('scale-110'));
-      setActive(isReports);
-
-      const heading = [...document.querySelectorAll('h2')]
-        .find(element => element.textContent?.trim() === 'Central de Relatórios');
-      const container = heading?.closest('.space-y-8');
-      if (!container) return;
-
-      const selects = [...container.querySelectorAll('select')];
-      const yearSelect = selects.find(select => /^\d{4}$/.test(select.value));
-      const athleteSelect = selects.find(select => [...select.options].some(option => option.value === 'todos'));
-      if (yearSelect) setYear(yearSelect.value);
-      if (athleteSelect) setPlayerSelect(athleteSelect);
-
-      const rankingCard = findRankingCard();
-      if (!rankingCard) return;
-
-      if (hiddenCard && hiddenCard !== rankingCard) hiddenCard.style.display = '';
-      hiddenCard = rankingCard;
-
-      if (!node || !node.isConnected) {
-        node = document.createElement('div');
-        node.dataset.compactReportsRanking = 'true';
-        rankingCard.insertAdjacentElement('beforebegin', node);
-        setMountNode(node);
-      }
-
-      rankingCard.style.display = isReports ? 'none' : '';
-      node.style.display = isReports ? '' : 'none';
-    };
-
-    sync();
-    const observer = new MutationObserver(sync);
-    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'value'] });
-    document.addEventListener('change', sync, true);
-
-    return () => {
-      observer.disconnect();
-      document.removeEventListener('change', sync, true);
-      if (hiddenCard) hiddenCard.style.display = '';
-      if (node?.isConnected) node.remove();
-    };
-  }, []);
-
-  const onSelectPlayer = name => {
-    if (!playerSelect) return;
-    playerSelect.value = name;
-    playerSelect.dispatchEvent(new Event('change', { bubbles: true }));
-  };
-
-  if (!active || !mountNode || !data) return null;
-  return createPortal(
-    <CompactRanking data={data} year={year} onSelectPlayer={onSelectPlayer} />,
-    mountNode
-  );
+export default function ReportsRankingCompact({ data, year, onSelectPlayer }) {
+  return <CompactRanking data={data} year={year} onSelectPlayer={onSelectPlayer} />;
 }
