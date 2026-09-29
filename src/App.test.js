@@ -87,6 +87,44 @@ test('o painel de presença usa os dados iniciais sem repetir a consulta', async
   }
 });
 
+test('Departamento Médico abre diretamente e preserva a restrição dos detalhes', async () => {
+  const token = 'sessao-medica-de-teste';
+  window.localStorage.setItem('cba_session_v1', JSON.stringify({
+    user: { role: 'MEMBER', email: 'atleta@cba.test', name: 'Atleta', token }, savedAt: Date.now()
+  }));
+  window.localStorage.setItem('cba_last_tab_v1', 'dm');
+  const previousFetch = global.fetch;
+  global.fetch = jest.fn(async (url, options) => {
+    const body = JSON.parse(options.body);
+    expect(body.token).toBe(token);
+    if (body.action === 'getInitialAppData') {
+      expect(url).toContain('/cba-gateway');
+      return { ok: true, json: async () => ({ data: { dashboard: { players: [], dates: [] }, finance: {} } }) };
+    }
+    expect(url).toContain('/cba-medical');
+    expect(body.action).toBe('bootstrap');
+    return { ok: true, json: async () => ({ isAdmin: false, athletes: [], records: [{
+      id: 'restrito-1', playerName: 'Outro Atleta', status: 'Fisioterapia', canViewDetails: false
+    }] }) };
+  });
+  try {
+    const { container } = render(<App />);
+    expect(await screen.findByText('Disponibilidade do elenco')).toBeInTheDocument();
+    expect(screen.getByText('Outro Atleta')).toBeInTheDocument();
+    expect(screen.getByText('Detalhes médicos restritos. Status operacional disponível.')).toBeInTheDocument();
+    expect(screen.queryByText('Entorse no Tornozelo Direito')).not.toBeInTheDocument();
+    expect(container.querySelector('[data-dm-dashboard-v2]')).toBeNull();
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    fireEvent.click(screen.getByText('Outro Atleta'));
+    expect(screen.getByText(/Por privacidade, você pode ver apenas o status operacional/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Dar alta' })).not.toBeInTheDocument();
+  } finally {
+    global.fetch = previousFetch;
+    window.localStorage.removeItem('cba_session_v1');
+    window.localStorage.removeItem('cba_last_tab_v1');
+  }
+});
+
 test('menu móvel abre o Sorteio diretamente, rola até o fim e volta sem nova consulta', async () => {
   window.localStorage.setItem('cba_session_v1', JSON.stringify({
     user: { role: 'MEMBER', email: 'atleta@cba.test', name: 'Atleta', token: 'sessao-de-teste' }, savedAt: Date.now()
