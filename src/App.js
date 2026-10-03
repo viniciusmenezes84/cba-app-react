@@ -18,6 +18,7 @@ const MesarioDashboard = lazy(() => import('./MesarioDashboard'));
 const SorteioDashboard = lazy(() => import('./SorteioDashboard'));
 const DmDashboard = lazy(() => import('./DmDashboard'));
 const PortalExperienceBridge = lazy(() => import('./PortalExperienceBridge'));
+const CbaHistory = lazy(() => import('./CbaHistory'));
 
 function ActiveBridges({ tab }) {
     return <Suspense fallback={null}>
@@ -721,7 +722,8 @@ const NotificacoesTab = () => {
 };
 
 // 10. ABA HALL DA FAMA
-const HallDaFamaTab = ({ allPlayersData, dates }) => {
+export const HallDaFamaTab = ({ allPlayersData, dates }) => {
+    const [historyOpen, setHistoryOpen] = useState(false);
     
     // Cálculo dos líderes All-Time (Histórico Geral)
     const allTimeStats = useMemo(() => {
@@ -766,6 +768,8 @@ const HallDaFamaTab = ({ allPlayersData, dates }) => {
     const topAst = getTopPlayer('totalAst');
     const topBlk = getTopPlayer('totalBlk');
 
+    if (historyOpen) return <Suspense fallback={<div role="status" className="p-8 text-center text-slate-400">Carregando nossa história...</div>}><CbaHistory onBack={() => setHistoryOpen(false)} /></Suspense>;
+
     return (
         <div className="space-y-8 animate-fade-in-up pb-10">
             <GlassCard className="text-center bg-gradient-to-br from-yellow-500 to-amber-600 !text-white border-none shadow-2xl relative overflow-hidden">
@@ -778,6 +782,7 @@ const HallDaFamaTab = ({ allPlayersData, dates }) => {
                     <p className="text-yellow-100 mt-3 font-medium text-lg max-w-2xl mx-auto">
                         O mural definitivo com as maiores lendas e os recordistas absolutos da história do Basquete dos Aposentados.
                     </p>
+                    <button type="button" onClick={() => setHistoryOpen(true)} className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/50 bg-slate-950/15 px-4 py-2.5 text-sm font-black text-white transition-colors hover:bg-slate-950/25 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"><BookOpen className="h-4 w-4" aria-hidden="true"/> Conheça nossa história</button>
                 </div>
             </GlassCard>
             
@@ -855,21 +860,12 @@ const HallDaFamaTab = ({ allPlayersData, dates }) => {
                 </div>
             </div>
 
-            <div className="mt-12">
-                <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-6 flex items-center gap-2 border-b border-slate-200 dark:border-slate-700 pb-3">
-                    <BookOpen className="w-5 h-5 text-slate-500"/> Lendas Eternizadas (Mural)
-                </h3>
-                <GlassCard className="bg-slate-900 border border-slate-800 flex flex-col items-center justify-center p-12 text-center relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-slate-800 rounded-full blur-3xl pointer-events-none"></div>
-                    <Award className="w-16 h-16 text-slate-700 mb-4" />
-                    <p className="text-slate-400 font-medium text-lg max-w-lg">
-                        Este espaço está reservado para homenagear os fundadores e atletas que deixaram a sua marca na história do CBA. 
-                    </p>
-                    <p className="text-slate-600 font-bold text-sm mt-4 uppercase tracking-widest">
-                        Em breve: Cerimónia de Aposentação de Camisas
-                    </p>
-                </GlassCard>
-            </div>
+            <GlassCard className="border-amber-500/20 bg-slate-900 text-slate-100">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="max-w-xl"><p className="text-xs font-black uppercase tracking-widest text-amber-400">Memória do CBA</p><h3 className="mt-2 text-xl font-black text-white">Antes dos recordes, vieram os reencontros.</h3><p className="mt-2 text-sm leading-6 text-slate-400">Conheça os amigos, a quadra e o episódio que deram forma à história do grupo.</p></div>
+                    <button type="button" onClick={() => setHistoryOpen(true)} className="min-h-11 shrink-0 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-black text-slate-950 hover:bg-amber-400">Ler nossa história</button>
+                </div>
+            </GlassCard>
         </div>
     );
 };
