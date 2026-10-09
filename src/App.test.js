@@ -366,3 +366,33 @@ test('Eventos abre a tela nova diretamente e confirma presença com resposta vis
     window.localStorage.removeItem('cba_last_tab_v1');
   }
 });
+
+test('Meu CBA abre pelo cabeçalho de outra aba mesmo se o Início falhar; navegação continua disponível', async () => {
+  window.localStorage.setItem('cba_session_v1', JSON.stringify({ user: { role: 'MEMBER', name: 'Atleta', token: 'a'.repeat(64) }, savedAt: Date.now() }));
+  window.localStorage.setItem('cba_last_tab_v1', 'presenca');
+  const previousFetch = global.fetch;
+  global.fetch = jest.fn(async (_, options) => {
+    const { action } = JSON.parse(options.body);
+    if (action === 'getInitialAppData') return { ok: true, json: async () => ({ data: { dashboard: { players: [], dates: [] }, finance: {} } }) };
+    if (action === 'bootstrap') throw new Error('Início indisponível');
+    if (action === 'getMyProfile') return { ok: true, json: async () => ({ profile: { name: 'Atleta', nickname: '', athleteId: 'own' }, attendance: [], stats: [] }) };
+    throw new Error(action);
+  });
+  try {
+    render(<App />);
+    await screen.findByText(/Visão do elenco em/);
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir Meu CBA' }));
+    expect(await screen.findByRole('heading', { name: 'Meu CBA' })).toBeInTheDocument();
+    expect(await screen.findByText('Minha temporada')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Voltar ao Início' }));
+    expect(await screen.findByText('Não foi possível carregar o Início')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir Meu CBA' }));
+    expect(await screen.findByText('Minha temporada')).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Presença' }).at(-1));
+    expect(await screen.findByText(/Visão do elenco em/)).toBeInTheDocument();
+  } finally {
+    global.fetch = previousFetch;
+    window.localStorage.removeItem('cba_session_v1');
+    window.localStorage.removeItem('cba_last_tab_v1');
+  }
+});
