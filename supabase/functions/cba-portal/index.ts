@@ -38,7 +38,7 @@ Deno.serve(async (req: Request) => {
     if (sessionError) throw sessionError;
     if (!session || new Date(session.expires_at).getTime() <= Date.now()) return fail('Sessão expirada.', 'UNAUTHORIZED', 401);
 
-    const { data: account, error: accountError } = await sb.from('accounts').select('id,email,role,status,athlete_id,athletes(name,photo_url,position,jersey_number)').eq('id', session.account_id).maybeSingle();
+    const { data: account, error: accountError } = await sb.from('accounts').select('id,email,role,status,athlete_id,athletes(name,nickname,photo_url,position,jersey_number)').eq('id', session.account_id).maybeSingle();
     if (accountError) throw accountError;
     if (!account || account.status !== 'approved') return fail('Acesso não autorizado.', 'FORBIDDEN', 403);
     const isAdmin = String(account.role || '').toUpperCase() === 'ADMIN';
@@ -50,6 +50,49 @@ Deno.serve(async (req: Request) => {
     const audit = async (auditAction:string, entityType:string, entityId:string, payload?:unknown) => {
       await sb.from('audit_log').insert({ actor_account_id: account.id, action:auditAction, entity_type:entityType, entity_id:entityId, payload:payload ?? null });
     };
+
+    const profile = (athlete:any) => ({
+      athleteId:account.athlete_id, name:athlete.name, nickname:athlete.nickname || '',
+      photoUrl:athlete.photo_url || '', position:athlete.position || '', jerseyNumber:athlete.jersey_number || ''
+    });
+
+    if (action === 'getMyProfile' || action === 'updateMyProfile') {
+      if (!account.athlete_id || !ownAthlete) return fail('Sua conta ainda não está vinculada a um atleta. Procure a administração.', 'NO_ATHLETE', 409);
+      if (action === 'updateMyProfile') {
+        const allowed = new Set(['action','token','nickname','photoUrl','position','jerseyNumber']);
+        if (Object.keys(p).some(key => !allowed.has(key))) return fail('Campo não permitido na edição do perfil.', 'VALIDATION_ERROR');
+        const row:Record<string,unknown> = {};
+        for (const [key,column,max] of [['nickname','nickname',40],['position','position',60],['jerseyNumber','jersey_number',2],['photoUrl','photo_url',2048]] as const) {
+          if (!(key in p)) continue;
+          if (typeof p[key] !== 'string') return fail('Informe os campos do perfil como texto.', 'VALIDATION_ERROR');
+          const value = text(p[key]);
+          if (value.length > max) return fail(`O campo ${key} excede o limite permitido.`, 'VALIDATION_ERROR');
+          if (key === 'jerseyNumber' && value && !/^\d{1,2}$/.test(value)) return fail('A camisa deve ter um ou dois dígitos.', 'VALIDATION_ERROR');
+          if (key === 'photoUrl' && value) {
+            try {
+              const url = new URL(value);
+              if (url.protocol !== 'https:' || url.username || url.password) throw new Error('invalid');
+            } catch { return fail('Use um link HTTPS válido para a foto.', 'VALIDATION_ERROR'); }
+          }
+          row[column] = value || null;
+        }
+        if (!Object.keys(row).length) return fail('Nenhuma alteração informada.', 'VALIDATION_ERROR');
+        const {data:updated,error} = await sb.from('athletes').update(row).eq('id',account.athlete_id)
+          .select('name,nickname,photo_url,position,jersey_number').single();
+        if (error) throw error;
+        await audit('self_update_profile','athlete',account.athlete_id,{fields:Object.keys(row)});
+        return json({result:'success',profile:profile(updated)});
+      }
+      const year = Number(p.year || todayBahia().slice(0,4));
+      if (!Number.isInteger(year) || year < 2000 || year > Number(todayBahia().slice(0,4))) return fail('Temporada inválida.', 'VALIDATION_ERROR');
+      const end = `${year}-12-31` < todayBahia() ? `${year}-12-31` : todayBahia();
+      const [attendance,stats] = await Promise.all([
+        sb.from('attendance_records').select('attendance_date,status').eq('athlete_id',account.athlete_id).gte('attendance_date',`${year}-01-01`).lte('attendance_date',end).order('attendance_date'),
+        sb.from('daily_stats').select('stat_date,pts2,pts3,reb,ast,blk').eq('athlete_id',account.athlete_id).gte('stat_date',`${year}-01-01`).lte('stat_date',end).order('stat_date')
+      ]);
+      if (attendance.error || stats.error) throw attendance.error || stats.error;
+      return json({result:'success',profile:profile(ownAthlete),year,attendance:attendance.data || [],stats:stats.data || []});
+    }
 
     if (action === 'bootstrap') {
       const [
@@ -161,7 +204,7 @@ Deno.serve(async (req: Request) => {
 
       return json({
         result:'success',
-        user:{ email:account.email, role:account.role, athleteId:account.athlete_id, name:ownAthlete?.name || '', photoUrl:ownAthlete?.photo_url || '' },
+        user:{ email:account.email, role:account.role, athleteId:account.athlete_id, name:ownAthlete?.name || '', photoUrl:ownAthlete?.photo_url || '', nickname:ownAthlete?.nickname || '' },
         overview:{
           athletes:activeAthletes.length,
           portalUsers:approvedAccounts.length,

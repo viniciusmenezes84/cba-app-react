@@ -18,6 +18,10 @@ CI=true npm test -- --watch=false --runInBand
 npm run build
 ```
 
+## Meu CBA (0.4.12)
+
+No Início, toque na foto ou no nome para abrir o perfil pessoal. É possível editar apelido, posição, camisa preferida e foto por link HTTPS; o nome cadastrado é preservado. A tela mostra a temporada, frequência e histórico de presença, com acesso ao card e à agenda. As ações `getMyProfile` e `updateMyProfile` usam exclusivamente o atleta vinculado à sessão validada no servidor. A migração `20261009173459_athlete_nickname.sql` deve ser aplicada antes de publicar a nova `cba-portal`. Verificação das permissões: `npm run test:profile`.
+
 ## Organização atual
 
 - `src/App.js`: autenticação, navegação e telas principais. O acesso à Administração faz parte da navegação do aplicativo.

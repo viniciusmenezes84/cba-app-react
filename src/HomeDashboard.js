@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { BellRing, CalendarDays, Home, PartyPopper, RefreshCw, WalletCards } from 'lucide-react';
 import { portalPost } from './cbaApi';
 import AgendaView from './AgendaView';
+import MeuCba, { ProfileAvatar } from './MeuCba';
 
 const money = value => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const fmtDate = value => {
@@ -26,7 +27,7 @@ function Pill({ children, tone = 'emerald' }) {
   return <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${tones[tone]}`}>{children}</span>;
 }
 
-export function HomeView({ data, isAdmin, onNavigate, onOpenAgenda }) {
+export function HomeView({ data, isAdmin, onNavigate, onOpenAgenda, onOpenProfile }) {
   const nextGame = useMemo(() => (data.games || [])
     .filter(game => !game.cancelledAt && game.date >= todayBahia())
     .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`))[0], [data.games]);
@@ -49,7 +50,7 @@ export function HomeView({ data, isAdmin, onNavigate, onOpenAgenda }) {
       <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
         <div>
           <span className="inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[.18em] text-emerald-300"><Home className="h-4 w-4" />Início</span>
-          <h2 className="mt-3 text-2xl font-black text-white sm:text-3xl">Olá, {data.user?.name || 'atleta'}</h2>
+          <button type="button" onClick={onOpenProfile} aria-label="Abrir Meu CBA" className="mt-3 flex max-w-full items-center gap-3 rounded-xl text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400"><ProfileAvatar name={data.user?.name} photoUrl={data.user?.photoUrl} className="h-12 w-12"/><span className="min-w-0"><h2 className="break-words text-2xl font-black text-white sm:text-3xl">Olá, {data.user?.nickname || data.user?.name || 'atleta'}</h2><span className="text-xs font-bold text-emerald-300">Meu CBA · Ver meu perfil</span></span></button>
           <p className="mt-1 max-w-2xl text-sm text-slate-400">O que importa no CBA agora, sem precisar procurar em várias abas.</p>
           <button type="button" onClick={onOpenAgenda} className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-black text-slate-950"><CalendarDays className="h-4 w-4"/>Abrir minha agenda</button>
         </div>
@@ -87,9 +88,10 @@ export function HomeView({ data, isAdmin, onNavigate, onOpenAgenda }) {
   </div>;
 }
 
-export default function HomeDashboard({ isAdmin, onNavigate, refreshKey = 0 }) {
+export default function HomeDashboard({ isAdmin, onNavigate, refreshKey = 0, onProfileSaved }) {
   const [attempt, setAttempt] = useState(0);
   const [agendaOpen, setAgendaOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [state, setState] = useState({ data: null, error: '', loading: true });
 
   useEffect(() => {
@@ -103,6 +105,7 @@ export default function HomeDashboard({ isAdmin, onNavigate, refreshKey = 0 }) {
 
   if (state.loading) return <div role="status" className="rounded-3xl border border-slate-700 bg-slate-900/75 p-10 text-center text-slate-400"><RefreshCw className="mx-auto h-6 w-6 animate-spin text-emerald-400" /><p className="mt-3 text-sm font-bold">Atualizando dados do CBA...</p></div>;
   if (state.error) return <div role="alert" className="rounded-3xl border border-slate-700 bg-slate-900/75 p-8 text-center text-white"><h2 className="text-lg font-black">Não foi possível carregar o Início</h2><p className="mt-2 text-sm text-slate-400">{state.error}</p><button type="button" onClick={() => setAttempt(value => value + 1)} className="mt-5 rounded-xl bg-emerald-500 px-4 py-2.5 font-black text-slate-950">Tentar novamente</button></div>;
+  if (profileOpen) return <MeuCba onBack={() => setProfileOpen(false)} onOpenAgenda={() => { setProfileOpen(false); setAgendaOpen(true); }} onProfileSaved={profile => { setState(previous => ({ ...previous, data: { ...previous.data, user: { ...previous.data.user, ...profile } } })); onProfileSaved?.(); }} />;
   if (agendaOpen) return <AgendaView data={state.data} onBack={() => setAgendaOpen(false)} onNavigate={onNavigate} />;
-  return <HomeView data={state.data} isAdmin={isAdmin} onNavigate={onNavigate} onOpenAgenda={() => setAgendaOpen(true)} />;
+  return <HomeView data={state.data} isAdmin={isAdmin} onNavigate={onNavigate} onOpenAgenda={() => setAgendaOpen(true)} onOpenProfile={() => setProfileOpen(true)} />;
 }
