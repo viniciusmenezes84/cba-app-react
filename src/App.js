@@ -979,7 +979,7 @@ const MainApp = ({ user, onLogout, logoutPending }) => {
         return (
             <AnimatePresence mode="wait">
                 <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
-                    {activeTab === 'inicio' && <Suspense fallback={<Loader message="Carregando Início..." />}><HomeDashboard isAdmin={isAdmin} onNavigate={tab => { if (TABS.includes(tab)) setActiveTab(tab); }} refreshKey={refreshTrigger} /></Suspense>}
+                    {activeTab === 'inicio' && <Suspense fallback={<Loader message="Carregando Início..." />}><HomeDashboard onProfileSaved={refetch} isAdmin={isAdmin} onNavigate={tab => { if (TABS.includes(tab)) setActiveTab(tab); }} refreshKey={refreshTrigger} /></Suspense>}
                     {activeTab === 'presenca' && <PresencaTab {...props} onAttendanceUpdate={handleForceRefresh} />}
                     {activeTab === 'relatorios' && <Suspense fallback={<Loader message="Carregando Relatórios..." />}><ReportsDashboard data={initialData} /></Suspense>}
                     {activeTab === 'atleta' && <AthleteDashboard {...props} dataError={dataError} />}

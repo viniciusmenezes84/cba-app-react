@@ -1,6 +1,6 @@
 {
   "name": "cba-app",
-  "version": "0.4.11",
+  "version": "0.4.12",
   "private": true,
   "engines": {
     "node": "24.x"
@@ -34,7 +34,8 @@
     "pretest": "node scripts/build-tailwind.js",
     "test": "react-scripts test",
     "test:backend": "node scripts/test-cba-api-auth.cjs",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "test:profile": "node scripts/test-my-profile.cjs"
   },
   "eslintConfig": {
     "extends": [
