@@ -88,11 +88,15 @@ export function HomeView({ data, isAdmin, onNavigate, onOpenAgenda, onOpenProfil
   </div>;
 }
 
-export default function HomeDashboard({ isAdmin, onNavigate, refreshKey = 0, onProfileSaved }) {
+export default function HomeDashboard({ isAdmin, onNavigate, refreshKey = 0, onProfileSaved, openProfile = false, onProfileOpened }) {
   const [attempt, setAttempt] = useState(0);
   const [agendaOpen, setAgendaOpen] = useState(false);
-  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(openProfile);
   const [state, setState] = useState({ data: null, error: '', loading: true });
+
+  useEffect(() => {
+    if (openProfile) { setProfileOpen(true); setAgendaOpen(false); onProfileOpened?.(); }
+  }, [openProfile, onProfileOpened]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -103,9 +107,9 @@ export default function HomeDashboard({ isAdmin, onNavigate, refreshKey = 0, onP
     return () => controller.abort();
   }, [attempt, refreshKey]);
 
+  if (profileOpen) return <MeuCba onBack={() => setProfileOpen(false)} onOpenAgenda={() => { setProfileOpen(false); setAgendaOpen(true); }} onProfileSaved={profile => { setState(previous => ({ ...previous, data: { ...previous.data, user: { ...previous.data?.user, ...profile } } })); onProfileSaved?.(); }} />;
   if (state.loading) return <div role="status" className="rounded-3xl border border-slate-700 bg-slate-900/75 p-10 text-center text-slate-400"><RefreshCw className="mx-auto h-6 w-6 animate-spin text-emerald-400" /><p className="mt-3 text-sm font-bold">Atualizando dados do CBA...</p></div>;
   if (state.error) return <div role="alert" className="rounded-3xl border border-slate-700 bg-slate-900/75 p-8 text-center text-white"><h2 className="text-lg font-black">Não foi possível carregar o Início</h2><p className="mt-2 text-sm text-slate-400">{state.error}</p><button type="button" onClick={() => setAttempt(value => value + 1)} className="mt-5 rounded-xl bg-emerald-500 px-4 py-2.5 font-black text-slate-950">Tentar novamente</button></div>;
-  if (profileOpen) return <MeuCba onBack={() => setProfileOpen(false)} onOpenAgenda={() => { setProfileOpen(false); setAgendaOpen(true); }} onProfileSaved={profile => { setState(previous => ({ ...previous, data: { ...previous.data, user: { ...previous.data.user, ...profile } } })); onProfileSaved?.(); }} />;
   if (agendaOpen) return <AgendaView data={state.data} onBack={() => setAgendaOpen(false)} onNavigate={onNavigate} />;
   return <HomeView data={state.data} isAdmin={isAdmin} onNavigate={onNavigate} onOpenAgenda={() => setAgendaOpen(true)} onOpenProfile={() => setProfileOpen(true)} />;
 }

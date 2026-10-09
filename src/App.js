@@ -879,6 +879,7 @@ const MainApp = ({ user, onLogout, logoutPending }) => {
         } catch { return 'inicio'; }
     });
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [openProfile, setOpenProfile] = useState(false);
     const mainScrollRef = useRef(null);
     const [adminOpen, setAdminOpen] = useState(false);
     const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -979,7 +980,7 @@ const MainApp = ({ user, onLogout, logoutPending }) => {
         return (
             <AnimatePresence mode="wait">
                 <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
-                    {activeTab === 'inicio' && <Suspense fallback={<Loader message="Carregando Início..." />}><HomeDashboard onProfileSaved={refetch} isAdmin={isAdmin} onNavigate={tab => { if (TABS.includes(tab)) setActiveTab(tab); }} refreshKey={refreshTrigger} /></Suspense>}
+                    {activeTab === 'inicio' && <Suspense fallback={<Loader message="Carregando Início..." />}><HomeDashboard openProfile={openProfile} onProfileOpened={() => setOpenProfile(false)} onProfileSaved={refetch} isAdmin={isAdmin} onNavigate={tab => { if (TABS.includes(tab)) setActiveTab(tab); }} refreshKey={refreshTrigger} /></Suspense>}
                     {activeTab === 'presenca' && <PresencaTab {...props} onAttendanceUpdate={handleForceRefresh} />}
                     {activeTab === 'relatorios' && <Suspense fallback={<Loader message="Carregando Relatórios..." />}><ReportsDashboard data={initialData} /></Suspense>}
                     {activeTab === 'atleta' && <AthleteDashboard {...props} dataError={dataError} />}
@@ -1021,11 +1022,13 @@ const MainApp = ({ user, onLogout, logoutPending }) => {
             </nav>
 
             <div className="flex-1 flex flex-col h-full overflow-hidden w-full relative">
-                <header className="shrink-0 p-4 flex justify-between items-center bg-white/40 dark:bg-slate-800/30 backdrop-blur-md border-b border-slate-200/50 dark:border-slate-700/50 z-30">
-                    <div className="flex items-center gap-3">
+                <header className="shrink-0 px-2 py-3 sm:p-4 flex gap-2 justify-between items-center bg-white/40 dark:bg-slate-800/30 backdrop-blur-md border-b border-slate-200/50 dark:border-slate-700/50 z-30">
+                    <div className="flex min-w-0 items-center gap-1 sm:gap-3">
                         <button onClick={() => setIsSidebarOpen(true)} aria-label="Abrir menu de navegação" aria-controls="cba-menu-principal" aria-expanded={isSidebarOpen} className="md:hidden p-2 text-slate-600 dark:text-slate-300 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800"><Menu className="w-6 h-6" /></button>
-                        <img src={user.fotoUrl || 'https://placehold.co/100'} alt="Avatar" className="h-10 w-10 rounded-full object-cover shadow-sm ring-2 ring-white dark:ring-slate-700" crossOrigin="anonymous" />
-                        <div className="hidden sm:block"><h1 className="text-xl font-black leading-none">Portal CBA</h1><p className="text-indigo-600 dark:text-indigo-400 font-bold text-[10px] uppercase tracking-widest">{user.name}</p></div>
+                        <button type="button" aria-label="Abrir Meu CBA" title="Meu CBA — meu perfil" onClick={() => { setActiveTab('inicio'); setOpenProfile(true); setIsSidebarOpen(false); if (mainScrollRef.current) mainScrollRef.current.scrollTop = 0; }} className="flex min-h-11 min-w-0 items-center gap-2 rounded-xl px-1 text-left hover:bg-slate-100 dark:hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400">
+                            <span aria-hidden="true" className="hidden sm:flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-emerald-500/15 font-black text-emerald-500">{user.fotoUrl ? <img src={user.fotoUrl} alt="" className="h-full w-full object-cover" /> : (user.name?.[0] || 'C')}</span>
+                            <span className="min-w-0"><span className="block whitespace-nowrap text-sm font-black sm:text-lg">Meu CBA</span><span className="hidden max-w-48 truncate text-xs text-indigo-500 sm:block">{user.name}</span></span>
+                        </button>
                     </div>
                     <div className="flex gap-2">
                         <button onClick={handleForceRefresh} aria-label="Atualizar dados" title="Atualizar dados" className="p-2 bg-white dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl shadow-sm hover:shadow-md"><RefreshCw className="w-5 h-5" /></button>
