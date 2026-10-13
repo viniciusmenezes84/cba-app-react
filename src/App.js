@@ -879,6 +879,7 @@ const MainApp = ({ user, onLogout, logoutPending, onProfileUpdated }) => {
         } catch { return 'inicio'; }
     });
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [courtMode, setCourtMode] = useState(false);
     const [openProfile, setOpenProfile] = useState(false);
     const mainScrollRef = useRef(null);
     const [adminOpen, setAdminOpen] = useState(false);
@@ -984,7 +985,7 @@ const MainApp = ({ user, onLogout, logoutPending, onProfileUpdated }) => {
                     {activeTab === 'presenca' && <PresencaTab {...props} onAttendanceUpdate={handleForceRefresh} />}
                     {activeTab === 'relatorios' && <Suspense fallback={<Loader message="Carregando Relatórios..." />}><ReportsDashboard data={initialData} /></Suspense>}
                     {activeTab === 'atleta' && <AthleteDashboard {...props} dataError={dataError} />}
-                    {activeTab === 'mesario' && <Suspense fallback={<Loader message="Carregando Mesário..." />}><MesarioDashboard data={initialData} onStatsSaved={handleForceRefresh} /></Suspense>}
+                    {activeTab === 'mesario' && <Suspense fallback={<Loader message="Carregando Mesário..." />}><MesarioDashboard data={initialData} onStatsSaved={handleForceRefresh} onCourtModeChange={setCourtMode} /></Suspense>}
                     {activeTab === 'financas' && <FinancasTab {...props} />}
                     {activeTab === 'jogos' && <Suspense fallback={<Loader message="Carregando Jogos..." />}><ScheduleDashboard tab="jogos" refreshKey={refreshTrigger} players={props.allPlayersData} /></Suspense>}
                     {activeTab === 'eventos' && <Suspense fallback={<Loader message="Carregando Eventos..." />}><ScheduleDashboard tab="eventos" refreshKey={refreshTrigger} /></Suspense>}
@@ -1000,7 +1001,7 @@ const MainApp = ({ user, onLogout, logoutPending, onProfileUpdated }) => {
 
     return (
         <InitialDataContext.Provider value={initialData}>
-        <div className="flex h-screen w-full bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 overflow-hidden">
+        <div data-cba-court-mode={courtMode && activeTab === 'mesario'} className="flex h-screen w-full bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 overflow-hidden">
             <AnimatePresence>
                 {isSidebarOpen && (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="cba-sidebar-backdrop fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-40 md:hidden" onClick={() => setIsSidebarOpen(false)} />
@@ -1022,7 +1023,7 @@ const MainApp = ({ user, onLogout, logoutPending, onProfileUpdated }) => {
             </nav>
 
             <div className="flex-1 flex flex-col h-full overflow-hidden w-full relative">
-                <header className="shrink-0 px-2 py-3 sm:p-4 flex gap-2 justify-between items-center bg-white/40 dark:bg-slate-800/30 backdrop-blur-md border-b border-slate-200/50 dark:border-slate-700/50 z-30">
+                <header data-portal-header="true" className="shrink-0 px-2 py-3 sm:p-4 flex gap-2 justify-between items-center bg-white/40 dark:bg-slate-800/30 backdrop-blur-md border-b border-slate-200/50 dark:border-slate-700/50 z-30">
                     <div className="flex min-w-0 items-center gap-1 sm:gap-3">
                         <button onClick={() => setIsSidebarOpen(true)} aria-label="Abrir menu de navegação" aria-controls="cba-menu-principal" aria-expanded={isSidebarOpen} className="md:hidden p-2 text-slate-600 dark:text-slate-300 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800"><Menu className="w-6 h-6" /></button>
                         <button type="button" aria-label="Abrir Meu CBA" title="Meu CBA — meu perfil" onClick={() => { setActiveTab('inicio'); setOpenProfile(true); setIsSidebarOpen(false); if (mainScrollRef.current) mainScrollRef.current.scrollTop = 0; }} className="flex min-h-11 min-w-0 items-center gap-2 rounded-xl px-1 text-left hover:bg-slate-100 dark:hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400">
@@ -1036,7 +1037,7 @@ const MainApp = ({ user, onLogout, logoutPending, onProfileUpdated }) => {
                         <button onClick={() => onLogout()} disabled={logoutPending} className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-rose-500 font-bold text-sm rounded-xl hover:bg-rose-50 dark:hover:bg-rose-900/20 border border-slate-200 dark:border-slate-700 flex items-center gap-2 disabled:opacity-50"><LogOut className="w-4 h-4 hidden sm:block"/> {logoutPending ? 'Saindo...' : 'Sair'}</button>
                     </div>
                 </header>
-                <main ref={mainScrollRef} className="flex-1 min-w-0 overflow-y-auto hide-scrollbar p-4 md:p-8"><div className="max-w-7xl mx-auto min-h-full flex flex-col pb-24 md:pb-4"><div className="flex-1">{dataError && initialData && <div role="alert" className="mb-4 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">Não foi possível atualizar os dados. <button type="button" onClick={refetch} className="font-black underline">Tentar novamente</button></div>}{renderContent()}</div><footer className="mt-10 pt-4 border-t border-slate-200/30 dark:border-slate-700/40 text-center text-[10px] tracking-wide text-slate-500 dark:text-slate-400" aria-label={`Versão do Portal CBA ${SITE_VERSION}`}>Portal CBA · v{SITE_VERSION}</footer></div></main>
+                <main ref={mainScrollRef} className="flex-1 min-w-0 overflow-y-auto hide-scrollbar p-4 md:p-8"><div data-portal-content="true" className="max-w-7xl mx-auto min-h-full flex flex-col pb-24 md:pb-4"><div className="flex-1">{dataError && initialData && <div role="alert" className="mb-4 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">Não foi possível atualizar os dados. <button type="button" onClick={refetch} className="font-black underline">Tentar novamente</button></div>}{renderContent()}</div><footer className="mt-10 pt-4 border-t border-slate-200/30 dark:border-slate-700/40 text-center text-[10px] tracking-wide text-slate-500 dark:text-slate-400" aria-label={`Versão do Portal CBA ${SITE_VERSION}`}>Portal CBA · v{SITE_VERSION}</footer></div></main>
                 <AnimatePresence>
                     {isPasswordModalOpen && (
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[120] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => !passwordStatus.loading && setIsPasswordModalOpen(false)}>
@@ -1064,7 +1065,7 @@ const MainApp = ({ user, onLogout, logoutPending, onProfileUpdated }) => {
                     )}
                 </AnimatePresence>
             </div>
-            <div className="md:hidden fixed bottom-0 left-0 right-0 z-[100] border-t border-slate-700/80 bg-slate-950/95 backdrop-blur-xl px-2 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))]">
+            <div data-portal-bottom-nav="true" className="md:hidden fixed bottom-0 left-0 right-0 z-[100] border-t border-slate-700/80 bg-slate-950/95 backdrop-blur-xl px-2 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))]">
                 <div className={`grid ${isAdmin ? 'grid-cols-6' : 'grid-cols-5'} gap-1`}>
                     {[
                         ['inicio','Início',Home],
