@@ -1,5 +1,49 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import jpeg from 'npm:jpeg-js@0.4.4';
+
+const PHOTO_BUCKET = 'profile-photos';
+const MAX_PHOTO_BYTES = 1024 * 1024;
+const MAX_BODY_BYTES = 2 * 1024 * 1024;
+
+async function readBody(req: Request) {
+  if (Number(req.headers.get('content-length')) > MAX_BODY_BYTES) throw new Error('BODY_TOO_LARGE');
+  const reader = req.body?.getReader();
+  if (!reader) throw new Error('INVALID_JSON');
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.length;
+    if (size > MAX_BODY_BYTES) { await reader.cancel(); throw new Error('BODY_TOO_LARGE'); }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
+  try { return JSON.parse(new TextDecoder().decode(bytes)); }
+  catch { throw new Error('INVALID_JSON'); }
+}
+
+function safePhoto(base64: unknown) {
+  if (typeof base64 !== 'string' || base64.length > Math.ceil(MAX_PHOTO_BYTES / 3) * 4 || !/^[A-Za-z0-9+/]+={0,2}$/.test(base64)) throw new Error('INVALID_PHOTO');
+  const bytes = Uint8Array.from(atob(base64), char => char.charCodeAt(0));
+  if (bytes.length > MAX_PHOTO_BYTES || bytes[0] !== 255 || bytes[1] !== 216) throw new Error('INVALID_PHOTO');
+  const decoded = jpeg.decode(bytes, { useTArray: true, maxResolutionInMP: 1, maxMemoryUsageInMB: 32, tolerantDecoding: false });
+  if (decoded.width !== decoded.height || decoded.width < 64 || decoded.width > 768) throw new Error('INVALID_PHOTO');
+  // Encode only pixels: strips EXIF, comments, location and any trailing payload.
+  const clean = jpeg.encode({ width: decoded.width, height: decoded.height, data: decoded.data }, 85).data;
+  if (clean.length > MAX_PHOTO_BYTES) throw new Error('INVALID_PHOTO');
+  return clean;
+}
+
+function ownedPhotoPath(value: unknown, athleteId: string) {
+  const prefix = `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/${PHOTO_BUCKET}/`;
+  if (typeof value !== 'string' || !value.startsWith(prefix)) return null;
+  const path = value.slice(prefix.length);
+  return path.startsWith(`${athleteId}/`) && /^[a-f0-9-]+\/[a-f0-9-]+\.jpg$/.test(path) ? path : null;
+}
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -27,7 +71,7 @@ Deno.serve(async (req: Request) => {
   });
 
   try {
-    const p = await req.json();
+    const p = await readBody(req);
     const action = text(p?.action);
     const token = text(p?.token);
     if (!action) return fail('Ação obrigatória.', 'INVALID_REQUEST');
@@ -55,6 +99,48 @@ Deno.serve(async (req: Request) => {
       athleteId:account.athlete_id, name:athlete.name, nickname:athlete.nickname || '',
       photoUrl:athlete.photo_url || '', position:athlete.position || '', jerseyNumber:athlete.jersey_number || ''
     });
+
+    if (action === 'uploadMyPhoto' || action === 'removeMyPhoto') {
+      if (!account.athlete_id || !ownAthlete) return fail('Sua conta ainda não está vinculada a um atleta. Procure a administração.', 'NO_ATHLETE', 409);
+      const allowed = new Set(['action', 'token', ...(action === 'uploadMyPhoto' ? ['imageBase64'] : [])]);
+      if (Object.keys(p).some(key => !allowed.has(key))) return fail('Campo não permitido no envio da foto.', 'VALIDATION_ERROR');
+      const bucket = sb.storage.from(PHOTO_BUCKET);
+      const removeObject = async (path: string) => {
+        try { const { error } = await bucket.remove([path]); if (error) console.error('photo_cleanup_failed'); }
+        catch { console.error('photo_cleanup_failed'); }
+      };
+      let path: string | null = null;
+      let newUrl: string | null = null;
+      if (action === 'uploadMyPhoto') {
+        let clean;
+        try { clean = safePhoto(p.imageBase64); }
+        catch { return fail('Foto inválida. Escolha a imagem novamente e ajuste o enquadramento.', 'INVALID_PHOTO'); }
+        path = `${account.athlete_id}/${crypto.randomUUID()}.jpg`;
+        const { error } = await bucket.upload(path, clean, { contentType: 'image/jpeg', cacheControl: '3600', upsert: false });
+        if (error) return fail('Não foi possível enviar a foto. Sua foto atual foi mantida. Tente novamente.', 'PHOTO_UPLOAD_FAILED', 502);
+        newUrl = bucket.getPublicUrl(path).data.publicUrl;
+      }
+      let updated: any;
+      try {
+        // Compare-and-set prevents overlapping uploads from deleting a newer photo.
+        let query = sb.from('athletes').update({ photo_url: newUrl }).eq('id', account.athlete_id);
+        query = ownAthlete.photo_url == null ? query.is('photo_url', null) : query.eq('photo_url', ownAthlete.photo_url);
+        const result = await query.select('name,nickname,photo_url,position,jersey_number').maybeSingle();
+        if (result.error) throw result.error;
+        updated = result.data;
+      } catch {
+        if (path) await removeObject(path);
+        return fail('Não foi possível salvar a foto no perfil. Tente novamente.', 'PHOTO_SAVE_FAILED', 500);
+      }
+      if (!updated) {
+        if (path) await removeObject(path);
+        return fail('Sua foto foi alterada em outro acesso. Atualize o perfil antes de tentar novamente.', 'PHOTO_CONFLICT', 409);
+      }
+      const previousPath = ownedPhotoPath(ownAthlete.photo_url, account.athlete_id);
+      if (previousPath) await removeObject(previousPath);
+      await audit(action === 'uploadMyPhoto' ? 'self_upload_photo' : 'self_remove_photo', 'athlete', account.athlete_id);
+      return json({ result: 'success', profile: profile(updated) });
+    }
 
     if (action === 'getMyProfile' || action === 'updateMyProfile') {
       if (!account.athlete_id || !ownAthlete) return fail('Sua conta ainda não está vinculada a um atleta. Procure a administração.', 'NO_ATHLETE', 409);
@@ -297,6 +383,8 @@ Deno.serve(async (req: Request) => {
 
     return fail('Ação não reconhecida.','UNKNOWN_ACTION',400);
   } catch (e:any) {
+    if (e?.message === 'BODY_TOO_LARGE') return fail('A imagem excede o limite de envio. Escolha outra foto.', 'PAYLOAD_TOO_LARGE', 413);
+    if (e?.message === 'INVALID_JSON') return fail('Solicitação inválida.', 'INVALID_REQUEST');
     console.error(e);
     return fail('Ocorreu um erro interno. Tente novamente.','INTERNAL_ERROR',500);
   }
