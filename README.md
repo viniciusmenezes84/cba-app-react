@@ -20,13 +20,21 @@ npm run build
 
 ## Meu CBA (0.4.12)
 
-Toque em Meu CBA no cabeçalho de qualquer aba, no celular ou computador, para abrir o perfil pessoal. O cartão de saudação no Início também abre o perfil. É possível editar apelido, posição, camisa preferida e foto por link HTTPS; o nome cadastrado é preservado. A tela mostra a temporada, frequência e histórico de presença, com acesso ao card e à agenda. As ações `getMyProfile` e `updateMyProfile` usam exclusivamente o atleta vinculado à sessão validada no servidor. A migração `20261009173459_athlete_nickname.sql` deve ser aplicada antes de publicar a nova `cba-portal`. Verificação das permissões: `npm run test:profile`.
+Toque em Meu CBA no cabeçalho de qualquer aba, no celular ou computador, para abrir o perfil pessoal. O cartão de saudação no Início também abre o perfil. É possível editar apelido, posição e camisa preferida; a foto é enviada pelo botão Alterar foto; o nome cadastrado é preservado. A tela mostra a temporada, frequência e histórico de presença, com acesso ao card e à agenda. As ações `getMyProfile` e `updateMyProfile` usam exclusivamente o atleta vinculado à sessão validada no servidor. A migração `20261009173459_athlete_nickname.sql` deve ser aplicada antes de publicar a nova `cba-portal`. Verificação das permissões: `npm run test:profile`.
 
 ## Conquistas do atleta (0.4.14)
 
 No Meu CBA, a seção Minhas conquistas calcula seis marcos por temporada: primeira presença, 100 pontos, 50 rebotes, 50 assistências, 20 presenças e 25 presenças. Mostra progresso, próximo objetivo e regras em uma área expansível. O card pessoal leva uma conquista sobre a área da foto, nos formatos Post e Story. O destaque prioriza 25 presenças, 20 presenças, assistências, rebotes, pontos e primeira presença.
 
 Os cálculos reutilizam a resposta do perfil pessoal e respeitam a temporada selecionada; não criam consultas, tabelas ou prêmios persistidos. Somente status `present` conta como presença; pontos seguem `pts2 * 2 + pts3 * 3`. Registros corrigidos recalculam os marcos ao recarregar. Sem registros, a tela informa que aguarda presenças/súmulas. Esta versão usa totais pessoais; sequências de domingos e liderança de rodada ficam para uma etapa posterior.
+
+## Foto de perfil (0.4.15)
+
+Cada atleta pode usar Meu CBA → Alterar foto → Escolher foto (ou Tirar foto no celular), ajustar zoom e posição, conferir a prévia e salvar. JPG, PNG, WebP, HEIC e HEIF até 15 MB são aceitos. A conversão HEIC é carregada somente se o navegador não conseguir abrir a foto nativamente; formatos HEIC específicos ainda podem exigir exportação para JPG. O resultado é JPEG quadrado de 768 px, comprimido no navegador, com validação e remoção de metadados no servidor. Progresso, erro e nova tentativa ficam visíveis; remover exige confirmação.
+
+O bucket público `profile-photos` permite exibição e exportação do card; não há políticas de escrita para `anon` ou `authenticated`. `cba-portal` valida a sessão própria, a aprovação da conta e o vínculo com o atleta em `uploadMyPhoto` e `removeMyPhoto`. O cliente nunca define atleta ou caminho. A foto antiga é removida somente após salvar a nova referência, com compare-and-set para evitar sobrescrita concorrente. Falhas no banco descartam o novo objeto. Falhas excepcionais na limpeza podem deixar um objeto sem referência e são registradas como `photo_cleanup_failed`.
+
+Aplique `20261013112614_profile_photos_storage.sql` antes de implantar a função. Verificação: `npm run test:photo` e `npm run test:profile`. O servidor limita o corpo a 2 MB, aceita somente JPEGs válidos e quadrados de 64–768 px, e o bucket limita cada arquivo a 1 MB. `heic-to` e `jpeg-js` têm versões fixas; o lockfile está versionado.
 
 ## Organização atual
 

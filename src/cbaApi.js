@@ -80,3 +80,30 @@ export const gatewayPost = (action, payload, options) => callFunction('cba-gatew
 export const adminPost = (action, payload, options) => callFunction('cba-admin', action, payload, options);
 export const portalPost = (action, payload, options) => callFunction('cba-portal', action, payload, options);
 export const medicalPost = (action, payload, options) => callFunction('cba-medical', action, payload, options);
+
+// XHR exposes actual upload progress; the server still validates the session and image.
+export function uploadProfilePhoto(imageBase64, { onProgress, signal } = {}) {
+  return new Promise((resolve, reject) => {
+    const token = readSession().token;
+    if (!token) { reject(new CbaApiError('Sessão não encontrada. Entre novamente no portal.', 401, 'UNAUTHORIZED')); return; }
+    const xhr = new XMLHttpRequest();
+    const abort = () => xhr.abort();
+    const finish = (error, data) => { signal?.removeEventListener('abort', abort); error ? reject(error) : resolve(data); };
+    xhr.open('POST', `${FUNCTION_BASE}/cba-portal`);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.timeout = 60000;
+    xhr.upload.onprogress = event => { if (event.lengthComputable) onProgress?.(Math.min(95, Math.round(event.loaded / event.total * 95))); };
+    xhr.onload = () => {
+      let data; try { data = JSON.parse(xhr.responseText); } catch { /* invalid server response */ }
+      if (xhr.status < 200 || xhr.status >= 300 || !data || data.result === 'error') {
+        finish(new CbaApiError(data?.message || 'Não foi possível confirmar o envio. Atualize o perfil antes de tentar novamente.', xhr.status, data?.code));
+      } else { onProgress?.(100); finish(null, data); }
+    };
+    xhr.onerror = xhr.ontimeout = () => finish(new CbaApiError('Conexão interrompida. Atualize o perfil para conferir se a foto foi salva antes de reenviar.', 0, 'NETWORK_ERROR'));
+    xhr.onabort = () => finish(new CbaApiError('Envio cancelado.', 0, 'ABORTED'));
+    if (signal?.aborted) { finish(new CbaApiError('Envio cancelado.', 0, 'ABORTED')); return; }
+    signal?.addEventListener('abort', abort, { once: true });
+    onProgress?.(0);
+    xhr.send(JSON.stringify({ action: 'uploadMyPhoto', token, imageBase64 }));
+  });
+}

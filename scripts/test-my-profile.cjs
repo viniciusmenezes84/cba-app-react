@@ -18,7 +18,7 @@ const db = { from(table) {
     then(resolve, reject) { if (table !== 'app_sessions') reads.push({ table, filters }); return Promise.resolve({ data: [], error: null }).then(resolve, reject); }
   }; return query;
 }};
-vm.runInNewContext(code, { require: () => ({ createClient: () => db }), Deno: { env: { get: () => 'test' }, serve: fn => handler = fn }, crypto: webcrypto, TextEncoder, Request, Response, URL, console });
+vm.runInNewContext(code, { require: () => ({ createClient: () => db }), Deno: { env: { get: () => 'test' }, serve: fn => handler = fn }, crypto: webcrypto, TextEncoder, TextDecoder, Request, Response, URL, console });
 const call = async payload => { const response = await handler(new Request('https://example.test', { method: 'POST', body: JSON.stringify({ token: 'a'.repeat(64), ...payload }) })); return { status: response.status, data: await response.json() }; };
 (async () => {
  reset(); let r = await call({ action: 'getMyProfile', year: 2026, athleteId: 'other' }); assert.equal(r.status, 200); assert.equal(r.data.profile.athleteId, 'athlete-own'); assert.equal(reads.length, 2); reads.forEach(q => assert.equal(q.filters.athlete_id, 'athlete-own'));

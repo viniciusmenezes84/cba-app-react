@@ -871,7 +871,7 @@ export const HallDaFamaTab = ({ allPlayersData, dates }) => {
 };
 
 // --- MAIN APP ---
-const MainApp = ({ user, onLogout, logoutPending }) => {
+const MainApp = ({ user, onLogout, logoutPending, onProfileUpdated }) => {
     const [activeTab, setActiveTab] = useState(() => {
         try {
             const saved = localStorage.getItem('cba_last_tab_v1');
@@ -980,7 +980,7 @@ const MainApp = ({ user, onLogout, logoutPending }) => {
         return (
             <AnimatePresence mode="wait">
                 <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
-                    {activeTab === 'inicio' && <Suspense fallback={<Loader message="Carregando Início..." />}><HomeDashboard openProfile={openProfile} onProfileOpened={() => setOpenProfile(false)} onProfileSaved={refetch} isAdmin={isAdmin} onNavigate={tab => { if (TABS.includes(tab)) setActiveTab(tab); }} refreshKey={refreshTrigger} /></Suspense>}
+                    {activeTab === 'inicio' && <Suspense fallback={<Loader message="Carregando Início..." />}><HomeDashboard openProfile={openProfile} onProfileOpened={() => setOpenProfile(false)} onProfileSaved={profile => { onProfileUpdated?.(profile); refetch(); }} isAdmin={isAdmin} onNavigate={tab => { if (TABS.includes(tab)) setActiveTab(tab); }} refreshKey={refreshTrigger} /></Suspense>}
                     {activeTab === 'presenca' && <PresencaTab {...props} onAttendanceUpdate={handleForceRefresh} />}
                     {activeTab === 'relatorios' && <Suspense fallback={<Loader message="Carregando Relatórios..." />}><ReportsDashboard data={initialData} /></Suspense>}
                     {activeTab === 'atleta' && <AthleteDashboard {...props} dataError={dataError} />}
@@ -1192,9 +1192,23 @@ function AppInner() {
         }
     };
 
+    const handleProfileUpdated = profile => {
+        if (typeof profile?.photoUrl !== 'string') return;
+        // Update display data only; preserve token, permissions and session expiry.
+        setAuth(previous => ({ ...previous, user: { ...previous.user, fotoUrl: profile.photoUrl } }));
+        try {
+            const stored = JSON.parse(localStorage.getItem(SESSION_STORAGE_KEY));
+            if (stored?.user) {
+                stored.user.fotoUrl = profile.photoUrl;
+                if (stored.user.user) stored.user.user.fotoUrl = profile.photoUrl;
+                localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(stored));
+            }
+        } catch { }
+    };
+
     return (
         <ThemeProvider>
-            {auth.status === 'authenticated' ? <MainApp user={auth.user} onLogout={handleLogout} logoutPending={logoutPending} /> : <LoginScreen onLogin={handleLogin} isLoading={auth.status === 'loading'} error={auth.error} />}
+            {auth.status === 'authenticated' ? <MainApp user={auth.user} onProfileUpdated={handleProfileUpdated} onLogout={handleLogout} logoutPending={logoutPending} /> : <LoginScreen onLogin={handleLogin} isLoading={auth.status === 'loading'} error={auth.error} />}
         </ThemeProvider>
     );
 }

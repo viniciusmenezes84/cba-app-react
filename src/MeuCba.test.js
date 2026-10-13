@@ -28,7 +28,7 @@ test('perfil salva somente campos próprios, mantém dados após erro e permite 
   expect(screen.getByLabelText('Apelido')).toHaveValue('Gigante');
   fireEvent.click(screen.getByRole('button', { name: 'Salvar perfil' }));
   expect(await screen.findByRole('status')).toHaveTextContent('Perfil atualizado');
-  expect(portalPost).toHaveBeenLastCalledWith('updateMyProfile', { nickname: 'Gigante', position: 'Pivô', jerseyNumber: '00', photoUrl: '' });
+  expect(portalPost).toHaveBeenLastCalledWith('updateMyProfile', { nickname: 'Gigante', position: 'Pivô', jerseyNumber: '00' });
   expect(onSaved).toHaveBeenCalledWith(expect.objectContaining({ nickname: 'Gigante' }));
   fireEvent.click(screen.getByText('Meu card da temporada'));
   expect(await screen.findByRole('dialog')).toHaveTextContent('Card de Gigante');
@@ -44,13 +44,15 @@ test('conta sem vínculo exibe orientação e mantém saída disponível', async
 });
 test('Início abre Meu CBA, salva apelido, atualiza saudação e acessa agenda', async () => {
   portalPost.mockResolvedValueOnce({ user: { name: 'Atleta' } }).mockResolvedValueOnce(data).mockResolvedValueOnce({ profile: { ...data.profile, nickname: 'Gigante' } }).mockResolvedValueOnce(data);
-  render(<HomeDashboard onNavigate={jest.fn()} />);
+  const profileSaved = jest.fn();
+  render(<HomeDashboard onNavigate={jest.fn()} onProfileSaved={profileSaved} />);
   fireEvent.click(await screen.findByRole('button', { name: 'Abrir Meu CBA' }));
   expect(await screen.findByText('50%')).toBeInTheDocument();
   fireEvent.click(screen.getByText('Editar meu perfil'));
   fireEvent.change(screen.getByLabelText('Apelido'), { target: { value: 'Gigante' } });
   fireEvent.click(screen.getByText('Salvar perfil'));
   await screen.findByText('Perfil atualizado com sucesso.');
+  expect(profileSaved).toHaveBeenCalledWith(expect.objectContaining({ nickname: 'Gigante', photoUrl: '' }));
   fireEvent.click(screen.getByText('Voltar ao Início'));
   expect(screen.getByRole('heading', { name: 'Olá, Gigante' })).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Abrir Meu CBA' }));
