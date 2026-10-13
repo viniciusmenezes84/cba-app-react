@@ -164,6 +164,7 @@ export default function AthleteCardModal({ athlete, year, onClose }) {
           <div className="cba-card-modal__formats" role="group" aria-label="Formato do card"><button type="button" aria-pressed={format === 'post'} onClick={() => changeFormat('post')}>Post · 1080 × 1350</button><button type="button" aria-pressed={format === 'story'} onClick={() => changeFormat('story')}>Story · 1080 × 1920</button></div>
           <p>O card mostra os números da temporada selecionada no formato {format === 'story' ? 'Story (1080 × 1920 px)' : 'post (1080 × 1350 px)'}.</p>
           <p>As médias são por rodada com súmula; uma rodada pode incluir várias partidas na mesma data.</p>
+          {athlete.achievement?.earned && <p className="cba-card-modal__notice">Conquista no card: <strong>{athlete.achievement.title}</strong> · {year}</p>}
           {photoUnavailable && <p className="cba-card-modal__notice">A foto não permitiu exportação. O card usa a inicial do atleta.</p>}
           {!ready && !message && <p role="status">Preparando a foto do atleta…</p>}
           {shareFile && <button type="button" className="cba-card-modal__share" onClick={share}><Share2 size={19} aria-hidden="true" /> Compartilhar imagem</button>}
