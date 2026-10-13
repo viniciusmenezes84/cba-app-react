@@ -22,6 +22,12 @@ npm run build
 
 Toque em Meu CBA no cabeçalho de qualquer aba, no celular ou computador, para abrir o perfil pessoal. O cartão de saudação no Início também abre o perfil. É possível editar apelido, posição, camisa preferida e foto por link HTTPS; o nome cadastrado é preservado. A tela mostra a temporada, frequência e histórico de presença, com acesso ao card e à agenda. As ações `getMyProfile` e `updateMyProfile` usam exclusivamente o atleta vinculado à sessão validada no servidor. A migração `20261009173459_athlete_nickname.sql` deve ser aplicada antes de publicar a nova `cba-portal`. Verificação das permissões: `npm run test:profile`.
 
+## Conquistas do atleta (0.4.14)
+
+No Meu CBA, a seção Minhas conquistas calcula seis marcos por temporada: primeira presença, 100 pontos, 50 rebotes, 50 assistências, 20 presenças e 25 presenças. Mostra progresso, próximo objetivo e regras em uma área expansível. O card pessoal leva uma conquista sobre a área da foto, nos formatos Post e Story. O destaque prioriza 25 presenças, 20 presenças, assistências, rebotes, pontos e primeira presença.
+
+Os cálculos reutilizam a resposta do perfil pessoal e respeitam a temporada selecionada; não criam consultas, tabelas ou prêmios persistidos. Somente status `present` conta como presença; pontos seguem `pts2 * 2 + pts3 * 3`. Registros corrigidos recalculam os marcos ao recarregar. Sem registros, a tela informa que aguarda presenças/súmulas. Esta versão usa totais pessoais; sequências de domingos e liderança de rodada ficam para uma etapa posterior.
+
 ## Organização atual
 
 - `src/App.js`: autenticação, navegação e telas principais. O acesso à Administração faz parte da navegação do aplicativo.

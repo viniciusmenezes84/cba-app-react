@@ -124,6 +124,16 @@ export function drawAthleteCard(canvas, athlete, year, photo = null) {
   ctx.textAlign = 'left';
 
   drawPhoto(ctx, photo, athlete);
+  if (athlete.achievement?.earned) {
+    ctx.fillStyle = '#17283b';
+    roundedRect(ctx, 610, 628, 378, 83, 15);
+    ctx.fill();
+    ctx.strokeStyle = '#d6a647';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    drawText(ctx, 'CONQUISTA DA TEMPORADA', 626, 644, 15, '#facc15', 800);
+    drawText(ctx, athlete.achievement.title, 626, 671, 24, INK, 900);
+  }
   drawText(ctx, 'O JOGO EM NÚMEROS', 78, 257, 20, ORANGE, 900);
   const { lines, size } = nameLines(ctx, athlete.name, 495, 4);
   lines.forEach((line, index) => drawText(ctx, line, 76, 306 + index * (size + 4), size, INK, 900));

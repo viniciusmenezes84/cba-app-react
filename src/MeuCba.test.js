@@ -1,10 +1,11 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import MeuCba from './MeuCba';
 import HomeDashboard from './HomeDashboard';
+import { InitialDataContext } from './InitialDataContext';
 import { buildMySeason } from './myCbaStats';
 import { portalPost } from './cbaApi';
 jest.mock('./cbaApi', () => ({ portalPost: jest.fn() }));
-jest.mock('./AthleteCardModal', () => ({ athlete, onClose }) => <div role="dialog">Card de {athlete.name}<button onClick={onClose}>Fechar card</button></div>);
+jest.mock('./AthleteCardModal', () => ({ athlete, onClose }) => <div role="dialog">Card de {athlete.name}{athlete.achievement?.title && <span>Conquista: {athlete.achievement.title}</span>}<button onClick={onClose}>Fechar card</button></div>);
 const data = {
   profile: { athleteId: 'own', name: 'Atleta', nickname: '', photoUrl: '', position: 'Pivô', jerseyNumber: '00' },
   attendance: [{ attendance_date: '2026-01-01', status: 'present' }, { attendance_date: '2026-01-08', status: 'absent' }, { attendance_date: '2026-01-15', status: 'na' }],
@@ -56,4 +57,21 @@ test('Início abre Meu CBA, salva apelido, atualiza saudação e acessa agenda',
   await screen.findByText('50%');
   fireEvent.click(screen.getByText('Minha agenda'));
   await waitFor(() => expect(screen.getByRole('heading', { name: 'Minha agenda' })).toBeInTheDocument());
+});
+
+
+test('conquistas acompanham o ano selecionado e o card recebe somente prêmio alcançado', async () => {
+  portalPost.mockImplementation(async (_, payload) => payload.year === 2025
+    ? { ...data, attendance: [], stats: [] } : data);
+  render(<InitialDataContext.Provider value={{ dashboard: { dates: ['2025-01-01'], players: [] } }}><MeuCba onBack={jest.fn()} /></InitialDataContext.Provider>);
+  expect(await screen.findByText('1 de 6 · 2026')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Ver conquista no meu card' }));
+  expect(await screen.findByRole('dialog')).toHaveTextContent('Conquista: De volta à quadra');
+  fireEvent.click(screen.getByRole('button', { name: 'Fechar card' }));
+  fireEvent.change(screen.getByLabelText('Temporada'), { target: { value: '2025' } });
+  expect(await screen.findByText('0 de 6 · 2025')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Ver conquista no meu card' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Meu card da temporada' }));
+  expect(await screen.findByRole('dialog')).not.toHaveTextContent('Conquista:');
+  expect(portalPost.mock.calls.map(call => call[0])).toEqual(['getMyProfile', 'getMyProfile']);
 });

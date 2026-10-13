@@ -4,6 +4,8 @@ import { portalPost } from './cbaApi';
 import { InitialDataContext } from './InitialDataContext';
 import { availableAthleteYears, formatDate } from './athleteDashboardData';
 import { buildMySeason } from './myCbaStats';
+import { buildSeasonAchievements } from './athleteAchievementRules';
+import AthleteAchievements from './AthleteAchievements';
 const AthleteCardModal = lazy(() => import('./AthleteCardModal'));
 const currentYear = () => new Intl.DateTimeFormat('en', { timeZone: 'America/Bahia', year: 'numeric' }).format(new Date());
 const fields = profile => Object.fromEntries(['nickname', 'position', 'jerseyNumber', 'photoUrl'].map(key => [key, profile[key] || '']));
@@ -44,6 +46,8 @@ export default function MeuCba({ onBack, onOpenAgenda, onProfileSaved }) {
     return () => controller.abort();
   }, [year, attempt]);
   const athlete = useMemo(() => state.data ? buildMySeason(state.data) : null, [state.data]);
+  const achievements = useMemo(() => buildSeasonAchievements(athlete), [athlete]);
+  const cardAthlete = useMemo(() => athlete ? { ...athlete, achievement: achievements.featured } : null, [athlete, achievements]);
   const dirty = !!draft && JSON.stringify(draft) !== JSON.stringify(fields(state.data?.profile || {}));
   async function save(event) {
     event.preventDefault();
@@ -91,18 +95,19 @@ export default function MeuCba({ onBack, onOpenAgenda, onProfileSaved }) {
         </form>
       </details>
       <section className="rounded-3xl border border-slate-700 bg-slate-900 p-5" aria-labelledby="my-season-title">
-        <div className="flex flex-wrap items-center justify-between gap-3"><h3 id="my-season-title" className="text-xl font-black">Minha temporada</h3><label className="text-xs font-bold">Temporada<select disabled={saving || dirty} className={`${inputClass} ml-2 w-auto`} value={year} onChange={event => setYear(event.target.value)}>{years.map(value => <option key={value}>{value}</option>)}</select></label></div>
+        <div className="flex flex-wrap items-center justify-between gap-3"><h3 id="my-season-title" className="text-xl font-black">Minha temporada</h3><label className="text-xs font-bold">Temporada<select aria-label="Temporada" disabled={saving || dirty} className={`${inputClass} ml-2 w-auto`} value={year} onChange={event => setYear(event.target.value)}>{years.map(value => <option key={value}>{value}</option>)}</select></label></div>
         <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">{[['Pontos', athlete.totals.pts], ['Rebotes', athlete.totals.reb], ['Assistências', athlete.totals.ast], ['Tocos', athlete.totals.blk]].map(([label, value]) => <div key={label} className="rounded-2xl bg-slate-950 p-4"><p className="text-2xl font-black text-emerald-300">{athlete.statDates ? value : '—'}</p><p className="mt-1 text-xs text-slate-400">{label}</p></div>)}</div>
         <p className="mt-4 text-xs leading-5 text-slate-400">{athlete.statDates ? `${athlete.statDates} rodadas com súmula. Cada data pode reunir mais de uma partida.` : 'Nenhuma súmula registrada para você nesta temporada.'}</p>
         <div className="mt-5 flex flex-wrap gap-3"><button type="button" onClick={() => setCardOpen(true)} className={buttonClass}><Share2 size={16} aria-hidden="true"/>Meu card da temporada</button><button type="button" onClick={onOpenAgenda} className={buttonClass}><CalendarDays size={16} aria-hidden="true"/>Minha agenda</button></div>
       </section>
+      <AthleteAchievements achievements={achievements} year={year} onOpenCard={() => setCardOpen(true)} />
       <section className="rounded-3xl border border-slate-700 bg-slate-900 p-5" aria-labelledby="my-attendance-title">
         <h3 id="my-attendance-title" className="flex items-center gap-2 text-xl font-black"><UserRound size={20} aria-hidden="true"/>Minha presença</h3>
         <p className="mt-4 text-3xl font-black text-emerald-300">{athlete.attendanceRate === null ? '—' : `${Math.round(athlete.attendanceRate)}%`}</p>
         <p className="mt-1 text-sm text-slate-400">{athlete.validDates ? `${athlete.presences} presenças em ${athlete.validDates} datas com registro válido.` : 'Sem registros de presença nesta temporada.'}</p>
         {!!state.data.attendance.length && <details className="mt-5"><summary className="min-h-11 cursor-pointer text-sm font-bold">Ver histórico de presença</summary><ul className="mt-2 max-h-64 divide-y divide-slate-700 overflow-y-auto pr-2">{[...state.data.attendance].reverse().map(row => <li key={row.attendance_date} className="flex justify-between gap-3 py-3 text-sm"><span>{formatDate(row.attendance_date)}</span><span className={row.status === 'present' ? 'text-emerald-300' : 'text-slate-400'}>{{ present: 'Presente', absent: 'Ausente', justified: 'Justificado', na: 'Não se aplica' }[row.status] || 'Não informado'}</span></li>)}</ul></details>}
       </section>
-      {cardOpen && <Suspense fallback={<p role="status">Preparando card...</p>}><AthleteCardModal athlete={athlete} year={year} onClose={() => setCardOpen(false)} /></Suspense>}
+      {cardOpen && <Suspense fallback={<p role="status">Preparando card...</p>}><AthleteCardModal athlete={cardAthlete} year={year} onClose={() => setCardOpen(false)} /></Suspense>}
     </>}
   </section>;
 }
