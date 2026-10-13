@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { gatewayPost } from './cbaApi';
 import {
-  AlertCircle, CalendarDays, CheckCircle, ClipboardList, History, Minus,
-  Play, RefreshCw, Save, Search, Trash, Trophy, X
+  AlertCircle, CalendarDays, CheckCircle, ClipboardList, Minus,
+  ChevronDown, Maximize2, Minimize2, Play, RefreshCw, Save, Search, Trash, Trophy, X
 } from 'lucide-react';
 
 const BACKUP_KEY = 'cba_mesario_backup_v2';
@@ -73,7 +73,50 @@ function Modal({ open, onClose, children, width = 'max-w-lg' }) {
   );
 }
 
-export default function MesarioDashboard({ data, onStatsSaved }) {
+const describeEvent = event => {
+  const multiplier = event.statKey === 'pts2' ? 2 : event.statKey === 'pts3' ? 3 : 1;
+  const label = { pts2: 'pontos', pts3: 'pontos', reb: 'rebote', ast: 'assistência', blk: 'toco' }[event.statKey];
+  const delta = event.delta * multiplier;
+  return `${event.player} · ${delta > 0 ? '+' : ''}${delta} ${label}`;
+};
+
+const STAT_OPTIONS = [
+  ['pts2', '+2', 'Cestas de 2'], ['pts3', '+3', 'Cestas de 3'],
+  ['reb', 'REB', 'Rebotes'], ['ast', 'AST', 'Assistências'], ['blk', 'TOC', 'Tocos']
+];
+
+function PlayerCard({ name, player, stats, teamTone, expanded, selected, onSelect, onUpdate, feedback }) {
+  const [correcting, setCorrecting] = useState(false);
+  const [photoFailed, setPhotoFailed] = useState(false);
+  const photo = player?.fotoUrl || player?.photoUrl;
+  useEffect(() => setPhotoFailed(false), [photo]);
+  const controlsId = React.useId();
+  return (
+    <article className="mesario-player rounded-2xl" data-team={teamTone} data-expanded={expanded} data-feedback={feedback || undefined}>
+      <button type="button" className="mesario-player-heading" aria-expanded={expanded} aria-controls={controlsId} onClick={onSelect}>
+        <span className="mesario-avatar" aria-hidden="true">{photo && !photoFailed ? <img src={photo} alt="" onError={() => setPhotoFailed(true)} /> : name.slice(0, 1)}</span>
+        <span className="mesario-player-name">{name}<span className="mesario-player-hint">{selected ? 'Selecionado' : 'Toque para lançar'}</span></span>
+        <span className="mesario-player-points">{calcPts(stats)}<span>PTS</span></span>
+        <ChevronDown className="mesario-player-chevron" aria-hidden="true" />
+      </button>
+      <div id={controlsId} className="mesario-player-controls" hidden={!expanded}>
+        <div className="mesario-stat-grid">
+          {STAT_OPTIONS.map(([key, label, description]) => (
+            <div key={key} className="mesario-stat-cell">
+              <button type="button" className="mesario-stat-button" data-scoring={key === 'pts2' || key === 'pts3'} aria-label={`${label} ${stats[key] || 0} · ${name}`} title={`${description} de ${name}: adicionar`} onClick={() => onUpdate(name, key, 1)}>
+                <span>{label}</span><strong>{stats[key] || 0}</strong>
+              </button>
+              {correcting && <button type="button" className="mesario-subtract" aria-label={`Remover ${description.toLowerCase()} de ${name}`} disabled={!stats[key]} onClick={() => onUpdate(name, key, -1)}><Minus aria-hidden="true" size={16} /></button>}
+            </div>
+          ))}
+        </div>
+        <button type="button" className="mesario-correct" aria-label={`${correcting ? 'Concluir correção' : 'Corrigir lançamento'} de ${name}`} title={correcting ? 'Concluir correção' : 'Corrigir lançamento'} aria-pressed={correcting} onClick={() => setCorrecting(value => !value)}><Minus aria-hidden="true" size={18} /><span>{correcting ? 'Concluir correção' : 'Corrigir lançamento'}</span></button>
+      </div>
+    </article>
+  );
+}
+
+export default function MesarioDashboard({ data, onStatsSaved, onCourtModeChange }) {
   const players = useMemo(() => [...(data?.data?.dashboard?.players || data?.dashboard?.players || [])].sort((a, b) => a.name.localeCompare(b.name)), [data]);
 
   const [bootBackup] = useState(() => readBackup());
@@ -96,6 +139,42 @@ export default function MesarioDashboard({ data, onStatsSaved }) {
   const [modal, setModal] = useState(null);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState(null);
+  const [courtMode, setCourtMode] = useState(false);
+  const [wideLayout, setWideLayout] = useState(false);
+  const [selectedPlayers, setSelectedPlayers] = useState({});
+  const [feedback, setFeedback] = useState(null);
+  const boardRef = useRef(null);
+  const inCourtMode = courtMode && isLive;
+
+  useEffect(() => {
+    onCourtModeChange?.(inCourtMode);
+    return () => onCourtModeChange?.(false);
+  }, [inCourtMode, onCourtModeChange]);
+
+  useEffect(() => {
+    if (!isLive) { setCourtMode(false); return; }
+    const board = boardRef.current;
+    if (!board) return;
+    const measure = () => setWideLayout(board.getBoundingClientRect().width >= 840);
+    measure();
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null;
+    observer?.observe(board);
+    window.addEventListener('resize', measure);
+    return () => { observer?.disconnect(); window.removeEventListener('resize', measure); };
+  }, [isLive, inCourtMode]);
+
+  useEffect(() => {
+    if (!feedback) return;
+    const timer = setTimeout(() => setFeedback(null), 1200);
+    return () => clearTimeout(timer);
+  }, [feedback]);
+
+  useEffect(() => {
+    if (!inCourtMode) return;
+    const exit = event => { if (event.key === 'Escape' && !modal && !notice) setCourtMode(false); };
+    window.addEventListener('keydown', exit);
+    return () => window.removeEventListener('keydown', exit);
+  }, [inCourtMode, modal, notice]);
 
   const sessionLocked = Boolean(sessionStartedAt || gameHistory.length || Object.keys(dayStats).length || isLive);
 
@@ -178,6 +257,8 @@ export default function MesarioDashboard({ data, onStatsSaved }) {
     });
     if (!sessionStartedAt) setSessionStartedAt(Date.now());
     setEventHistory(prev => prev.filter(event => event.gameNumber !== gameNumber));
+    setFeedback(null);
+    setSelectedPlayers({});
     setIsLive(true);
   };
 
@@ -186,6 +267,7 @@ export default function MesarioDashboard({ data, onStatsSaved }) {
     const next = Math.max(0, current + delta);
     const actualDelta = next - current;
     if (!actualDelta) return;
+    setFeedback({ player, statKey, delta: actualDelta, at: Date.now() });
 
     setMatchStats(prev => ({ ...prev, [player]: { ...(prev[player] || emptyStats()), [statKey]: next } }));
     setDayStats(prev => {
@@ -202,6 +284,7 @@ export default function MesarioDashboard({ data, onStatsSaved }) {
     const index = [...eventHistory].map((event, i) => ({ event, i })).reverse().find(item => item.event.gameNumber === gameNumber)?.i;
     if (index === undefined) return;
     const event = eventHistory[index];
+    setFeedback({ player: event.player, statKey: event.statKey, delta: -event.delta, undone: true, at: Date.now() });
     setMatchStats(prev => {
       const current = num(prev[event.player]?.[event.statKey]);
       return { ...prev, [event.player]: { ...(prev[event.player] || emptyStats()), [event.statKey]: Math.max(0, current - event.delta) } };
@@ -297,7 +380,7 @@ export default function MesarioDashboard({ data, onStatsSaved }) {
       if (result.result !== 'success') throw new Error(result.message || 'Não foi possível salvar a súmula.');
       resetSession();
       setModal(null);
-      setNotice({ title: 'Súmula salva', message: 'As estatísticas da sessão foram enviadas com sucesso para a planilha.' });
+      setNotice({ title: 'Súmula salva', message: 'As estatísticas da sessão foram salvas com sucesso no portal.' });
       onStatsSaved?.();
     } catch (error) {
       setNotice({ title: 'Erro ao salvar', message: error.message || 'Falha inesperada ao salvar a sessão.' });
@@ -310,32 +393,10 @@ export default function MesarioDashboard({ data, onStatsSaved }) {
   const lastGameEvents = eventHistory.filter(event => event.gameNumber === gameNumber).slice(-6).reverse();
   const imbalance = Math.abs(teamBlack.length - teamGreen.length);
 
-  const PlayerCard = ({ name, teamTone }) => {
-    const stats = matchStats[name] || emptyStats();
-    return (
-      <div className={`rounded-2xl border p-3 ${teamTone === 'black' ? 'bg-slate-900 border-slate-700' : 'bg-emerald-950/70 border-emerald-700/70'}`}>
-        <div className="flex items-center justify-between gap-3 mb-3">
-          <div className="min-w-0"><p className="font-black text-white truncate">{name}</p><p className="text-[10px] uppercase font-bold text-slate-400">Jogo {gameNumber}</p></div>
-          <div className="text-right"><p className="text-2xl font-black text-white">{calcPts(stats)}</p><p className="text-[9px] uppercase font-black text-slate-400">pontos</p></div>
-        </div>
-        <div className="grid grid-cols-5 gap-1.5">
-          {Object.entries(statLabels).map(([key, label]) => (
-            <div key={key} className="rounded-xl bg-white/5 p-1 text-center">
-              <button onClick={() => updateStat(name, key, 1)} className="w-full min-h-[52px] rounded-lg bg-white/10 hover:bg-white/20 active:scale-95 transition text-white">
-                <span className="block text-[9px] font-black text-slate-400">{label}</span>
-                <span className="block text-xl font-black mt-0.5">{stats[key] || 0}</span>
-              </button>
-              <button onClick={() => updateStat(name, key, -1)} disabled={!stats[key]} className="mt-1 w-full h-7 flex items-center justify-center rounded-md text-white/40 hover:text-white disabled:opacity-15"><Minus className="w-3.5 h-3.5" /></button>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
 
   return (
-    <div data-mesario-v2-root="true" className="space-y-5 pt-2 pb-48 md:pb-8 text-slate-100">
-      <div className="rounded-3xl overflow-hidden border border-cyan-500/15 bg-gradient-to-br from-slate-950 via-cyan-950/60 to-slate-900 p-5 sm:p-7 shadow-2xl">
+    <div data-mesario-v2-root="true" data-live={isLive} data-court-mode={inCourtMode} className="mesario-root space-y-5 pt-2 pb-48 md:pb-8 text-slate-100">
+      <div className="mesario-intro rounded-3xl overflow-hidden border border-cyan-500/15 bg-gradient-to-br from-slate-950 via-cyan-950/60 to-slate-900 p-5 sm:p-7 shadow-2xl">
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-5">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full bg-cyan-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-cyan-300"><ClipboardList className="w-4 h-4" /> Mesa digital CBA</div>
@@ -351,51 +412,45 @@ export default function MesarioDashboard({ data, onStatsSaved }) {
       </div>
 
       {isLive ? (
-        <>
-          <div className="sticky top-2 z-40 rounded-3xl border border-slate-700 bg-slate-950/95 backdrop-blur-xl shadow-2xl p-3 sm:p-4">
-            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-              <div className="text-center"><p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Preto</p><p className="text-4xl sm:text-5xl font-black text-white">{scoreBlack}</p></div>
-              <div className="text-center"><p className="text-[10px] font-black text-cyan-400">JOGO {gameNumber}</p><p className="text-xl font-black text-slate-600">×</p></div>
-              <div className="text-center"><p className="text-[10px] font-black uppercase tracking-wider text-emerald-400">Verde</p><p className="text-4xl sm:text-5xl font-black text-emerald-400">{scoreGreen}</p></div>
+        <section ref={boardRef} className="mesario-board" data-wide={wideLayout} aria-label="Mesa da partida">
+          <div className="mesario-live-toolbar">
+            <div><span className="mesario-live-dot" /> <strong>Mesa CBA</strong><span className="mesario-live-date">{fmtDate(date)} · Jogo {gameNumber}</span></div>
+            <button type="button" className="mesario-mode-button" aria-pressed={inCourtMode} onClick={() => setCourtMode(value => !value)}>{inCourtMode ? <Minimize2 size={18} /> : <Maximize2 size={18} />}{inCourtMode ? 'Sair do Modo Quadra' : 'Modo Quadra'}</button>
+          </div>
+          <div className="mesario-scoreboard" aria-label={`Placar: Preto ${scoreBlack}, Verde ${scoreGreen}`}>
+            <div><span>TIME PRETO</span><strong>{scoreBlack}</strong></div>
+            <div className="mesario-score-center"><span>JOGO {gameNumber}</span><b>×</b><small>EM ANDAMENTO</small></div>
+            <div data-team="green"><span>TIME VERDE</span><strong>{scoreGreen}</strong></div>
+          </div>
+          <div className="mesario-team-switch" aria-label="Equipe para lançamento">
+            <button type="button" aria-pressed={activeMobileTeam === 'black'} data-team="black" onClick={() => setActiveMobileTeam('black')}>Preto <span>{scoreBlack} pts</span></button>
+            <button type="button" aria-pressed={activeMobileTeam === 'green'} data-team="green" onClick={() => setActiveMobileTeam('green')}>Verde <span>{scoreGreen} pts</span></button>
+          </div>
+          <div className="mesario-teams">
+            {[[ 'black', teamBlack, 'Time Preto' ], [ 'green', teamGreen, 'Time Verde' ]].map(([tone, team, title]) => {
+              const selected = team.includes(selectedPlayers[tone]) ? selectedPlayers[tone] : team[0];
+              return <section key={tone} className="mesario-team" data-team={tone} hidden={!wideLayout && activeMobileTeam !== tone} aria-label={title}>
+                <div className="mesario-team-title"><h2>{title}</h2><span>{team.length} atletas</span></div>
+                <div className="mesario-roster">
+                  {team.map(name => <PlayerCard key={name} name={name} player={players.find(player => player.name === name)} stats={matchStats[name] || emptyStats()} teamTone={tone} expanded={wideLayout || selected === name} selected={selected === name} onSelect={() => setSelectedPlayers(prev => ({ ...prev, [tone]: name }))} onUpdate={updateStat} feedback={feedback?.player === name ? String(feedback.at) : null} />)}
+                </div>
+              </section>;
+            })}
+          </div>
+          <div className="mesario-game-actions">
+            <div className="mesario-last-action" role="status" aria-live="polite" aria-atomic="true">{feedback ? `${feedback.undone ? 'Desfeito: ' : ''}${describeEvent(feedback)}` : lastGameEvents[0] ? `Último: ${describeEvent(lastGameEvents[0])}` : 'Selecione o atleta e registre a jogada.'}</div>
+            <div className="mesario-action-buttons">
+              <button type="button" onClick={undoLast} disabled={!lastGameEvents.length} className="mesario-undo">↶ Desfazer</button>
+              <button type="button" onClick={requestFinishGame} className="mesario-finish">Finalizar partida</button>
             </div>
-          </div>
-
-          <div className="lg:hidden grid grid-cols-2 gap-2">
-            <button onClick={() => setActiveMobileTeam('black')} className={`py-3 rounded-2xl font-black ${activeMobileTeam === 'black' ? 'bg-slate-100 text-slate-950' : 'bg-slate-800 text-slate-400'}`}>PRETO ({teamBlack.length})</button>
-            <button onClick={() => setActiveMobileTeam('green')} className={`py-3 rounded-2xl font-black ${activeMobileTeam === 'green' ? 'bg-emerald-500 text-white' : 'bg-slate-800 text-slate-400'}`}>VERDE ({teamGreen.length})</button>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <Card className={`p-3 sm:p-4 ${activeMobileTeam === 'black' ? '' : 'hidden lg:block'}`}>
-              <div className="flex items-center justify-between mb-3"><h2 className="text-lg font-black">Time Preto</h2><span className="text-xs text-slate-500">{teamBlack.length} atletas</span></div>
-              <div className="space-y-3">{teamBlack.map(name => <PlayerCard key={name} name={name} teamTone="black" />)}</div>
-            </Card>
-            <Card className={`p-3 sm:p-4 ${activeMobileTeam === 'green' ? '' : 'hidden lg:block'}`}>
-              <div className="flex items-center justify-between mb-3"><h2 className="text-lg font-black text-emerald-400">Time Verde</h2><span className="text-xs text-slate-500">{teamGreen.length} atletas</span></div>
-              <div className="space-y-3">{teamGreen.map(name => <PlayerCard key={name} name={name} teamTone="green" />)}</div>
-            </Card>
-          </div>
-
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            <Card className="p-4">
-              <div className="flex items-center justify-between mb-3"><div><p className="text-xs uppercase font-black text-slate-500">Últimas ações</p><p className="font-black">Log do jogo atual</p></div><History className="w-5 h-5 text-cyan-400" /></div>
-              <div className="space-y-2 max-h-48 overflow-y-auto">
-                {lastGameEvents.length ? lastGameEvents.map(event => <div key={event.id} className="flex items-center justify-between rounded-xl bg-slate-900/60 px-3 py-2 text-xs"><span><strong>{event.player}</strong> · {statLabels[event.statKey]} {event.delta > 0 ? '+' : ''}{event.delta}</span><span className="text-slate-500">{fmtTime(event.at)}</span></div>) : <p className="text-sm text-slate-500 py-5 text-center">Nenhuma ação registrada neste jogo.</p>}
+            <details className="mesario-history"><summary>Histórico e resumo da sessão</summary>
+              <div className="mesario-history-content">
+                <p>{gameHistory.length} partidas finalizadas · {dayRows.length} atletas · {totals.pts} pontos na sessão</p>
+                {lastGameEvents.length ? <ol>{lastGameEvents.map(event => <li key={event.id}><strong>{event.player}</strong> · {statLabels[event.statKey]} {event.delta > 0 ? '+' : ''}{event.delta}<time>{fmtTime(event.at)}</time></li>)}</ol> : <p>Nenhuma ação registrada neste jogo.</p>}
               </div>
-            </Card>
-            <Card className="p-4">
-              <p className="text-xs uppercase font-black text-slate-500">Sessão</p>
-              <div className="grid grid-cols-3 gap-2 mt-3"><div className="rounded-xl bg-slate-900/60 p-3 text-center"><p className="text-2xl font-black">{gameHistory.length}</p><p className="text-[9px] uppercase text-slate-500">finalizados</p></div><div className="rounded-xl bg-slate-900/60 p-3 text-center"><p className="text-2xl font-black">{dayRows.length}</p><p className="text-[9px] uppercase text-slate-500">atletas</p></div><div className="rounded-xl bg-slate-900/60 p-3 text-center"><p className="text-2xl font-black">{totals.pts}</p><p className="text-[9px] uppercase text-slate-500">pontos</p></div></div>
-            </Card>
+            </details>
           </div>
-
-          <div className="fixed md:static inset-x-0 z-50 bg-slate-950/95 border-t md:border border-slate-800 p-3 md:rounded-3xl backdrop-blur-xl" style={{ bottom: 'calc(4.25rem + env(safe-area-inset-bottom, 0px))' }}>
-            <div className="max-w-7xl mx-auto grid grid-cols-2 gap-2">
-              <button onClick={undoLast} disabled={!lastGameEvents.length} className="py-3.5 rounded-2xl bg-slate-800 text-white font-black disabled:opacity-30">↶ Desfazer</button>
-              <button onClick={requestFinishGame} className="py-3.5 rounded-2xl bg-cyan-600 text-white font-black shadow-lg shadow-cyan-900/30">Finalizar partida</button>
-            </div>
-          </div>
-        </>
+        </section>
       ) : (
         <>
           <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">

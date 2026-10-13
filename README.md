@@ -36,6 +36,12 @@ O bucket público `profile-photos` permite exibição e exportação do card; n�
 
 Aplique `20261013112614_profile_photos_storage.sql` antes de implantar a função. Verificação: `npm run test:photo` e `npm run test:profile`. O servidor limita o corpo a 2 MB, aceita somente JPEGs válidos e quadrados de 64–768 px, e o bucket limita cada arquivo a 1 MB. `heic-to` e `jpeg-js` têm versões fixas; o lockfile está versionado.
 
+## Modo Quadra (0.4.16)
+
+No Mesário, inicie a partida e toque em Modo Quadra. A mesa ocupa a área do portal, recolhendo cabeçalho, menu e navegação inferior. Sair do Modo Quadra (ou Escape, no computador) restaura a navegação sem apagar os lançamentos. Confirmar o fim da partida também restaura o portal. Não depende da API de tela cheia do navegador, funcionando no app instalado e no Safari móvel.
+
+O placar permanece visível, fotos têm fallback para a inicial e ações exibem confirmação e a última jogada. A mesa usa a largura disponível: a partir de 840 px mostra os dois times; abaixo disso mostra um seletor de equipe e expande os controles do atleta selecionado. A partir de 980 px os atletas ficam em linhas compactas. O Modo Quadra mantém os controles fora da rolagem da lista; listas extensas continuam roláveis. Corrigir lançamento abre botões de subtração; Desfazer reverte a última ação. Histórico e resumo ficam numa área expansível. Backup local, regras de pontuação, confirmação do resultado e salvamento da súmula continuam no fluxo existente; o modo visual não é persistido no backup.
+
 ## Organização atual
 
 - `src/App.js`: autenticação, navegação e telas principais. O acesso à Administração faz parte da navegação do aplicativo.

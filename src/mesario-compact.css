@@ -1,221 +1,107 @@
-/* Mesário v2 — modo compacto de operação ao vivo.
-   Mantém toda a lógica React intacta e reduz apenas a densidade visual. */
-
-/* O estado ao vivo é identificado pela presença do placar sticky. */
-[data-mesario-v2-root]:has(> .sticky.top-2) {
-  padding-top: 0 !important;
-  padding-bottom: 10rem !important;
+/* Mesa digital: controles de toque e layout baseado no espaço real da mesa. */
+.mesario-root[data-live="true"] { padding-top: 0; padding-bottom: 1rem; }
+.mesario-root[data-live="true"] > .mesario-intro { display: none; }
+.mesario-root[data-live="true"] > * + * { margin-top: 0; }
+.mesario-board { --mesa-border: #334155; --mesa-muted: #94a3b8; display: flex; flex-direction: column; gap: 12px; min-width: 0; color: #f8fafc; container-type: inline-size; container-name: mesa; }
+.mesario-board button { touch-action: manipulation; cursor: pointer; }
+.mesario-board button:focus-visible, .mesario-board summary:focus-visible { outline: 3px solid #22d3ee; outline-offset: 3px; }
+.mesario-board button:disabled { cursor: default; opacity: .4; }
+.mesario-live-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.mesario-live-toolbar > div { min-width: 0; font-size: 14px; }
+.mesario-live-date { display: block; color: var(--mesa-muted); font-size: 12px; margin-top: 2px; }
+.mesario-live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #34d399; margin-right: 4px; }
+.mesario-mode-button { display: flex; align-items: center; justify-content: center; gap: 7px; flex-shrink: 0; min-height: 44px; padding: 8px 12px; border: 1px solid #475569; border-radius: 12px; background: #1e293b; font-size: 12px; font-weight: 800; }
+.mesario-scoreboard { position: sticky; top: 0; z-index: 20; display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); align-items: center; gap: 12px; border: 1px solid var(--mesa-border); border-radius: 20px; padding: 14px 12px; background: #020617; box-shadow: 0 6px 20px #02061766; text-align: center; }
+.mesario-scoreboard > div > span { display: block; font-size: 12px; font-weight: 800; letter-spacing: .05em; color: #cbd5e1; }
+.mesario-scoreboard strong { display: block; font-size: clamp(42px, 6vw, 64px); line-height: 1.1; font-weight: 900; font-variant-numeric: tabular-nums; }
+.mesario-scoreboard [data-team="green"] { color: #34d399; }
+.mesario-scoreboard [data-team="green"] span { color: #6ee7b7; }
+.mesario-scoreboard .mesario-score-center span { color: #67e8f9; font-size: 11px; }
+.mesario-score-center b { display: block; font-size: 22px; color: #64748b; }
+.mesario-score-center small { font-size: 9px; font-weight: 700; color: #94a3b8; }
+.mesario-team-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.mesario-team-switch button { min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 10px 12px; border-radius: 12px; background: #1e293b; border: 1px solid #475569; font-size: 14px; font-weight: 800; }
+.mesario-team-switch span { font-size: 12px; }
+.mesario-team-switch button[aria-pressed="true"][data-team="black"] { background: #f1f5f9; color: #0f172a; border-color: #f1f5f9; }
+.mesario-team-switch button[aria-pressed="true"][data-team="green"] { background: #059669; color: white; border-color: #34d399; }
+.mesario-board[data-wide="true"] .mesario-team-switch { display: none; }
+.mesario-teams { display: grid; grid-template-columns: minmax(0,1fr); gap: 12px; min-height: 0; }
+.mesario-board[data-wide="true"] .mesario-teams { grid-template-columns: repeat(2,minmax(0,1fr)); }
+.mesario-team { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: #0f172a; border: 1px solid var(--mesa-border); border-radius: 18px; overflow: hidden; }
+.mesario-team[hidden] { display: none; }
+.mesario-team[data-team="green"] { border-color: #065f46; }
+.mesario-team-title { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 12px; }
+.mesario-team-title h2 { font-size: 16px; font-weight: 900; }
+.mesario-team-title span { color: var(--mesa-muted); font-size: 12px; }
+.mesario-team[data-team="green"] h2 { color: #34d399; }
+.mesario-roster { display: flex; flex-direction: column; gap: 8px; padding: 0 10px 10px; max-height: 65vh; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+.mesario-roster::-webkit-scrollbar { display: none; }
+.mesario-player { flex-shrink: 0; border: 1px solid #334155; background: #1e293b; overflow: hidden; }
+.mesario-player[data-team="green"] { background: #052e26; border-color: #065f46; }
+.mesario-player[data-feedback] { border-color: #22d3ee; box-shadow: inset 0 0 0 1px #22d3ee; animation: mesa-feedback .4s ease-out; }
+@keyframes mesa-feedback { from { background-color: #155e75; } }
+.mesario-player-heading { display: flex; align-items: center; gap: 10px; min-height: 60px; width: 100%; text-align: left; padding: 8px 10px; }
+.mesario-avatar { display: flex; align-items: center; justify-content: center; flex: 0 0 36px; height: 36px; border-radius: 50%; background: #334155; color: white; font-size: 16px; font-weight: 900; overflow: hidden; }
+.mesario-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.mesario-player-name { min-width: 0; flex: 1; font-size: 15px; line-height: 1.25; font-weight: 800; overflow-wrap: anywhere; }
+.mesario-player-hint { display: block; font-size: 10px; font-weight: 500; color: #cbd5e1; margin-top: 3px; }
+.mesario-player-points { font-size: 24px; line-height: 1; font-weight: 900; text-align: right; font-variant-numeric: tabular-nums; }
+.mesario-player-points > span { display: block; font-size: 9px; color: #cbd5e1; margin-top: 4px; }
+.mesario-player-chevron { width: 16px; height: 16px; color: #94a3b8; flex-shrink: 0; }
+.mesario-player[data-expanded="true"] .mesario-player-chevron { transform: rotate(180deg); }
+.mesario-board[data-wide="true"] .mesario-player-chevron, .mesario-board[data-wide="true"] .mesario-player-hint { display: none; }
+.mesario-player-controls { padding: 0 8px 6px; }
+.mesario-stat-grid { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 5px; }
+.mesario-stat-cell { min-width: 0; }
+.mesario-stat-button { display: flex; flex-direction: column; justify-content: center; align-items: center; width: 100%; min-height: 54px; border-radius: 10px; background: #334155; color: #f8fafc; border: 1px solid #475569; }
+.mesario-stat-button[data-scoring="true"] { background: #0e7490; border-color: #22d3ee66; }
+.mesario-player[data-team="green"] .mesario-stat-button[data-scoring="true"] { background: #047857; border-color: #34d39988; }
+.mesario-stat-button span { font-size: 11px; font-weight: 800; }
+.mesario-stat-button strong { font-size: 20px; line-height: 1.1; font-weight: 900; }
+.mesario-stat-button:active { background: #0891b2; }
+.mesario-subtract { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 44px; margin-top: 5px; border-radius: 10px; background: #4c1d2a; color: #fecdd3; }
+.mesario-correct { display: flex; align-items: center; justify-content: center; gap: 5px; min-height: 44px; margin-left: auto; padding: 6px 4px; font-size: 11px; color: #cbd5e1; }
+.mesario-game-actions { position: sticky; bottom: -1px; z-index: 25; padding: 10px; border: 1px solid var(--mesa-border); border-radius: 16px; background: #020617; }
+.mesario-last-action { min-height: 24px; color: #a5f3fc; font-size: 12px; margin-bottom: 6px; overflow-wrap: anywhere; }
+.mesario-action-buttons { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 10px; }
+.mesario-action-buttons button { min-height: 48px; border-radius: 12px; padding: 8px; font-size: 13px; font-weight: 800; }
+.mesario-undo { background: #1e293b; border: 1px solid #475569; }
+.mesario-finish { background: #155e75; border: 1px solid #0e7490; }
+.mesario-history summary { min-height: 44px; padding: 12px 0 4px; color: #cbd5e1; font-size: 12px; cursor: pointer; }
+.mesario-history-content { max-height: 160px; overflow-y: auto; font-size: 12px; color: #cbd5e1; padding-top: 6px; }
+.mesario-history-content li { padding: 6px 0; border-top: 1px solid #1e293b; }
+.mesario-history-content time { float: right; margin-left: 8px; color: #94a3b8; }
+[data-cba-court-mode="true"] { height: 100dvh; background: #020617; }
+[data-cba-court-mode="true"] #cba-menu-principal, [data-cba-court-mode="true"] [data-portal-header], [data-cba-court-mode="true"] [data-portal-bottom-nav], [data-cba-court-mode="true"] footer { display: none; }
+[data-cba-court-mode="true"] main { padding: 0; }
+[data-cba-court-mode="true"] [data-portal-content] { max-width: none; padding-bottom: 0; }
+.mesario-root[data-court-mode="true"] { display: flex; flex-direction: column; height: 100dvh; padding: max(10px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left)); background: #020617; }
+.mesario-root[data-court-mode="true"] .mesario-board { flex: 1; min-height: 0; }
+.mesario-root[data-court-mode="true"] .mesario-live-toolbar, .mesario-root[data-court-mode="true"] .mesario-scoreboard, .mesario-root[data-court-mode="true"] .mesario-team-switch, .mesario-root[data-court-mode="true"] .mesario-game-actions { flex-shrink: 0; }
+.mesario-root[data-court-mode="true"] .mesario-teams { flex: 1; }
+.mesario-root[data-court-mode="true"] .mesario-roster { flex: 1; max-height: none; }
+@media (max-height: 550px) {
+  .mesario-root[data-court-mode="true"] .mesario-board { gap: 6px; }
+  .mesario-root[data-court-mode="true"] .mesario-scoreboard { padding: 5px; }
+  .mesario-root[data-court-mode="true"] .mesario-scoreboard strong { font-size: 36px; }
+  .mesario-root[data-court-mode="true"] .mesario-score-center small { display: none; }
+  .mesario-root[data-court-mode="true"] .mesario-history { display: none; }
 }
+@media (prefers-reduced-motion: reduce) { .mesario-player[data-feedback] { animation: none; } }
 
-[data-mesario-v2-root]:has(> .sticky.top-2) > * + * {
-  margin-top: 0.5rem !important;
+/* Em telas largas, uma linha por atleta mantém os dez jogadores ao alcance. */
+@container mesa (min-width: 980px) {
+  .mesario-player { display: grid; grid-template-columns: minmax(0,1fr) minmax(310px,1.9fr); align-items: center; }
+  .mesario-player-heading { min-height: 76px; gap: 6px; padding: 8px; }
+  .mesario-avatar { flex-basis: 28px; height: 28px; font-size: 13px; }
+  .mesario-player-name { font-size: 13px; }
+  .mesario-player-points { font-size: 20px; }
+  .mesario-player-controls { display: grid; grid-template-columns: minmax(0,1fr) 44px; gap: 5px; align-items: start; padding: 8px; }
+  .mesario-player-controls[hidden] { display: none; }
+  .mesario-correct { min-height: 54px; padding: 0; margin: 0; border-radius: 10px; background: #334155; }
+  .mesario-correct[aria-pressed="true"] { background: #881337; }
+  .mesario-correct span { display: none; }
 }
-
-/* Durante o jogo, o hero institucional sai de cena para priorizar a operação. */
-[data-mesario-v2-root]:has(> .sticky.top-2) > div:first-child {
-  display: none !important;
-}
-
-/* Placar: menor, mais horizontal e sempre visível. */
-[data-mesario-v2-root]:has(> .sticky.top-2) > .sticky.top-2 {
-  top: 0.25rem !important;
-  padding: 0.45rem 0.8rem !important;
-  border-radius: 1rem !important;
-}
-
-[data-mesario-v2-root]:has(> .sticky.top-2) > .sticky.top-2 .grid {
-  min-height: 58px;
-}
-
-[data-mesario-v2-root]:has(> .sticky.top-2) > .sticky.top-2 .text-4xl {
-  font-size: 2rem !important;
-  line-height: 1 !important;
-}
-
-[data-mesario-v2-root]:has(> .sticky.top-2) > .sticky.top-2 .text-xl {
-  font-size: 0.9rem !important;
-  line-height: 1 !important;
-}
-
-/* Abas de time no celular ficam mais baixas. */
-[data-mesario-v2-root]:has(> .sticky.top-2) > .sticky + div button {
-  padding-top: 0.55rem !important;
-  padding-bottom: 0.55rem !important;
-  border-radius: 0.8rem !important;
-  font-size: 0.78rem !important;
-}
-
-/* Primeiro grid após as abas = quadra (Preto / Verde). */
-[data-mesario-v2-root]:has(> .sticky.top-2) > .sticky + div + div {
-  gap: 0.55rem !important;
-}
-
-/* Painéis dos times. */
-[data-mesario-v2-root]:has(> .sticky.top-2) > .sticky + div + div > div {
-  padding: 0.55rem !important;
-  border-radius: 1rem !important;
-  min-width: 0;
-}
-
-[data-mesario-v2-root]:has(> .sticky.top-2) > .sticky + div + div > div > div:first-child {
-  margin-bottom: 0.4rem !important;
-  min-height: 24px;
-}
-
-[data-mesario-v2-root]:has(> .sticky.top-2) > .sticky + div + div > div > div:first-child h2 {
-  font-size: 0.95rem !important;
-  line-height: 1.1 !important;
-}
-
-/* Lista de jogadores: altura controlada e scroll somente se realmente necessário. */
-[data-mesario-v2-root]:has(> .sticky.top-2) > .sticky + div + div > div > div:nth-child(2) {
-  max-height: calc(100dvh - 205px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding-right: 2px;
-}
-
-[data-mesario-v2-root]:has(> .sticky.top-2) > .sticky + div + div > div > div:nth-child(2) > * + * {
-  margin-top: 0.3rem !important;
-}
-
-/* Cada jogador deixa de ser um card vertical e vira uma linha operacional. */
-[data-mesario-v2-root]:has(> .sticky.top-2) > .sticky + div + div > div > div:nth-child(2) > div {
-  display: grid !important;
-  grid-template-columns: minmax(105px, 1.05fr) minmax(0, 4fr);
-  align-items: center;
-  gap: 0.45rem;
-  padding: 0.38rem 0.48rem !important;
-  border-radius: 0.85rem !important;
-}
-
-/* Nome + pontos na mesma faixa compacta. */
-[data-mesario-v2-root]:has(> .sticky.top-2) > .sticky + div + div > div > div:nth-child(2) > div > div:first-child {
-  margin-bottom: 0 !important;
-  gap: 0.35rem !important;
-}
-
-[data-mesario-v2-root]:has(> .sticky.top-2) > .sticky + div + div > div > div:nth-child(2) > div > div:first-child > div:first-child p:first-child {
-  font-size: 0.82rem !important;
-  line-height: 1.05 !important;
-}
-
-/* "Jogo X" é redundante porque o jogo já está no placar. */
-[data-mesario-v2-root]:has(> .sticky.top-2) > .sticky + div + div > div > div:nth-child(2) > div > div:first-child > div:first-child p:last-child {
-  display: none !important;
-}
-
-[data-mesario-v2-root]:has(> .sticky.top-2) > .sticky + div + div > div > div:nth-child(2) > div > div:first-child > div:last-child p:first-child {
-  font-size: 1.15rem !important;
-  line-height: 1 !important;
-}
-
-[data-mesario-v2-root]:has(> .sticky.top-2) > .sticky + div + div > div > div:nth-child(2) > div > div:first-child > div:last-child p:last-child {
-  font-size: 0.48rem !important;
-  line-height: 1 !important;
-}
-
-/* Grade dos cinco fundamentos. */
-[data-mesario-v2-root]:has(> .sticky.top-2) > .sticky + div + div > div > div:nth-child(2) > div > div:nth-child(2) {
-  gap: 0.22rem !important;
-}
-
-[data-mesario-v2-root]:has(> .sticky.top-2) > .sticky + div + div > div > div:nth-child(2) > div > div:nth-child(2) > div {
-  position: relative;
-  padding: 0.15rem !important;
-  border-radius: 0.65rem !important;
-  min-width: 0;
-}
-
-/* Botão principal: rótulo e valor em uma única linha. */
-[data-mesario-v2-root]:has(> .sticky.top-2) > .sticky + div + div > div > div:nth-child(2) > div > div:nth-child(2) > div > button:first-child {
-  min-height: 36px !important;
-  padding: 0.18rem 0.1rem !important;
-  display: flex !important;
-  align-items: center;
-  justify-content: center;
-  gap: 0.3rem;
-  border-radius: 0.5rem !important;
-}
-
-[data-mesario-v2-root]:has(> .sticky.top-2) > .sticky + div + div > div > div:nth-child(2) > div > div:nth-child(2) > div > button:first-child span {
-  display: inline !important;
-  margin-top: 0 !important;
-}
-
-[data-mesario-v2-root]:has(> .sticky.top-2) > .sticky + div + div > div > div:nth-child(2) > div > div:nth-child(2) > div > button:first-child span:first-child {
-  font-size: 0.55rem !important;
-}
-
-[data-mesario-v2-root]:has(> .sticky.top-2) > .sticky + div + div > div > div:nth-child(2) > div > div:nth-child(2) > div > button:first-child span:last-child {
-  font-size: 1rem !important;
-  line-height: 1 !important;
-}
-
-/* Correção continua disponível, mas sem consumir uma segunda linha grande. */
-[data-mesario-v2-root]:has(> .sticky.top-2) > .sticky + div + div > div > div:nth-child(2) > div > div:nth-child(2) > div > button:last-child {
-  height: 16px !important;
-  margin-top: 0 !important;
-  padding: 0 !important;
-}
-
-[data-mesario-v2-root]:has(> .sticky.top-2) > .sticky + div + div > div > div:nth-child(2) > div > div:nth-child(2) > div > button:last-child svg {
-  width: 11px !important;
-  height: 11px !important;
-}
-
-/* Log e resumo da sessão continuam preservados no estado, mas saem da tela operacional. */
-[data-mesario-v2-root]:has(> .sticky.top-2) > .sticky + div + div + div {
-  display: none !important;
-}
-
-/* Ações principais sempre acessíveis, também no desktop. */
-[data-mesario-v2-root]:has(> .sticky.top-2) > div:last-child {
-  position: sticky !important;
-  bottom: 0.35rem !important;
-  z-index: 55 !important;
-  padding: 0.45rem !important;
-  border-radius: 1rem !important;
-}
-
-[data-mesario-v2-root]:has(> .sticky.top-2) > div:last-child button {
-  padding-top: 0.65rem !important;
-  padding-bottom: 0.65rem !important;
-  border-radius: 0.8rem !important;
-  font-size: 0.82rem !important;
-}
-
-@media (max-width: 1023px) {
-  [data-mesario-v2-root]:has(> .sticky.top-2) > .sticky + div + div > div > div:nth-child(2) {
-    max-height: calc(100dvh - 245px);
-  }
-}
-
-@media (max-width: 640px) {
-  [data-mesario-v2-root]:has(> .sticky.top-2) {
-    padding-bottom: 4.5rem !important;
-  }
-
-  [data-mesario-v2-root]:has(> .sticky.top-2) > .sticky.top-2 .text-4xl {
-    font-size: 1.75rem !important;
-  }
-
-  [data-mesario-v2-root]:has(> .sticky.top-2) > .sticky + div + div > div > div:nth-child(2) > div {
-    grid-template-columns: minmax(82px, 0.9fr) minmax(0, 3.6fr);
-    gap: 0.28rem;
-    padding: 0.32rem 0.38rem !important;
-  }
-
-  [data-mesario-v2-root]:has(> .sticky.top-2) > .sticky + div + div > div > div:nth-child(2) > div > div:first-child > div:last-child p:last-child {
-    display: none !important;
-  }
-
-  [data-mesario-v2-root]:has(> .sticky.top-2) > .sticky + div + div > div > div:nth-child(2) > div > div:nth-child(2) > div > button:first-child {
-    min-height: 34px !important;
-    gap: 0.15rem;
-  }
-
-  [data-mesario-v2-root]:has(> .sticky.top-2) > .sticky + div + div > div > div:nth-child(2) > div > div:nth-child(2) > div > button:first-child span:first-child {
-    font-size: 0.48rem !important;
-  }
+@media (max-width: 767px) {
+  .mesario-root[data-court-mode="false"] .mesario-game-actions { bottom: calc(4.25rem + env(safe-area-inset-bottom,0px)); }
 }
