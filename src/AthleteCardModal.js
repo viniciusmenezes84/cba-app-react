@@ -12,6 +12,9 @@ export default function AthleteCardModal({ athlete, year, onClose }) {
   const [format, setFormat] = useState('post');
   const [shareFile, setShareFile] = useState(null);
   const [photoUnavailable, setPhotoUnavailable] = useState(false);
+  const [photoSlow, setPhotoSlow] = useState(false);
+  const [photoAttempt, setPhotoAttempt] = useState(0);
+  const [renderRevision, setRenderRevision] = useState(0);
   const [message, setMessage] = useState('');
 
   useEffect(() => {
@@ -29,7 +32,12 @@ export default function AthleteCardModal({ athlete, year, onClose }) {
     let cancelled = false;
     let timeout;
     const canvas = canvasRef.current;
-    const draw = photo => (format === 'story' ? drawAthleteStory : drawAthleteCard)(canvas, athlete, year, photo);
+    setReady(false); setShareFile(null); setPhotoUnavailable(false); setPhotoSlow(false); setMessage('');
+    const draw = photo => {
+      (format === 'story' ? drawAthleteStory : drawAthleteCard)(canvas, athlete, year, photo);
+      setShareFile(null);
+      setRenderRevision(value => value + 1);
+    };
     try {
       draw();
     } catch (error) {
@@ -48,11 +56,13 @@ export default function AthleteCardModal({ athlete, year, onClose }) {
     const fallback = () => {
       if (cancelled) return;
       setPhotoUnavailable(true);
+      setPhotoSlow(false);
       setReady(true);
     };
     photo.onload = () => {
       if (cancelled) return;
       window.clearTimeout(timeout);
+      setPhotoSlow(false);
       try {
         draw(photo);
         setPhotoUnavailable(false);
@@ -65,7 +75,7 @@ export default function AthleteCardModal({ athlete, year, onClose }) {
       window.clearTimeout(timeout);
       fallback();
     };
-    timeout = window.setTimeout(fallback, 7000);
+    timeout = window.setTimeout(() => { if (!cancelled) setPhotoSlow(true); }, 7000);
     photo.src = athlete.fotoUrl;
     return () => {
       cancelled = true;
@@ -73,7 +83,7 @@ export default function AthleteCardModal({ athlete, year, onClose }) {
       photo.onload = null;
       photo.onerror = null;
     };
-  }, [athlete, year, format]);
+  }, [athlete, year, format, photoAttempt]);
 
   useEffect(() => {
     if (!ready || !canvasRef.current || typeof navigator.share !== 'function') return undefined;
@@ -86,7 +96,7 @@ export default function AthleteCardModal({ athlete, year, onClose }) {
     return () => { cancelled = true; };
   // The canvas was redrawn whenever these values or ready changed.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, format, athlete, year]);
+  }, [ready, format, athlete, year, renderRevision]);
 
   const filename = () => {
     const slug = String(athlete.name || 'atleta').normalize('NFD')
@@ -165,7 +175,9 @@ export default function AthleteCardModal({ athlete, year, onClose }) {
           <p>O card mostra os números da temporada selecionada no formato {format === 'story' ? 'Story (1080 × 1920 px)' : 'post (1080 × 1350 px)'}.</p>
           <p>As médias são por rodada com súmula; uma rodada pode incluir várias partidas na mesma data.</p>
           {athlete.achievement?.earned && <p className="cba-card-modal__notice">Conquista no card: <strong>{athlete.achievement.title}</strong> · {year}</p>}
-          {photoUnavailable && <p className="cba-card-modal__notice">A foto não permitiu exportação. O card usa a inicial do atleta.</p>}
+          {photoUnavailable && <p className="cba-card-modal__notice">O card está usando a inicial do atleta. Você pode tentar carregar a foto novamente.</p>}
+          {photoSlow && !ready && <><p className="cba-card-modal__notice">A foto ainda está carregando. Aguarde ou escolha continuar com a inicial.</p><button type="button" className="cba-card-modal__share" onClick={() => { setPhotoUnavailable(true); setPhotoSlow(false); setReady(true); }}>Continuar com a inicial</button></>}
+          {photoUnavailable && <button type="button" className="cba-card-modal__share" onClick={() => setPhotoAttempt(value => value + 1)}>Tentar carregar foto novamente</button>}
           {!ready && !message && <p role="status">Preparando a foto do atleta…</p>}
           {shareFile && <button type="button" className="cba-card-modal__share" onClick={share}><Share2 size={19} aria-hidden="true" /> Compartilhar imagem</button>}
           <button type="button" className="cba-card-modal__download" onClick={download} disabled={!ready}>
