@@ -42,6 +42,14 @@ No Mesário, inicie a partida e toque em Modo Quadra. A mesa ocupa a área do po
 
 O placar permanece visível, fotos têm fallback para a inicial e ações exibem confirmação e a última jogada. A mesa usa a largura disponível: a partir de 840 px mostra os dois times; abaixo disso mostra um seletor de equipe e expande os controles do atleta selecionado. A partir de 980 px os atletas ficam em linhas compactas. O Modo Quadra mantém os controles fora da rolagem da lista; listas extensas continuam roláveis. Corrigir lançamento abre botões de subtração; Desfazer reverte a última ação. Histórico e resumo ficam numa área expansível. Backup local, regras de pontuação, confirmação do resultado e salvamento da súmula continuam no fluxo existente; o modo visual não é persistido no backup.
 
+## Destaques esportivos no Início (0.4.18)
+
+A página **Início** preserva saudação/Meu CBA, agenda, próximos jogos/eventos, situação financeira e comunicação. A seção **CBA Sports Center** acrescenta destaques da última rodada com súmula, líderes e ranking da temporada selecionada (PTS, REB, AST, TOC e 3PT), assiduidade, evolução individual (produção ou posição acumulada), presenças por data, sequência de comparecimentos e recordes.
+
+Os indicadores reutilizam o `dashboard.players` do `InitialDataContext` e `roundMatches` do `cba-portal/bootstrap`, sem novas consultas. A temporada é determinada pelo ano da data; resultados de um mesmo domingo permanecem consolidados na rodada; recordes por **partida** são exibidos apenas quando existem partidas detalhadas persistidas. Dados zerados não elegem falsos líderes.
+
+**Importante:** a indicação de destaque usa índice editorial transparente `PTS + REB + AST + TOC`; não é prêmio MVP oficial nem eficiência técnica completa. Sem tentativas de arremesso, não é possível calcular aproveitamento de arremessos. Ranking e evolução por rodada respeitam ano e data. Para testar: `CI=true npm test -- --watch=false --runInBand`; para compilar: `CI=false npm run build`.
+
 ## Organização atual
 
 - `src/App.js`: autenticação, navegação e telas principais. O acesso à Administração faz parte da navegação do aplicativo.

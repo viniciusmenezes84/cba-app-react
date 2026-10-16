@@ -1,8 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { BellRing, CalendarDays, Home, PartyPopper, RefreshCw, WalletCards } from 'lucide-react';
 import { portalPost } from './cbaApi';
 import AgendaView from './AgendaView';
 import MeuCba, { ProfileAvatar } from './MeuCba';
+import HomeHighlights from './HomeHighlights';
+import { InitialDataContext } from './InitialDataContext';
 
 const money = value => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const fmtDate = value => {
@@ -27,7 +29,7 @@ function Pill({ children, tone = 'emerald' }) {
   return <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-wide ${tones[tone]}`}>{children}</span>;
 }
 
-export function HomeView({ data, isAdmin, onNavigate, onOpenAgenda, onOpenProfile }) {
+export function HomeView({ data, isAdmin, onNavigate, onOpenAgenda, onOpenProfile, initialData }) {
   const nextGame = useMemo(() => (data.games || [])
     .filter(game => !game.cancelledAt && game.date >= todayBahia())
     .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`))[0], [data.games]);
@@ -63,6 +65,7 @@ export function HomeView({ data, isAdmin, onNavigate, onOpenAgenda, onOpenProfil
         </div>
       </div>
     </div>
+    <HomeHighlights initialData={initialData} portalData={data} onNavigate={onNavigate}/>
     <div className="grid gap-4 lg:grid-cols-2">
       <Panel>
         <div className="flex items-center justify-between"><div><Pill>Próximo jogo</Pill><h3 className="mt-3 text-xl font-black text-white">{nextGame ? fmtDate(nextGame.date) : 'Nenhum jogo agendado'}</h3></div><CalendarDays className="h-8 w-8 text-emerald-400" /></div>
@@ -89,6 +92,7 @@ export function HomeView({ data, isAdmin, onNavigate, onOpenAgenda, onOpenProfil
 }
 
 export default function HomeDashboard({ isAdmin, onNavigate, refreshKey = 0, onProfileSaved, openProfile = false, onProfileOpened }) {
+  const initialData = useContext(InitialDataContext);
   const [attempt, setAttempt] = useState(0);
   const [agendaOpen, setAgendaOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(openProfile);
@@ -111,5 +115,5 @@ export default function HomeDashboard({ isAdmin, onNavigate, refreshKey = 0, onP
   if (state.loading) return <div role="status" className="rounded-3xl border border-slate-700 bg-slate-900/75 p-10 text-center text-slate-400"><RefreshCw className="mx-auto h-6 w-6 animate-spin text-emerald-400" /><p className="mt-3 text-sm font-bold">Atualizando dados do CBA...</p></div>;
   if (state.error) return <div role="alert" className="rounded-3xl border border-slate-700 bg-slate-900/75 p-8 text-center text-white"><h2 className="text-lg font-black">Não foi possível carregar o Início</h2><p className="mt-2 text-sm text-slate-400">{state.error}</p><button type="button" onClick={() => setAttempt(value => value + 1)} className="mt-5 rounded-xl bg-emerald-500 px-4 py-2.5 font-black text-slate-950">Tentar novamente</button></div>;
   if (agendaOpen) return <AgendaView data={state.data} onBack={() => setAgendaOpen(false)} onNavigate={onNavigate} />;
-  return <HomeView data={state.data} isAdmin={isAdmin} onNavigate={onNavigate} onOpenAgenda={() => setAgendaOpen(true)} onOpenProfile={() => setProfileOpen(true)} />;
+  return <HomeView data={state.data} isAdmin={isAdmin} onNavigate={onNavigate} onOpenAgenda={() => setAgendaOpen(true)} onOpenProfile={() => setProfileOpen(true)} initialData={initialData} />;
 }
