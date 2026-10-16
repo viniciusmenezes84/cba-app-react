@@ -148,12 +148,148 @@ function DueRow({ athlete, due, defaultAmount, onSave }) {
 }
 
 function StatsModule({ notify, setDirty }) {
-  const [date,setDate]=useState(new Date().toISOString().slice(0,10)); const [athletes,setAthletes]=useState([]); const [values,setValues]=useState({}); const [loading,setLoading]=useState(false);
-  const load=useCallback(async()=>{try{setLoading(true);const d=await adminPost('statsByDate',{date});setAthletes(d.athletes||[]);const n={};(d.records||[]).forEach(r=>n[r.athlete_id]=r);setValues(n);}catch(e){notify(e.message,'error');}finally{setLoading(false);}},[date,notify]);
-  useEffect(()=>{load();},[load]);
-  const change=(id,key,v)=>setValues(prev=>({...prev,[id]:{...(prev[id]||{}),[key]:Math.max(0,Number(v)||0)}}));
-  const save=async()=>{try{setLoading(true);const records=athletes.map(a=>({athleteId:a.id,pts2:values[a.id]?.pts2||0,pts3:values[a.id]?.pts3||0,reb:values[a.id]?.reb||0,ast:values[a.id]?.ast||0,blk:values[a.id]?.blk||0}));const r=await adminPost('saveStats',{date,records});notify(r.message);setDirty(true);}catch(e){notify(e.message,'error');}finally{setLoading(false);}};
-  return <div className="space-y-4"><Panel className="p-4 flex flex-wrap items-end gap-3"><Field label="Data da súmula"><input type="date" className={inputClass} value={date} onChange={e=>setDate(e.target.value)}/></Field><button onClick={save} disabled={loading} className={cx(btn,'bg-indigo-600 text-white ml-auto')}><Save className="w-4 h-4"/>Salvar estatísticas</button></Panel><Panel className="overflow-hidden"><div className="grid grid-cols-[minmax(140px,1fr)_70px_70px_70px_70px_70px_70px] gap-2 px-4 py-3 bg-slate-900/60 text-[10px] uppercase font-black text-slate-500"><span>Atleta</span><span>2PT</span><span>3PT</span><span>REB</span><span>AST</span><span>TOC</span><span>PTS</span></div><div className="max-h-[68vh] overflow-y-auto">{athletes.map(a=>{const s=values[a.id]||{};return <div key={a.id} className="grid grid-cols-[minmax(140px,1fr)_70px_70px_70px_70px_70px_70px] gap-2 items-center px-4 py-2 border-t border-slate-700/50"><span className="font-bold text-slate-200 truncate">{a.name}</span>{['pts2','pts3','reb','ast','blk'].map(k=><input key={k} type="number" min="0" className={cx(inputClass,'px-2 text-center')} value={s[k]||0} onChange={e=>change(a.id,k,e.target.value)}/>)}<span className="text-center font-black text-indigo-300">{(Number(s.pts2||0)*2)+(Number(s.pts3||0)*3)}</span></div>})}</div></Panel></div>;
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [athletes, setAthletes] = useState([]);
+  const [values, setValues] = useState({});
+  const [recordCount, setRecordCount] = useState(0);
+  const [matchCount, setMatchCount] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [resetDate, setResetDate] = useState('');
+  const [confirmation, setConfirmation] = useState('');
+
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      const result = await adminPost('statsByDate', { date });
+      setAthletes(result.athletes || []);
+      const byAthlete = {};
+      (result.records || []).forEach(row => { byAthlete[row.athlete_id] = row; });
+      setValues(byAthlete);
+      setRecordCount((result.records || []).length);
+      setMatchCount(result.matchCount || 0);
+    } catch (error) {
+      notify(error.message, 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [date, notify]);
+  useEffect(() => { load(); }, [load]);
+
+  const change = (id, key, value) => setValues(prev => ({
+    ...prev, [id]: { ...(prev[id] || {}), [key]: Math.max(0, Number(value) || 0) }
+  }));
+
+  const save = async () => {
+    if (loading) return;
+    try {
+      setLoading(true);
+      const records = athletes.map(a => ({
+        athleteId: a.id, pts2: values[a.id]?.pts2 || 0,
+        pts3: values[a.id]?.pts3 || 0, reb: values[a.id]?.reb || 0,
+        ast: values[a.id]?.ast || 0, blk: values[a.id]?.blk || 0
+      }));
+      const result = await adminPost('saveStats', { date, records });
+      notify(result.message);
+      setDirty(true);
+      await load();
+    } catch (error) {
+      notify(error.message, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const closeReset = () => { setResetDate(''); setConfirmation(''); };
+  const reset = async () => {
+    if (loading || resetDate !== date || confirmation !== 'ZERAR') return;
+    try {
+      setLoading(true);
+      const result = await adminPost('resetStatsByDate', {
+        date: resetDate, confirmation
+      });
+      closeReset();
+      setValues({});
+      setRecordCount(0);
+      setMatchCount(0);
+      setDirty(true);
+      notify(result.message || 'Estatísticas da data zeradas.');
+      await load();
+    } catch (error) {
+      notify(error.message, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return <div className="space-y-4">
+    <Panel className="p-4">
+      <div className="flex flex-wrap items-end gap-3">
+        <Field label="Data da súmula">
+          <input aria-label="Data da súmula" type="date" className={inputClass} value={date}
+            disabled={loading} onChange={event => { setDate(event.target.value); closeReset(); }}/>
+        </Field>
+        <div className="min-w-0 flex-1 text-xs text-slate-400">
+          <p>{recordCount} {recordCount === 1 ? 'registro estatístico' : 'registros estatísticos'} · {matchCount} {matchCount === 1 ? 'partida salva' : 'partidas salvas'}</p>
+          <p className="mt-1">O reset afeta somente a data selecionada, não as presenças.</p>
+        </div>
+        <button type="button" onClick={() => { setResetDate(date); setConfirmation(''); }}
+          disabled={loading || (recordCount === 0 && matchCount === 0)}
+          className={cx(btn, 'min-h-11 border border-rose-700/50 bg-rose-950/30 text-rose-300 hover:bg-rose-950/60')}>
+          <Trash2 className="h-4 w-4"/> Zerar estatísticas da data
+        </button>
+        <button type="button" onClick={save} disabled={loading} className={cx(btn, 'min-h-11 bg-indigo-600 text-white hover:bg-indigo-500')}>
+          {loading ? <RefreshCw className="h-4 w-4 animate-spin"/> : <Save className="h-4 w-4"/>} Salvar estatísticas
+        </button>
+      </div>
+    </Panel>
+    <Panel className="overflow-hidden">
+      <div className="grid grid-cols-[minmax(140px,1fr)_70px_70px_70px_70px_70px_70px] gap-2 bg-slate-900/60 px-4 py-3 text-[10px] font-black uppercase text-slate-500">
+        <span>Atleta</span><span>2PT</span><span>3PT</span><span>REB</span><span>AST</span><span>TOC</span><span>PTS</span>
+      </div>
+      <div className="max-h-[68vh] overflow-x-auto overflow-y-auto">
+        {athletes.map(a => {
+          const stats = values[a.id] || {};
+          return <div key={a.id} className="grid min-w-[650px] grid-cols-[minmax(140px,1fr)_70px_70px_70px_70px_70px_70px] items-center gap-2 border-t border-slate-700/50 px-4 py-2">
+            <span className="truncate font-bold text-slate-200">{a.name}</span>
+            {['pts2', 'pts3', 'reb', 'ast', 'blk'].map(key => <input key={key} type="number" min="0"
+              aria-label={a.name + ' · ' + key} disabled={loading}
+              className={cx(inputClass, 'px-2 text-center')}
+              value={stats[key] || 0} onChange={event => change(a.id, key, event.target.value)}/>)}
+            <span className="text-center font-black text-indigo-300">{Number(stats.pts2 || 0) * 2 + Number(stats.pts3 || 0) * 3}</span>
+          </div>;
+        })}
+      </div>
+    </Panel>
+    {resetDate && <div role="dialog" aria-modal="true" aria-labelledby="stats-reset-heading"
+      className="fixed inset-0 z-[210] flex items-center justify-center bg-slate-950/85 p-4">
+      <div className="w-full max-w-lg rounded-3xl border border-rose-700/50 bg-slate-900 p-5 shadow-2xl sm:p-6">
+        <h3 id="stats-reset-heading" className="flex items-center gap-2 text-xl font-black text-white">
+          <AlertTriangle className="h-6 w-6 text-rose-400"/> Confirmar limpeza da súmula
+        </h3>
+        <p className="mt-3 text-sm leading-6 text-slate-300">
+          Você vai remover <strong>todas as estatísticas e partidas salvas de {dateBr(resetDate)}</strong>.
+          Esta operação recalculará os totais da temporada, mas não excluirá presenças,
+          jogos agendados nem informações de outras datas.
+        </p>
+        <p className="mt-3 text-xs leading-5 text-amber-300">Será criada uma cópia de segurança no banco antes da limpeza.
+          Confira a data antes de prosseguir.</p>
+        <Field label='Digite ZERAR para confirmar'>
+          <input aria-label="Confirmação para zerar" autoFocus autoComplete="off"
+            className={cx(inputClass, 'mt-2')} value={confirmation} disabled={loading}
+            onChange={event => setConfirmation(event.target.value)} placeholder="ZERAR"/>
+        </Field>
+        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button type="button" onClick={closeReset} disabled={loading}
+            className={cx(btn, 'min-h-11 bg-slate-700 text-white')}>Cancelar</button>
+          <button type="button" onClick={reset}
+            disabled={loading || date !== resetDate || confirmation !== 'ZERAR'}
+            className={cx(btn, 'min-h-11 bg-rose-600 text-white hover:bg-rose-500')}>
+            {loading ? <RefreshCw className="h-4 w-4 animate-spin"/> : <Trash2 className="h-4 w-4"/>} Confirmar e zerar
+          </button>
+        </div>
+      </div>
+    </div>}
+  </div>;
 }
 
 function GamesModule({ data, reload, notify, setDirty }) {
