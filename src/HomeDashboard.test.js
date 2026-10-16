@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import HomeDashboard from './HomeDashboard';
+import { InitialDataContext } from './InitialDataContext';
 import { portalPost } from './cbaApi';
 
 jest.mock('./cbaApi', () => ({ portalPost: jest.fn() }));
@@ -57,4 +58,33 @@ test('atualização global recarrega o painel e descarta resposta antiga', async
   await waitFor(() => expect(screen.getByRole('heading', { name: 'Olá, Vinicius' })).toBeInTheDocument());
   resolveOld({ ...payload, user: { name: 'Antigo' } });
   expect(screen.queryByRole('heading', { name: 'Olá, Antigo' })).not.toBeInTheDocument();
+});
+
+
+test('Início mantém os cards antigos e mostra o Sports Center com rankings por temporada', async () => {
+  const year = today.slice(0, 4);
+  const stats = { dashboard: { players: [
+    {name:'Ana',fotoUrl:'',dailyStats:{[today]:{pts2:5,pts3:0,reb:2,ast:2,blk:1}},attendance:{[today]:'✅'}},
+    {name:'Bia',dailyStats:{[today]:{pts2:3,pts3:0,reb:4,ast:1,blk:0}},attendance:{[today]:'✅'}}
+  ],dates:[today] } };
+  portalPost.mockReset();
+  portalPost.mockResolvedValue(payload);
+  const navigate=jest.fn();
+  render(<InitialDataContext.Provider value={{data:stats}}>
+    <HomeDashboard isAdmin onNavigate={navigate}/>
+  </InitialDataContext.Provider>);
+  expect(await screen.findByRole('heading',{name:'Olá, Vinicius'})).toBeInTheDocument();
+  expect(screen.getByRole('heading',{name:/O jogo em/})).toBeInTheDocument();
+  expect(screen.getByText('Cestinha da rodada')).toBeInTheDocument();
+  expect(screen.getByText('Líderes da temporada')).toBeInTheDocument();
+  expect(screen.getByText('Ranking acumulado')).toBeInTheDocument();
+  expect(screen.getByText('Recordes da temporada')).toBeInTheDocument();
+  expect(screen.getByText('R$ 15,00')).toBeInTheDocument();
+  expect(screen.getByText('Aviso do clube')).toBeInTheDocument();
+  expect(screen.getByLabelText('Temporada dos destaques')).toHaveValue(year);
+  fireEvent.click(screen.getByRole('button',{name:'REB'}));
+  expect(screen.getByRole('button',{name:'REB'})).toHaveAttribute('aria-pressed','true');
+  fireEvent.click(screen.getByRole('button',{name:'Abrir rankings completos'}));
+  expect(navigate).toHaveBeenCalledWith('relatorios');
+  expect(portalPost).toHaveBeenCalledTimes(1);
 });
