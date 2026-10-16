@@ -145,7 +145,7 @@ export function buildAnnualGeneral(year, derived, medical) {
   doc.addPage();
   let y = header(doc, 'RELATÓRIO EXECUTIVO ANUAL', 'Visão consolidada do elenco', year);
   y = section(doc, '1. RESUMO EXECUTIVO', y);
-  y = summary(doc, [['Jogos', playedDates.length], ['Participantes', activePlayers], ['Assiduidade', `${averageAttendance.toFixed(0)}%`], ['Súmulas', `${statGameDates.length}/${playedDates.length}`]], y);
+  y = summary(doc, [['Rodadas', playedDates.length], ['Participantes', activePlayers], ['Assiduidade', `${averageAttendance.toFixed(0)}%`], ['Súmulas', `${statGameDates.length}/${playedDates.length}`]], y);
   y = section(doc, '2. DESTAQUES DE ASSIDUIDADE', y);
   y = table(doc, ['#', 'Atleta', 'Presenças', 'Assiduidade'], attendance.slice(0, 10)
     .map((player, index) => [index + 1, player.name, `${player.presences}/${player.validGames}`, `${player.percentage.toFixed(0)}%`]), y);
@@ -162,7 +162,7 @@ export function buildAnnualGeneral(year, derived, medical) {
   }
   doc.addPage();
   y = header(doc, 'DESEMPENHO GERAL DO ELENCO', 'Dados da temporada', year);
-  y = table(doc, ['Atleta', 'Pres.', 'Assid.', 'Súm.', 'PTS/J', 'REB/J', 'AST/J', 'TOC/J'], attendance.map(player => [
+  y = table(doc, ['Atleta', 'Pres.', 'Assid.', 'Súm.', 'PTS/R', 'REB/R', 'AST/R', 'TOC/R'], attendance.map(player => [
     player.name, `${player.presences}/${player.validGames}`, `${player.percentage.toFixed(0)}%`, player.gamesWithStats,
     player.ppjYear.toFixed(1), player.rpjYear.toFixed(1), player.apjYear.toFixed(1), player.tpjYear.toFixed(1)
   ]), y, { fontSize: 7, columnStyles: { 0: { cellWidth: 48 } } });
@@ -190,7 +190,7 @@ export function buildAnnualPlayer(year, player) {
   y = section(doc, '1. PERFIL DA TEMPORADA', y);
   y = summary(doc, [['Presenças', `${player.presences}/${player.validGames}`], ['Assiduidade', `${player.percentage.toFixed(0)}%`], ['Súmulas', player.gamesWithStats], ['Faltas NJ', player.faults]], y);
   y = section(doc, '2. MÉDIAS TÉCNICAS', y);
-  y = summary(doc, [['PTS/J', player.ppjYear.toFixed(1)], ['REB/J', player.rpjYear.toFixed(1)], ['AST/J', player.apjYear.toFixed(1)], ['TOC/J', player.tpjYear.toFixed(1)]], y);
+  y = summary(doc, [['PTS/R', player.ppjYear.toFixed(1)], ['REB/R', player.rpjYear.toFixed(1)], ['AST/R', player.apjYear.toFixed(1)], ['TOC/R', player.tpjYear.toFixed(1)]], y);
   y = section(doc, '3. RECORDES', y);
   const season = highs(player.statEntries);
   const career = highs(Object.entries(player.dailyStats || {}));
