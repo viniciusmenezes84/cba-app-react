@@ -164,12 +164,37 @@ Deno.serve(async (req: Request) => {
 
       case 'statsByDate': {
         const date = text(p.date);
-        const [aQ, rQ] = await Promise.all([
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return fail('Data inválida.', 'VALIDATION_ERROR');
+        const [aQ, rQ, mQ] = await Promise.all([
           sb.from('athletes').select('id,name,active').eq('active', true).order('name'),
           sb.from('daily_stats').select('*').eq('stat_date', date),
+          sb.from('round_matches').select('id', { count: 'exact', head: true }).eq('match_date', date),
         ]);
-        if (aQ.error) throw aQ.error; if (rQ.error) throw rQ.error;
-        return json({ result: 'success', athletes: aQ.data || [], records: rQ.data || [] });
+        if (aQ.error) throw aQ.error; if (rQ.error) throw rQ.error; if (mQ.error) throw mQ.error;
+        return json({ result: 'success', athletes: aQ.data || [], records: rQ.data || [], matchCount: mQ.count || 0 });
+      }
+
+      case 'resetStatsByDate': {
+        const date = text(p.date);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return fail('Data inválida.', 'VALIDATION_ERROR');
+        if (text(p.confirmation) !== 'ZERAR') return fail('Confirmação obrigatória: digite ZERAR.', 'VALIDATION_ERROR');
+        // Admin authenticated at the start of this handler; the DB verifies the role again.
+        const { data: result, error } = await sb.rpc('cba_reset_stats_for_date', {
+          p_date: date, p_actor: account.id
+        });
+        if (error) {
+          if (['22023', '42501'].includes(error.code)) return fail(error.message, 'VALIDATION_ERROR');
+          throw error;
+        }
+        return json({
+          result: 'success',
+          message: result?.alreadyEmpty
+            ? 'A data já não tinha estatísticas ou partidas para remover.'
+            : 'Estatísticas e partidas desta data zeradas com cópia de segurança.',
+          dailyRows: result?.dailyRows || 0,
+          matches: result?.matches || 0,
+          backupId: result?.backupId || null
+        });
       }
 
       case 'saveStats': {
