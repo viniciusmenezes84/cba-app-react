@@ -1,4 +1,4 @@
-import { availableHighlightYears, buildHomeHighlights, efficiencyIndex } from './homeHighlightsData';
+import { availableHighlightYears, buildHomeHighlights, efficiencyIndex, buildRankHistory } from './homeHighlightsData';
 
 const players = [
   { name: 'Ana', dailyStats: {
@@ -56,4 +56,19 @@ test('preserva estado vazio sem atribuir líderes fictícios a súmulas zeradas'
   expect(h.seasonLeaders.pts).toBeNull();
   expect(h.gameRecords.every(r=>r.value===null)).toBe(true);
   expect(h.presenceTop).toHaveLength(1);
+});
+
+
+test('exibe colocação cumulativa e melhor sequência de presença sem inventar vitórias', () => {
+  const h=buildHomeHighlights(players,'2026',matches,'2026-10-16');
+  expect(h.bestStreakLeader.name).toBe('Ana');
+  expect(h.bestStreakLeader.bestStreak).toBe(2);
+  expect(buildRankHistory(h,'Ana','pts')).toEqual([
+    {date:'2026-09-06',position:1},
+    {date:'2026-09-13',position:1}
+  ]);
+  expect(buildRankHistory(h,'Cris','pts')).toEqual([
+    {date:'2026-09-06',position:null},
+    {date:'2026-09-13',position:null}
+  ]);
 });
