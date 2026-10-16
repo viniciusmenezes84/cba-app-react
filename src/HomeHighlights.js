@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Activity, ArrowRight, Award, BarChart3, CalendarDays, Crown, Flame, Medal, Shield, Sparkles, Target, TrendingUp, Trophy, Users, Zap } from 'lucide-react';
 import { ProfileAvatar } from './MeuCba';
-import { availableHighlightYears, buildHomeHighlights, roundDateLabel, STAT_KEYS, STAT_LABELS, efficiencyIndex } from './homeHighlightsData';
+import { availableHighlightYears, buildHomeHighlights, roundDateLabel, STAT_KEYS, STAT_LABELS, efficiencyIndex, buildRankHistory } from './homeHighlightsData';
 
 const todayBahia = () => new Intl.DateTimeFormat('en-CA', { timeZone:'America/Bahia',year:'numeric',month:'2-digit',day:'2-digit' }).format(new Date());
 const show = n => Number(n || 0).toLocaleString('pt-BR');
@@ -50,6 +50,21 @@ function Bars({ rows, metric = 'pts', attendance = false }) {
     })}
   </div>;
 }
+function PositionBars({ rows }) {
+  const recent = rows.slice(-8);
+  const placed = recent.map(r => r.position).filter(v => v !== null);
+  const last = Math.max(1,...placed);
+  if (!placed.length) return <p className="p-4 text-sm text-slate-400">Sem posição acumulada nesta métrica.</p>;
+  return <div role="img" aria-label="Posição no ranking acumulado por rodada" className="flex h-40 items-end justify-between gap-2 pt-3">
+    {recent.map(r => <div key={r.date} className="flex min-w-0 flex-1 flex-col items-center justify-end gap-1.5">
+      <span className="text-[10px] font-black text-cyan-300">{r.position ? r.position + 'º' : '—'}</span>
+      <div className="flex h-24 w-full max-w-12 items-end overflow-hidden rounded-t-lg bg-white/5">
+        <span className="w-full rounded-t-md bg-cyan-400" style={{height:(r.position ? Math.max(12,(last+1-r.position)/last*100) : 3)+'%'}}/>
+      </div>
+      <span title={roundDateLabel(r.date)} className="text-center text-[9px] text-slate-400">{r.date.slice(5).replace('-','/')}</span>
+    </div>)}
+  </div>;
+}
 export default function HomeHighlights({ initialData, portalData, onNavigate }) {
   const today = todayBahia();
   const active = initialData?.data || initialData || {};
@@ -63,6 +78,7 @@ export default function HomeHighlights({ initialData, portalData, onNavigate }) 
   const [year,setYear] = useState(today.slice(0,4));
   const [metric,setMetric] = useState('pts');
   const [selectedName,setSelectedName] = useState('');
+  const [trendMode,setTrendMode] = useState('stats');
   useEffect(() => { if (!years.includes(year)) setYear(years[0]); }, [years,year]);
   const matches = portalData?.roundMatches || active.roundMatches || [];
   const summary = useMemo(() => buildHomeHighlights(enriched,year,matches,today), [enriched,year,matches,today]);
@@ -72,6 +88,7 @@ export default function HomeHighlights({ initialData, portalData, onNavigate }) 
   const trendPlayer = summary.athletes.find(p => p.name === selectedName) ||
     seasonLeader || summary.athletes.find(p => p.entries.length);
   const ranking = summary.rankings[metric] || [];
+  const rankHistory = useMemo(() => buildRankHistory(summary,trendPlayer?.name,metric), [summary,trendPlayer?.name,metric]);
   const seasonCards = STAT_KEYS.map(key => ({key, athlete:summary.seasonLeaders[key]}));
   const presenceLeader = summary.presenceTop[0];
   return <section aria-labelledby="cba-sports-title" className="space-y-4 pb-3">
@@ -165,8 +182,13 @@ export default function HomeHighlights({ initialData, portalData, onNavigate }) 
             {summary.athletes.filter(p => p.entries.length).map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
           </select>
         </label>
-        <p className="mt-3 text-xs font-bold text-cyan-300">{STAT_LABELS[metric]} por rodada</p>
-        <Bars rows={trendPlayer?.entries || []} metric={metric}/>
+        <div role="group" aria-label="Tipo de evolução" className="mt-3 flex flex-wrap gap-2">
+          {[['stats','Produção'],['position','Posição acumulada']].map(([key,label]) =>
+            <button key={key} type="button" aria-pressed={trendMode === key} onClick={() => setTrendMode(key)}
+              className={'min-h-9 rounded-lg px-3 text-xs font-black ' + (trendMode === key ? 'bg-cyan-400 text-slate-950' : 'bg-slate-800 text-slate-300')}>{label}</button>)}
+        </div>
+        <p className="mt-3 text-xs font-bold text-cyan-300">{trendMode === 'stats' ? STAT_LABELS[metric] + ' por rodada' : 'Colocação no ranking de ' + STAT_LABELS[metric]}</p>
+        {trendMode === 'stats' ? <Bars rows={trendPlayer?.entries || []} metric={metric}/> : <PositionBars rows={rankHistory}/>}
         <button type="button" onClick={() => onNavigate('atleta')} className="mt-3 flex min-h-11 items-center gap-2 text-xs font-black text-cyan-300">Desempenho completo <ArrowRight className="h-4 w-4"/></button>
       </Frame>
     </div>
@@ -175,6 +197,13 @@ export default function HomeHighlights({ initialData, portalData, onNavigate }) 
         <h3 className="flex items-center gap-2 text-base font-black text-white"><Activity className="h-5 w-5 text-emerald-300"/> Presença por rodada</h3>
         <p className="mt-1 text-xs text-slate-400">Quantidade de atletas presentes nas últimas oito datas</p>
         <div className="mt-3"><Bars rows={summary.presenceDates} attendance/></div>
+        {summary.bestStreakLeader && <div className="mt-4 border-t border-white/10 pt-3">
+          <p className="mb-2 text-xs font-black uppercase tracking-wider text-emerald-300">Melhor sequência de presenças</p>
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0 flex-1"><Athlete player={summary.bestStreakLeader} size="h-10 w-10"/></div>
+            <strong className="shrink-0 text-lg font-black text-white">{summary.bestStreakLeader.bestStreak} <span className="text-xs text-slate-400">seguidas</span></strong>
+          </div>
+        </div>}
       </Frame>
       <Frame>
         <h3 className="flex items-center gap-2 text-base font-black text-white"><Flame className="h-5 w-5 text-orange-300"/> Recordes da temporada</h3>
