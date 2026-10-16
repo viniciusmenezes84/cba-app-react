@@ -109,7 +109,7 @@ function DayDetails({ date, rows, zeroRows, totals, onClose }) {
   </DetailsShell>;
 }
 
-function DayView({ players, year }) {
+function DayView({ players, year, matches = [] }) {
   const statDates = useMemo(() => {
     const dates = new Set();
     players.forEach(player => Object.keys(player.dailyStats || {}).forEach(date => {
@@ -152,6 +152,10 @@ function DayView({ players, year }) {
   }), { pts: 0, reb: 0, ast: 0, blk: 0 }), [rows]);
 
   const topPlayers = rows.slice(0, 3);
+  const dayMatches = useMemo(() => matches
+    .filter(match => match.date === selectedDate)
+    .sort((a,b) => String(a.sessionKey).localeCompare(String(b.sessionKey)) || a.number - b.number),
+  [matches, selectedDate]);
 
   return <>
     <Panel className="mt-5 overflow-hidden">
@@ -180,6 +184,24 @@ function DayView({ players, year }) {
           <Metric icon={BarChart3} label="Assistências" value={totals.ast} detail="total da rodada" tone="text-cyan-500" />
           <Metric icon={CalendarDays} label="Tocos" value={totals.blk} detail="total da rodada" tone="text-violet-500" />
         </div>
+
+
+        {dayMatches.length ? <details className="rounded-2xl border border-indigo-500/25 p-3 sm:p-4">
+          <summary className="cursor-pointer text-sm font-black text-indigo-700 dark:text-indigo-300">
+            {dayMatches.length} {dayMatches.length === 1 ? 'partida registrada' : 'partidas registradas'} nesta rodada — ver por jogo
+          </summary>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            {dayMatches.map(match => <div key={`${match.sessionKey}-${match.number}`} className="rounded-xl bg-slate-50 dark:bg-slate-900 p-3">
+              <p className="font-black text-sm">Jogo {match.number} · Preto {match.blackScore} × {match.greenScore} Verde</p>
+              <div className="mt-2 space-y-1 text-xs">
+                {Object.entries(match.playerStats || {}).map(([name, stats]) => <div key={name} className="flex justify-between gap-2">
+                  <span className="truncate">{name}</span>
+                  <span className="shrink-0 font-bold">{calcPts(stats)} PTS · {num(stats?.reb)} REB · {num(stats?.ast)} AST · {num(stats?.blk)} TOC</span>
+                </div>)}
+              </div>
+            </div>)}
+          </div>
+        </details> : <p className="text-xs text-slate-500">Súmula histórica consolidada por data: as partidas individuais não foram registradas.</p>}
 
         <div className="flex flex-col xl:flex-row xl:items-center gap-3">
           <div className="flex-1 min-w-0">
@@ -253,7 +275,8 @@ function StatsExperience({ data, year, selectedPlayer }) {
     const player = players.find(item => item.name === selectedPlayer);
     if (player) return <PlayerHistory player={player} year={year} />;
   }
-  return <DayView players={players} year={year} />;
+  const matches = (data?.data || data || {}).roundMatches || [];
+  return <DayView players={players} year={year} matches={matches} />;
 }
 
 export default function ReportsStatsByDate({ data, year, selectedPlayer }) {
