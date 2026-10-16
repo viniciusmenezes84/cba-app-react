@@ -147,7 +147,7 @@ function DueRow({ athlete, due, defaultAmount, onSave }) {
   return <div className="grid grid-cols-[minmax(120px,1fr)_90px_90px_105px_90px] gap-2 items-center px-4 py-2.5 border-t border-slate-700/50"><span className="font-bold text-slate-200 truncate">{athlete.name}</span><input type="number" step="0.01" className={inputClass} value={draft.amount_due} onChange={e=>setDraft({...draft,amount_due:e.target.value})}/><input type="number" step="0.01" className={inputClass} value={draft.amount_paid} onChange={e=>setDraft({...draft,amount_paid:e.target.value})}/><select className={inputClass} value={draft.status} onChange={e=>setDraft({...draft,status:e.target.value})}><option value="pending">Pendente</option><option value="partial">Parcial</option><option value="paid">Pago</option><option value="exempt">Isento</option></select><button onClick={()=>onSave(draft)} className={cx(btn,'bg-slate-700 hover:bg-indigo-600 text-white')}><Save className="w-4 h-4"/>Salvar</button></div>;
 }
 
-function StatsModule({ notify, setDirty }) {
+export function StatsModule({ notify, setDirty }) {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [athletes, setAthletes] = useState([]);
   const [values, setValues] = useState({});
