@@ -413,11 +413,13 @@ Deno.serve(async (req: Request) => {
         if (!Array.isArray(params.stats) || params.stats.length < 1 || params.stats.length > 200) return fail('Informe de 1 a 200 registros de estatísticas.', 'VALIDATION_ERROR');
         const rows: any[] = [];
         const names = new Set<string>();
+        const idsByName = new Map<string,string>();
         for (const entry of params.stats) {
           const name = text(entry.playerName);
           if (!name || names.has(lower(name))) return fail('Há atleta inválido ou duplicado na súmula.', 'VALIDATION_ERROR');
           names.add(lower(name));
           const athlete = await athleteByName(name);
+          idsByName.set(lower(name), athlete.id);
           const vals = ['pts2','pts3','reb','ast','blk'].map(k => Number(entry[k] || 0));
           if (vals.some(v => !Number.isInteger(v) || v < 0 || v > 100000)) return fail(`Estatística inválida para ${name}.`, 'VALIDATION_ERROR');
           rows.push({ athlete_id: athlete.id, stat_date: params.date, pts2: vals[0], pts3: vals[1], reb: vals[2], ast: vals[3], blk: vals[4] });
@@ -428,6 +430,7 @@ Deno.serve(async (req: Request) => {
         if (matches.length && !/^\d{10,16}$/.test(sessionKey)) return fail('Identificador da sessão inválido.', 'VALIDATION_ERROR');
         const matchNumbers = new Set<number>();
         const matchRows: any[] = [];
+        const matchTotals = new Map<string,number[]>();
         for (const match of matches) {
           const number = Number(match?.number);
           const blackScore = Number(match?.blackScore), greenScore = Number(match?.greenScore);
@@ -452,18 +455,30 @@ Deno.serve(async (req: Request) => {
           for (const stat of Object.values(playerStats) as any[]) {
             if (!stat || ['pts2','pts3','reb','ast','blk'].some(key => !Number.isInteger(Number(stat[key] || 0)) || Number(stat[key] || 0) < 0 || Number(stat[key] || 0) > 10000)) return fail('Estatística individual inválida.', 'VALIDATION_ERROR');
           }
-          matchRows.push({ match_date:params.date, session_key:sessionKey, match_number:number,
-            black_score:blackScore, green_score:greenScore, winner, team_black:teamBlack,
-            team_green:teamGreen, player_stats:playerStats, recorded_by:actor.id });
+          const athleteStats: any[] = [];
+          for (const [playerName, stat] of Object.entries(playerStats) as [string,any][]) {
+            const athleteId = idsByName.get(lower(playerName));
+            if (!athleteId) return fail('Atleta da partida ausente no total do dia.', 'VALIDATION_ERROR');
+            const values = ['pts2','pts3','reb','ast','blk'].map(key => Number(stat[key] || 0));
+            const previous = matchTotals.get(athleteId) || [0,0,0,0,0];
+            matchTotals.set(athleteId, previous.map((v, i) => v + values[i]));
+            athleteStats.push({ athleteId, pts2:values[0], pts3:values[1], reb:values[2], ast:values[3], blk:values[4] });
+          }
+          matchRows.push({number,blackScore,greenScore,winner,teamBlack,teamGreen,playerStats,athleteStats});
         }
-        const { error } = await sb.from('daily_stats').upsert(rows, { onConflict: 'athlete_id,stat_date' });
+        if (!matchRows.length) return fail('Finalize pelo menos uma partida antes de salvar.', 'VALIDATION_ERROR');
+        for (const row of rows) {
+          const expected = matchTotals.get(row.athlete_id) || [0,0,0,0,0];
+          if (['pts2','pts3','reb','ast','blk'].some((key,i) => row[key] !== expected[i])) {
+            return fail('Totais do dia não conferem com as partidas finalizadas. Corrija ou finalize a partida atual.', 'VALIDATION_ERROR');
+          }
+        }
+        const { data: saved, error } = await sb.rpc('cba_save_round_session', {
+          p_date:params.date,p_session_key:sessionKey,p_matches:matchRows,p_recorded_by:actor.id
+        });
         if (error) throw error;
-        if (matchRows.length) {
-          const { error: matchError } = await sb.from('round_matches').upsert(matchRows, { onConflict: 'match_date,session_key,match_number' });
-          if (matchError) throw matchError;
-        }
-        await audit('save_match_stats', 'daily_stats', String(params.date), { count: rows.length });
-        return json({ result: 'success', message: 'Súmula e partidas salvas sem duplicação.' });
+        await audit('save_match_stats', 'round_matches', String(params.date), {count:rows.length,games:matchRows.length});
+        return json({result:'success',message:'Partidas e rodada salvas sem duplicação.',gamesSaved:saved?.gamesSaved});
       }
       case 'saveTeams': {
         const parseTeam = (value: any) => Array.from(new Set((Array.isArray(value) ? value : String(value || '').split(',')).map((v: any) => text(v)).filter(Boolean)));
