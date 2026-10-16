@@ -182,8 +182,14 @@ Deno.serve(async (req: Request) => {
           reb: Math.max(0, Math.trunc(num(r.reb))), ast: Math.max(0, Math.trunc(num(r.ast))), blk: Math.max(0, Math.trunc(num(r.blk)))
         })).filter((r: any) => r.athlete_id);
         if (rows.length) {
-          const { error } = await sb.from('daily_stats').upsert(rows, { onConflict: 'athlete_id,stat_date' });
-          if (error) throw error;
+          // The RPC preserves per-game figures and edits only the daily/manual baseline.
+          const { error } = await sb.rpc('cba_set_daily_totals', {
+            p_date: date, p_records: rows
+          });
+          if (error) {
+            if (error.code === '22023') return fail(error.message, 'VALIDATION_ERROR');
+            throw error;
+          }
         }
         await audit('admin_save_stats', 'daily_stats', date, { count: rows.length });
         return json({ result: 'success', message: 'Estatísticas salvas.' });

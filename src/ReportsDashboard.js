@@ -156,10 +156,10 @@ function ReportsExperience({ data, year, selectedPlayer, onSelectPlayer }) {
           <div className="xl:col-span-8 space-y-5">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               {[
-                ['PTS / jogo', selected.ppjYear.toFixed(1), 'text-orange-500'],
-                ['REB / jogo', selected.rpjYear.toFixed(1), 'text-emerald-500'],
-                ['AST / jogo', selected.apjYear.toFixed(1), 'text-cyan-500'],
-                ['TOC / jogo', selected.tpjYear.toFixed(1), 'text-purple-500']
+                ['PTS / rodada', selected.ppjYear.toFixed(1), 'text-orange-500'],
+                ['REB / rodada', selected.rpjYear.toFixed(1), 'text-emerald-500'],
+                ['AST / rodada', selected.apjYear.toFixed(1), 'text-cyan-500'],
+                ['TOC / rodada', selected.tpjYear.toFixed(1), 'text-purple-500']
               ].map(([label, value, color]) => <Card key={label} className="!p-4"><p className="text-[10px] font-black uppercase tracking-wider text-slate-500">{label}</p><p className={`text-3xl font-black mt-2 ${color}`}>{value}</p><p className="text-[10px] text-slate-500 mt-1">{selected.gamesWithStats} súmula(s) em {year}</p></Card>)}
             </div>
 

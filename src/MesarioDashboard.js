@@ -358,6 +358,10 @@ export default function MesarioDashboard({ data, onStatsSaved, onCourtModeChange
 
   const saveSession = async () => {
     if (!dayRows.length) return;
+    if (isLive || !gameHistory.length) {
+      setNotice({ title: 'Finalize as partidas', message: 'Finalize a partida atual antes de salvar a rodada.' });
+      return;
+    }
     setSaving(true);
     try {
       const stats = dayRows.map(row => ({
