@@ -59,11 +59,17 @@ export function buildHomeHighlights(players = [], year, roundMatches = [], today
     const totals = entries.reduce((sum, e) => sumMetrics(sum, e), empty());
     const validDates = eligibleDates.filter(date => validStatus(player.attendance?.[date]));
     const presences = validDates.filter(date => isPresent(player.attendance?.[date])).length;
+    let currentStreak = 0;
+    let bestStreak = 0;
+    validDates.forEach(date => {
+      currentStreak = isPresent(player.attendance?.[date]) ? currentStreak + 1 : 0;
+      bestStreak = Math.max(bestStreak, currentStreak);
+    });
     return {
       name: player.name, photoUrl: player.fotoUrl || player.photoUrl || '',
       id: player.id, totals, entries, presences, validDates: validDates.length,
       attendanceRate: validDates.length ? presences / validDates.length * 100 : null,
-      roundCount: entries.length
+      bestStreak, roundCount: entries.length
     };
   });
   const latestDate = rounds[rounds.length - 1] || null;
@@ -102,13 +108,33 @@ export function buildHomeHighlights(players = [], year, roundMatches = [], today
   const presenceTop = [...athletes].filter(a => a.presences > 0)
     .sort((a, b) => b.presences - a.presences || (b.attendanceRate || 0) - (a.attendanceRate || 0) ||
       a.name.localeCompare(b.name, 'pt-BR'));
+  const bestStreakLeader = [...athletes].filter(a => a.bestStreak > 0)
+    .sort((a, b) => b.bestStreak - a.bestStreak || b.presences - a.presences ||
+      a.name.localeCompare(b.name, 'pt-BR'))[0] || null;
   const latestGames = realMatches.filter(m => m.date === latestDate);
   return {
     year: season, latestDate, rounds, athletes, latestGames,
     roundLeaders: leader, standout: mvpCandidates[0] || null,
     seasonLeaders: Object.fromEntries(STAT_KEYS.map(k => [k, seasonLeader(k)])),
     rankings: Object.fromEntries(STAT_KEYS.map(k => [k, rank(athletes, k)])),
-    presenceTop, presenceDates: dateCounts, roundRecords: milestones, gameRecords,
+    presenceTop, bestStreakLeader, presenceDates: dateCounts, roundRecords: milestones, gameRecords,
     hasStats: athletes.some(a => STAT_KEYS.some(k => a.totals[k] > 0))
   };
+}
+
+
+// Position within the season ranking as the recorded rounds accumulate.
+// Athletes tied at the same score share their placing; no points = no place.
+export function buildRankHistory(summary, athleteName, metric = 'pts') {
+  if (!STAT_KEYS.includes(metric)) return [];
+  const totals = new Map(summary.athletes.map(a => [a.name, 0]));
+  return summary.rounds.map(date => {
+    summary.athletes.forEach(a => {
+      const entry = a.entries.find(e => e.date === date);
+      if (entry) totals.set(a.name, totals.get(a.name) + entry[metric]);
+    });
+    const score = totals.get(athleteName) || 0;
+    const position = score ? 1 + [...totals.values()].filter(v => v > score).length : null;
+    return { date, position };
+  });
 }
