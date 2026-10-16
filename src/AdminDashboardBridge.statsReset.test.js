@@ -31,7 +31,7 @@ test('Zerar exige confirmação digitada e envia somente a data selecionada', as
   const notify=jest.fn(), setDirty=jest.fn();
   render(<StatsModule notify={notify} setDirty={setDirty}/>);
   const button=await screen.findByRole('button',{name:'Zerar estatísticas da data'});
-  expect(button).toBeEnabled();
+  await waitFor(() => expect(button).toBeEnabled());
   expect(screen.getByText(/1 registro estatístico · 2 partidas salvas/)).toBeInTheDocument();
   fireEvent.click(button);
   expect(screen.getByRole('dialog',{name:'Confirmar limpeza da súmula'})).toBeInTheDocument();
@@ -52,7 +52,9 @@ test('Zerar exige confirmação digitada e envia somente a data selecionada', as
 
 test('cancelamento não dispara limpeza', async () => {
   render(<StatsModule notify={jest.fn()} setDirty={jest.fn()}/>);
-  fireEvent.click(await screen.findByRole('button',{name:'Zerar estatísticas da data'}));
+  const button = await screen.findByRole('button',{name:'Zerar estatísticas da data'});
+  await waitFor(() => expect(button).toBeEnabled());
+  fireEvent.click(button);
   fireEvent.click(screen.getByRole('button',{name:'Cancelar'}));
   expect(screen.queryByRole('dialog',{name:'Confirmar limpeza da súmula'})).not.toBeInTheDocument();
   expect(adminPost.mock.calls.filter(([action])=>action==='resetStatsByDate')).toHaveLength(0);
