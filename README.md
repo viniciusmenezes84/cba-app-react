@@ -42,6 +42,12 @@ No Mesário, inicie a partida e toque em Modo Quadra. A mesa ocupa a área do po
 
 O placar permanece visível, fotos têm fallback para a inicial e ações exibem confirmação e a última jogada. A mesa usa a largura disponível: a partir de 840 px mostra os dois times; abaixo disso mostra um seletor de equipe e expande os controles do atleta selecionado. A partir de 980 px os atletas ficam em linhas compactas. O Modo Quadra mantém os controles fora da rolagem da lista; listas extensas continuam roláveis. Corrigir lançamento abre botões de subtração; Desfazer reverte a última ação. Histórico e resumo ficam numa área expansível. Backup local, regras de pontuação, confirmação do resultado e salvamento da súmula continuam no fluxo existente; o modo visual não é persistido no backup.
 
+## Relatório executivo esportivo no Início (0.4.20)
+
+O ADM pode emitir um relatório A4/PDF na seção **CBA Sports Center** da aba **Início** selecionando a temporada e clicando em **Relatório executivo PDF**. O documento utiliza os mesmos seletores dos cards da tela (\`buildHomeHighlights\`) e o estilo institucional dos relatórios já existentes: capa navy, cabeçalhos, quadros de resumo, tabelas e numeração de páginas. Inclui destaque da última rodada com súmula, líderes do ano, assiduidade, ranking Top 5 de PTS/REB/AST/TOC/3PT, recordes por rodada e por partida individual, evolução do cestinha e presença recente. Disponibiliza ações **Visualizar PDF** e **Baixar PDF**.
+
+Apenas a interface de ADM exibe o comando, e o backend \`cba-admin\` confirma a sessão ADMIN e registra \`admin_issue_sports_report\` na auditoria **antes** de liberar a emissão pelo fluxo oficial. O PDF é criado no navegador com \`jspdf\`/\`jspdf-autotable\` usando os dados já carregados, sem novo endpoint público de estatísticas. Não salva PDF no servidor e não altera banco. Recordes de partidas são apresentados somente quando as partidas individuais existem. Estatísticas legadas são interpretadas como rodadas por data; não simular aproveitamento sem tentativas de arremesso.
+
 ## Destaques esportivos no Início (0.4.18)
 
 A página **Início** preserva saudação/Meu CBA, agenda, próximos jogos/eventos, situação financeira e comunicação. A seção **CBA Sports Center** acrescenta destaques da última rodada com súmula, líderes e ranking da temporada selecionada (PTS, REB, AST, TOC e 3PT), assiduidade, evolução individual (produção ou posição acumulada), presenças por data, sequência de comparecimentos e recordes.
