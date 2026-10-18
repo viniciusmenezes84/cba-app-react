@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Activity, ArrowRight, Award, BarChart3, CalendarDays, Crown, Flame, Medal, Shield, Sparkles, Target, TrendingUp, Trophy, Users, Zap } from 'lucide-react';
 import { ProfileAvatar } from './MeuCba';
+import { adminPost } from './cbaApi';
+import { FileDown, FileText, Loader2 } from 'lucide-react';
 import { availableHighlightYears, buildHomeHighlights, roundDateLabel, STAT_KEYS, STAT_LABELS, efficiencyIndex, buildRankHistory } from './homeHighlightsData';
 
 const todayBahia = () => new Intl.DateTimeFormat('en-CA', { timeZone:'America/Bahia',year:'numeric',month:'2-digit',day:'2-digit' }).format(new Date());
@@ -65,7 +67,7 @@ function PositionBars({ rows }) {
     </div>)}
   </div>;
 }
-export default function HomeHighlights({ initialData, portalData, onNavigate }) {
+export default function HomeHighlights({ initialData, portalData, onNavigate, isAdmin = false }) {
   const today = todayBahia();
   const active = initialData?.data || initialData || {};
   const players = active.dashboard?.players || portalData?.dashboard?.players || [];
@@ -79,6 +81,10 @@ export default function HomeHighlights({ initialData, portalData, onNavigate }) 
   const [metric,setMetric] = useState('pts');
   const [selectedName,setSelectedName] = useState('');
   const [trendMode,setTrendMode] = useState('stats');
+  const [pdfBusy,setPdfBusy] = useState(false);
+  const [pdfError,setPdfError] = useState('');
+  const [pdfReady,setPdfReady] = useState(null);
+  useEffect(() => () => { if (pdfReady?.url) URL.revokeObjectURL?.(pdfReady.url); }, [pdfReady?.url]);
   useEffect(() => { if (!years.includes(year)) setYear(years[0]); }, [years,year]);
   const matches = portalData?.roundMatches || active.roundMatches || [];
   const summary = useMemo(() => buildHomeHighlights(enriched,year,matches,today), [enriched,year,matches,today]);
@@ -91,6 +97,26 @@ export default function HomeHighlights({ initialData, portalData, onNavigate }) 
   const rankHistory = useMemo(() => buildRankHistory(summary,trendPlayer?.name,metric), [summary,trendPlayer?.name,metric]);
   const seasonCards = STAT_KEYS.map(key => ({key, athlete:summary.seasonLeaders[key]}));
   const presenceLeader = summary.presenceTop[0];
+  const generatePdf = async () => {
+    if (!isAdmin || pdfBusy || !summary.hasStats) return;
+    setPdfBusy(true);
+    setPdfError('');
+    setPdfReady(null);
+    try {
+      // This action verifies the current session's ADMIN role on the server
+      // and registers each issuance in the audit trail.
+      await adminPost('authorizeSportsReport', { year, latestDate:summary.latestDate });
+      const { buildSportsExecutivePdf } = await import('./HomeHighlightsPdf');
+      const doc = buildSportsExecutivePdf(summary);
+      const fileName = 'CBA_Relatorio_Executivo_Esportivo_' + year + '.pdf';
+      const url = URL.createObjectURL(doc.output('blob'));
+      setPdfReady({url,fileName});
+    } catch (error) {
+      setPdfError(error?.message || 'Não foi possível emitir o relatório. Tente novamente.');
+    } finally {
+      setPdfBusy(false);
+    }
+  };
   return <section aria-labelledby="cba-sports-title" className="space-y-4 pb-3">
     <header className="overflow-hidden rounded-3xl border border-emerald-500/20 bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950/60 p-5 shadow-2xl sm:p-7">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -99,12 +125,26 @@ export default function HomeHighlights({ initialData, portalData, onNavigate }) 
           <h2 id="cba-sports-title" className="mt-2 text-2xl font-black text-white sm:text-3xl">O jogo em <span className="text-emerald-300">destaque.</span></h2>
           <p className="mt-2 max-w-xl text-sm text-slate-400">Os protagonistas da rodada, líderes da temporada e marcas que fazem a história do CBA.</p>
         </div>
-        <label className="w-full shrink-0 text-xs font-black text-slate-300 sm:w-40">Temporada
-          <select aria-label="Temporada dos destaques" value={year} onChange={e => setYear(e.target.value)} className="mt-2 min-h-11 w-full rounded-xl border border-slate-600 bg-slate-900 px-3 text-base font-black text-white">
-            {years.map(y => <option key={y} value={y}>{y}</option>)}
-          </select>
-        </label>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
+          <label className="w-full shrink-0 text-xs font-black text-slate-300 sm:w-40">Temporada
+            <select aria-label="Temporada dos destaques" value={year} onChange={e => { setYear(e.target.value); setPdfReady(null); setPdfError(''); }} className="mt-2 min-h-11 w-full rounded-xl border border-slate-600 bg-slate-900 px-3 text-base font-black text-white">
+              {years.map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+          </label>
+          {isAdmin && <button type="button" onClick={generatePdf} disabled={pdfBusy || !summary.hasStats}
+            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-black text-white shadow-md transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+            title={!summary.hasStats ? 'Aguarde as primeiras estatísticas da temporada.' : 'Emitir relatório esportivo exclusivo do ADM'}>
+            {pdfBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true"/> : <FileText className="h-4 w-4" aria-hidden="true"/>}
+            {pdfBusy ? 'Preparando relatório...' : 'Relatório executivo PDF'}
+          </button>}
+        </div>
       </div>
+      {isAdmin && pdfError && <p role="alert" className="mt-4 rounded-xl border border-rose-500/40 bg-rose-950/40 p-3 text-sm font-bold text-rose-200">{pdfError}</p>}
+      {isAdmin && pdfReady && <div role="status" className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-950/40 p-3">
+        <span className="min-w-0 flex-1 text-xs font-bold text-emerald-200">Relatório {year} pronto para consultar.</span>
+        <a href={pdfReady.url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-emerald-400/40 px-3 text-xs font-black text-emerald-200">Visualizar PDF</a>
+        <a href={pdfReady.url} download={pdfReady.fileName} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-emerald-500 px-3 text-xs font-black text-slate-950"><FileDown className="h-4 w-4"/> Baixar PDF</a>
+      </div>}
       <div className="mt-5 flex flex-wrap gap-2 text-[11px] font-bold text-slate-300">
         <span className="rounded-full bg-white/10 px-3 py-1.5">{summary.rounds.length} rodadas com súmula</span>
         <span className="rounded-full bg-white/10 px-3 py-1.5">{summary.athletes.length} atletas cadastrados</span>

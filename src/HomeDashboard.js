@@ -65,7 +65,7 @@ export function HomeView({ data, isAdmin, onNavigate, onOpenAgenda, onOpenProfil
         </div>
       </div>
     </div>
-    <HomeHighlights initialData={initialData} portalData={data} onNavigate={onNavigate}/>
+    <HomeHighlights initialData={initialData} portalData={data} onNavigate={onNavigate} isAdmin={isAdmin}/>
     <div className="grid gap-4 lg:grid-cols-2">
       <Panel>
         <div className="flex items-center justify-between"><div><Pill>Próximo jogo</Pill><h3 className="mt-3 text-xl font-black text-white">{nextGame ? fmtDate(nextGame.date) : 'Nenhum jogo agendado'}</h3></div><CalendarDays className="h-8 w-8 text-emerald-400" /></div>

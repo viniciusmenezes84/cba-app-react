@@ -162,6 +162,20 @@ Deno.serve(async (req: Request) => {
         return json({ result: 'success', message: 'Presenças salvas.' });
       }
 
+      case 'authorizeSportsReport': {
+        // All handlers here run after server-side ADMIN session validation.
+        // Issuance is audited; reports are built from the same published player stats.
+        const year = Number(p.year);
+        const latestDate = text(p.latestDate);
+        if (!Number.isInteger(year) || year < 2020 || year > 2100
+          || (latestDate && (!/^\d{4}-\d{2}-\d{2}$/.test(latestDate) || latestDate.slice(0, 4) !== String(year)))) {
+          return fail('Temporada ou rodada inválida.', 'VALIDATION_ERROR');
+        }
+        await audit('admin_issue_sports_report', 'sports_report', String(year),
+          { lastStatDate: latestDate || null, source: 'home_dashboard' });
+        return json({ result: 'success', message: 'Emissão de relatório autorizada para administrador.' });
+      }
+
       case 'statsByDate': {
         const date = text(p.date);
         if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return fail('Data inválida.', 'VALIDATION_ERROR');

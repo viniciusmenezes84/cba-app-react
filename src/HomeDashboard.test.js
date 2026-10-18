@@ -1,9 +1,10 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import HomeDashboard from './HomeDashboard';
 import { InitialDataContext } from './InitialDataContext';
-import { portalPost } from './cbaApi';
+import { portalPost, adminPost } from './cbaApi';
 
-jest.mock('./cbaApi', () => ({ portalPost: jest.fn() }));
+jest.mock('./cbaApi', () => ({ portalPost: jest.fn(), adminPost: jest.fn() }));
+jest.mock('./HomeHighlightsPdf', () => ({ buildSportsExecutivePdf: jest.fn(() => ({ output: () => new Blob(['PDF de teste']) })) }));
 
 const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bahia', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 const payload = {
@@ -87,4 +88,53 @@ test('Início mantém os cards antigos e mostra o Sports Center com rankings por
   fireEvent.click(screen.getByRole('button',{name:'Abrir rankings completos'}));
   expect(navigate).toHaveBeenCalledWith('relatorios');
   expect(portalPost).toHaveBeenCalledTimes(1);
+});
+
+
+test('somente ADM vê emitir relatório e backend autoriza antes da geração', async () => {
+  const stats={dashboard:{players:[{name:'Ana',dailyStats:{[today]:{pts2:5,pts3:0,reb:2,ast:1,blk:0}},attendance:{[today]:'✅'}}],dates:[today]}};
+  portalPost.mockReset().mockResolvedValue(payload);
+  adminPost.mockReset().mockResolvedValue({result:'success'});
+  const oldCreate=URL.createObjectURL;
+  const oldRevoke=URL.revokeObjectURL;
+  URL.createObjectURL=jest.fn(()=>'blob:cba-test');
+  URL.revokeObjectURL=jest.fn();
+  try {
+    const ui=render(<InitialDataContext.Provider value={{data:stats}}>
+      <HomeDashboard isAdmin={false} onNavigate={jest.fn()}/>
+    </InitialDataContext.Provider>);
+    await screen.findByRole('heading',{name:/O jogo em/});
+    expect(screen.queryByRole('button',{name:'Relatório executivo PDF'})).not.toBeInTheDocument();
+    expect(adminPost).not.toHaveBeenCalled();
+    ui.rerender(<InitialDataContext.Provider value={{data:stats}}>
+      <HomeDashboard isAdmin onNavigate={jest.fn()}/>
+    </InitialDataContext.Provider>);
+    const btn=screen.getByRole('button',{name:'Relatório executivo PDF'});
+    expect(btn).toBeEnabled();
+    fireEvent.click(btn);
+    await waitFor(()=>expect(adminPost).toHaveBeenCalledWith('authorizeSportsReport',{
+      year:today.slice(0,4),latestDate:today
+    }));
+    expect(await screen.findByText('Visualizar PDF')).toHaveAttribute('href','blob:cba-test');
+    expect(screen.getByText('Baixar PDF')).toHaveAttribute('download',
+      'CBA_Relatorio_Executivo_Esportivo_'+today.slice(0,4)+'.pdf');
+    expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
+  } finally {
+    URL.createObjectURL=oldCreate;
+    URL.revokeObjectURL=oldRevoke;
+  }
+});
+
+test('se o servidor negar a emissão, não gera o PDF', async () => {
+  const stats={dashboard:{players:[{name:'Ana',dailyStats:{[today]:{pts2:1}},attendance:{[today]:'✅'}}],dates:[today]}};
+  portalPost.mockReset().mockResolvedValue(payload);
+  adminPost.mockReset().mockRejectedValue(new Error('Acesso negado pelo servidor.'));
+  render(<InitialDataContext.Provider value={{data:stats}}>
+    <HomeDashboard isAdmin onNavigate={jest.fn()}/>
+  </InitialDataContext.Provider>);
+  const btn=await screen.findByRole('button',{name:'Relatório executivo PDF'});
+  expect(btn).toBeEnabled();
+  fireEvent.click(btn);
+  expect(await screen.findByRole('alert')).toHaveTextContent('Acesso negado pelo servidor.');
+  expect(screen.queryByText('Visualizar PDF')).not.toBeInTheDocument();
 });
