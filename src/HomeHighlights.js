@@ -84,7 +84,7 @@ export default function HomeHighlights({ initialData, portalData, onNavigate, is
   const [pdfBusy,setPdfBusy] = useState(false);
   const [pdfError,setPdfError] = useState('');
   const [pdfReady,setPdfReady] = useState(null);
-  useEffect(() => () => { if (pdfReady?.url) URL.revokeObjectURL(pdfReady.url); }, [pdfReady?.url]);
+  useEffect(() => () => { if (pdfReady?.url) URL.revokeObjectURL?.(pdfReady.url); }, [pdfReady?.url]);
   useEffect(() => { if (!years.includes(year)) setYear(years[0]); }, [years,year]);
   const matches = portalData?.roundMatches || active.roundMatches || [];
   const summary = useMemo(() => buildHomeHighlights(enriched,year,matches,today), [enriched,year,matches,today]);
