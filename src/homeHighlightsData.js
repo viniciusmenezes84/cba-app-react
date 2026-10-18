@@ -118,6 +118,7 @@ export function buildHomeHighlights(players = [], year, roundMatches = [], today
     seasonLeaders: Object.fromEntries(STAT_KEYS.map(k => [k, seasonLeader(k)])),
     rankings: Object.fromEntries(STAT_KEYS.map(k => [k, rank(athletes, k)])),
     presenceTop, bestStreakLeader, presenceDates: dateCounts, roundRecords: milestones, gameRecords,
+    recordedGames: realMatches.length,
     hasStats: athletes.some(a => STAT_KEYS.some(k => a.totals[k] > 0))
   };
 }
