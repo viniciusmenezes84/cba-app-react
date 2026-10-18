@@ -122,7 +122,7 @@ export function buildSportsExecutivePdf(summary, generatedAt = new Date()) {
     ['Rodadas', summary.rounds.length],
     ['Atletas c/ súmula', scored.length],
     ['Presenças', summary.presenceDates.reduce((sum,r)=>sum+r.count,0)],
-    ['Partidas detalhadas', (summary.gameRecords.some(r=>r.value!==null) ? (summary.latestGames || []).length : 0)]
+    ['Partidas detalhadas', summary.recordedGames || 0]
   ],y);
   y=note(doc,'Os indicadores de rodada são consolidados por data. Partidas individuais só são consideradas quando registradas no Mesário.',y);
   y=section(doc,'2. DESTAQUES DA RODADA  •  ' + latest,y);
