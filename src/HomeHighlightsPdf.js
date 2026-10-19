@@ -325,8 +325,10 @@ export function buildSportsExecutivePdf(summary, generatedAt = new Date()) {
 
   // 5. Record cards, with honest historic/game split.
   page(doc,'RECORDES E MARCAS','Melhores resultados dentro da temporada',year);
-  chapter(doc,'Por rodada', 'Uma rodada agrupa todas as partidas da mesma data.',43);
-  chapter(doc,'Por partida', 'Disponível somente para jogos registrados individualmente.',55);
+  write(doc,'POR RODADA',LEFT,47,11,NAVY,true);
+  write(doc,'POR PARTIDA',LEFT+95,47,11,NAVY,true);
+  write(doc,'Soma dos jogos na mesma data',LEFT,55,7.6,MUTED);
+  write(doc,'Somente jogos individualizados',LEFT+95,55,7.6,MUTED);
   const order=['pts','reb','ast','blk','pts3'];
   const byRound = new Map((summary.roundRecords || []).map(r => [r.key,r]));
   const byGame = new Map((summary.gameRecords || []).map(r => [r.key,r]));
@@ -335,7 +337,8 @@ export function buildSportsExecutivePdf(summary, generatedAt = new Date()) {
     recordCard(doc,LEFT,y,89,metricName(key).toUpperCase(),byRound.get(key),false,i%2?EMERALD:GOLD);
     recordCard(doc,LEFT+95,y,89,metricName(key).toUpperCase(),byGame.get(key),true,i%2?INDIGO:EMERALD);
   });
-  explanation(doc,'ATENÇÃO AO HISTÓRICO: súmulas anteriores à individualização das partidas representam a rodada (data). A coluna “Por partida” não transforma esses totais em jogos fictícios.',264);
+  write(doc,'HISTÓRICO: súmulas antigas representam totais do dia, não partidas individuais.',LEFT,270,8,MUTED);
+  write(doc,'Sem identificação da partida, o relatório não inventa recordes por jogo.',LEFT,276,8,MUTED);
 
   // 6. Attendance and scorer evolution, with compact charts explained in-place.
   page(doc,'EVOLUÇÃO DO CBA','Presenças e desempenho ao longo das rodadas',year);
@@ -357,8 +360,8 @@ export function buildSportsExecutivePdf(summary, generatedAt = new Date()) {
   } else {
     write(doc,'Sem pontuação registrada nesta temporada.',LEFT+6,203,9,MUTED);
   }
-  const note='METODOLOGIA: totais por rodada são derivados das estatísticas persistidas no CBA. Recordes por partida só incluem partidas identificadas. Sem tentativas de arremesso, não há taxa de aproveitamento. Última rodada registrada: '+latest+'.';
-  explanation(doc,note,259);
+  const note='METODOLOGIA: rodada = data com súmula. Recordes por partida exigem jogo identificado. Sem tentativas de arremesso, não calculamos aproveitamento. Última rodada: '+latest+'.';
+  explanation(doc,note,258);
 
   footer(doc,stamp);
   return doc;
