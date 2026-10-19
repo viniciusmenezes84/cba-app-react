@@ -77,21 +77,13 @@ function kpi(doc, x, y, w, label, value, color = EMERALD) {
   write(doc, label, x + 8, y + 9.5, 7.2, MUTED, true);
   write(doc, numberText(value), x + 8, y + 20.5, 16, NAVY, true);
 }
-function avatar(doc, name, x, y, diameter = 15, color = EMERALD) {
-  doc.setFillColor(...color);
-  doc.circle(x + diameter / 2, y + diameter / 2, diameter / 2, 'F');
-  const initials = textOrFallback(name, '?').split(/\s+/).slice(0, 2).map(v => v[0] || '').join('').toUpperCase();
-  write(doc, initials || '?', x + diameter / 2, y + diameter / 2 + 1.9,
-    diameter * 0.42, WHITE, true, 'center');
-}
 function heroCard(doc, x, y, w, title, player, value, unit, help, color = EMERALD) {
   surface(doc, x, y, w, 52, WHITE);
   doc.setFillColor(...color);
   doc.roundedRect(x, y, 2, 52, 1, 1, 'F');
   kicker(doc, title, x + 7, y + 9, color);
-  avatar(doc, player?.name, x + 7, y + 14, 14, color);
   doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
-  write(doc, clipped(doc, player?.name || 'Aguardando súmula', w - 36), x + 25, y + 23, 10.5, NAVY, true);
+  write(doc, clipped(doc, player?.name || 'Aguardando súmula', w - 14), x + 7, y + 23, 10.5, NAVY, true);
   write(doc, value == null ? '-' : numberText(value), x + 7, y + 41, 20, NAVY, true);
   write(doc, unit, x + w - 6, y + 41, 8.5, color, true, 'right');
   doc.setFont('helvetica', 'normal'); doc.setFontSize(7.4);
@@ -100,9 +92,8 @@ function heroCard(doc, x, y, w, title, player, value, unit, help, color = EMERAL
 function smallLeader(doc, x, y, w, label, athlete, value, unit, color = EMERALD) {
   surface(doc, x, y, w, 38, WHITE);
   kicker(doc, label, x + 5, y + 8, color);
-  avatar(doc, athlete?.name, x + 5, y + 12, 12, color);
   doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
-  write(doc, clipped(doc, athlete?.name || 'Sem registro', w - 27), x + 20, y + 21, 8.6, NAVY, true);
+  write(doc, clipped(doc, athlete?.name || 'Sem registro', w - 10), x + 5, y + 21, 8.6, NAVY, true);
   write(doc, value == null ? '-' : numberText(value), x + 5, y + 32, 13, NAVY, true);
   write(doc, unit, x + w - 5, y + 32, 7, MUTED, true, 'right');
 }
@@ -112,9 +103,8 @@ function seasonCard(doc, x, y, title, player, value, unit, color = EMERALD, info
   doc.setFillColor(...color);
   doc.roundedRect(x + 5, y + 6, 1.5, 10, 0.7, 0.7, 'F');
   kicker(doc, title, x + 10, y + 12, color);
-  avatar(doc, player?.name, x + 5, y + 19, 15, color);
   doc.setFont('helvetica', 'bold');doc.setFontSize(10);
-  write(doc, clipped(doc, player?.name || 'Sem registro', 63), x + 24, y + 25.5, 9.8, NAVY, true);
+  write(doc, clipped(doc, player?.name || 'Sem registro', w - 12), x + 6, y + 25.5, 9.8, NAVY, true);
   write(doc, value == null ? '-' : numberText(value), x + 6, y + 41, 17.5, NAVY, true);
   write(doc, unit, x + w - 6, y + 41, 7.5, MUTED, true, 'right');
   if (info) write(doc, clipped(doc, info, w - 12), x + 6, y + 47, 7, MUTED);
@@ -172,13 +162,20 @@ function miniChart(doc, x, y, w, h, rows, getValue, color, lastLabel = '') {
   if (lastLabel) write(doc, lastLabel, x + w - 2, y + h + 5, 7, MUTED, false, 'right');
 }
 function explanation(doc, text, y, color = INDIGO) {
-  const lines = doc.splitTextToSize(text, CONTENT - 13);
-  const h = Math.max(19, lines.length * 4.3 + 10);
+  const fontSize = 8.2;
+  const lineHeight = 4.2;
+  const textX = LEFT + 10;
+  const availableWidth = RIGHT - 7 - textX;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(fontSize);
+  const lines = doc.splitTextToSize(text, availableWidth);
+  const h = Math.max(19, 9 + (lines.length - 1) * lineHeight + 6);
   surface(doc, LEFT, y, CONTENT, h, [238, 242, 255], [224, 231, 255], 2.5);
   doc.setFillColor(...color);
   doc.roundedRect(LEFT + 4, y + 4, 1.4, h - 8, 0.7, 0.7, 'F');
-  doc.setFont('helvetica','normal');doc.setFontSize(8.2);doc.setTextColor(...INK);
-  doc.text(lines, LEFT + 10, y + 9);
+  lines.forEach((line, index) => {
+    write(doc, line, textX, y + 9 + index * lineHeight, fontSize, INK);
+  });
   return y + h;
 }
 function cover(doc, summary, generatedAt) {
