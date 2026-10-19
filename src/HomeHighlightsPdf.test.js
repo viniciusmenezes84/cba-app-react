@@ -20,7 +20,7 @@ test('relatório institucional em A4 usa a mesma seleção de temporada e cards 
   const pdf=buildSportsExecutivePdf(stats,new Date('2026-10-18T14:00:00-03:00'));
   expect(pdf.internal.pageSize.getWidth()).toBeCloseTo(210,0);
   expect(pdf.internal.pageSize.getHeight()).toBeCloseTo(297,0);
-  expect(pdf.getNumberOfPages()).toBeGreaterThanOrEqual(4);
+  expect(pdf.getNumberOfPages()).toBe(6);
   const bytes=new Uint8Array(pdf.output('arraybuffer'));
   expect(bytes.length).toBeGreaterThan(4000);
   expect(String.fromCharCode(...bytes.slice(0,5))).toBe('%PDF-');
@@ -32,4 +32,31 @@ test('relatório suporta temporada sem partidas detalhadas sem inventar recordes
   expect(stats.recordedGames).toBe(0);
   expect(stats.gameRecords.every(row=>row.value===null)).toBe(true);
   expect(()=>buildSportsExecutivePdf(stats)).not.toThrow();
+});
+
+
+test('layout em cards continua legível com nomes longos e evita páginas extras', () => {
+  const longName='Atleta de Nome Extraordinariamente Comprido da Equipe CBA';
+  const players=[
+    {name:longName,dailyStats:{'2026-10-18':{pts2:99,pts3:4,reb:42,ast:33,blk:20}},
+      attendance:{'2026-10-18':'✅'}},
+    {name:'Outra Atleta',dailyStats:{'2026-10-18':{pts2:3,pts3:1,reb:5,ast:2,blk:1}},
+      attendance:{'2026-10-18':'✅'}}
+  ];
+  const stats=buildHomeHighlights(players,'2026',[{
+    date:'2026-10-18',number:1,sessionKey:'1111111111111',
+    playerStats:{[longName]:{pts2:99,pts3:4,reb:42,ast:33,blk:20}}
+  }],'2026-10-18');
+  const pdf=buildSportsExecutivePdf(stats);
+  expect(pdf.getNumberOfPages()).toBe(6);
+  expect(new Uint8Array(pdf.output('arraybuffer')).length).toBeGreaterThan(4000);
+});
+
+test('relatório não adiciona partidas inexistentes à contagem das capas', () => {
+  const summary=buildHomeHighlights([{
+    name:'Ana',dailyStats:{'2026-10-11':{pts2:2}},attendance:{'2026-10-11':'✅'}
+  }],'2026',[],'2026-10-19');
+  expect(summary.recordedGames).toBe(0);
+  const pdf=buildSportsExecutivePdf(summary);
+  expect(pdf.getNumberOfPages()).toBe(6);
 });
