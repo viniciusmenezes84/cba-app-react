@@ -1,3 +1,9 @@
+## Relatório executivo esportivo em cards (0.4.21)
+
+A emissão exclusiva do ADM na aba Início mantém o fluxo de validação administrativa introduzido na 0.4.20 e gera o PDF com o mesmo objeto \`buildHomeHighlights\` dos cards do Sports Center. A evolução visual usa seis páginas A4, identidade navy/verde/índigo/dourado e rodapé numerado: capa com quatro indicadores, radar de destaques da última rodada, líderes da temporada em cards, cinco rankings Top 5 com barras de comparação, recordes em colunas **por rodada / por partida** e gráficos de presença/evolução do cestinha (últimas oito rodadas).
+
+O documento usa círculos com iniciais (sem buscar fotos externas) para manter previsibilidade na geração offline e evitar imagens vazias/bloqueadas. Nenhum número é fabricado: resultados sem súmula mostram \`Sem registro\`; recordes por partida exigem identificador individual. Índice de destaque editorial = PTS + REB + AST + TOC, não MVP oficial. Tentativas de arremesso não são capturadas, então não há percentual de aproveitamento. A geração continua no navegador via jsPDF; não há mudanças em banco, funções ou permissões.
+
 # Portal CBA
 
 Portal de jogos, presença, desempenho e administração do Clube Basquete dos Aposentados.
