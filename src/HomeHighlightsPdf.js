@@ -93,7 +93,7 @@ function heroCard(doc, x, y, w, title, player, value, unit, help, color = EMERAL
   doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
   write(doc, clipped(doc, player?.name || 'Aguardando súmula', w - 36), x + 25, y + 23, 10.5, NAVY, true);
   write(doc, value == null ? '-' : numberText(value), x + 7, y + 41, 20, NAVY, true);
-  write(doc, unit, x + 28, y + 41, 8.5, color, true);
+  write(doc, unit, x + w - 6, y + 41, 8.5, color, true, 'right');
   doc.setFont('helvetica', 'normal'); doc.setFontSize(7.4);
   write(doc, clipped(doc, help, w - 9), x + 7, y + 48, 7.4, MUTED);
 }
@@ -104,7 +104,7 @@ function smallLeader(doc, x, y, w, label, athlete, value, unit, color = EMERALD)
   doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
   write(doc, clipped(doc, athlete?.name || 'Sem registro', w - 27), x + 20, y + 21, 8.6, NAVY, true);
   write(doc, value == null ? '-' : numberText(value), x + 5, y + 32, 13, NAVY, true);
-  write(doc, unit, x + 24, y + 32, 7, MUTED, true);
+  write(doc, unit, x + w - 5, y + 32, 7, MUTED, true, 'right');
 }
 function seasonCard(doc, x, y, title, player, value, unit, color = EMERALD, info = '') {
   const w = 89;
@@ -116,7 +116,7 @@ function seasonCard(doc, x, y, title, player, value, unit, color = EMERALD, info
   doc.setFont('helvetica', 'bold');doc.setFontSize(10);
   write(doc, clipped(doc, player?.name || 'Sem registro', 63), x + 24, y + 25.5, 9.8, NAVY, true);
   write(doc, value == null ? '-' : numberText(value), x + 6, y + 41, 17.5, NAVY, true);
-  write(doc, unit, x + 31, y + 41, 7.5, MUTED, true);
+  write(doc, unit, x + w - 6, y + 41, 7.5, MUTED, true, 'right');
   if (info) write(doc, clipped(doc, info, w - 12), x + 6, y + 47, 7, MUTED);
 }
 function rankCard(doc, x, y, w, title, list, key, color = EMERALD) {
