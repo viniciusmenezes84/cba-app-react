@@ -3,7 +3,7 @@ import { ArrowLeft, CalendarDays, Save, Share2, UserRound } from 'lucide-react';
 import { portalPost } from './cbaApi';
 import { InitialDataContext } from './InitialDataContext';
 import { availableAthleteYears, formatDate } from './athleteDashboardData';
-import { buildMySeason } from './myCbaStats';
+import { buildMyRounds, buildMySeason } from './myCbaStats';
 import { buildSeasonAchievements } from './athleteAchievementRules';
 import AthleteAchievements from './AthleteAchievements';
 import ProfilePhotoEditor from './ProfilePhotoEditor';
@@ -33,6 +33,7 @@ export default function MeuCba({ onBack, onOpenAgenda, onProfileSaved }) {
   const [message, setMessage] = useState('');
   const [saveError, setSaveError] = useState('');
   const [cardOpen, setCardOpen] = useState(false);
+  const [roundDate, setRoundDate] = useState(null);
   const [photoEditing, setPhotoEditing] = useState(false);
   const savingRef = useRef(false);
   const mounted = useRef(true);
@@ -42,12 +43,15 @@ export default function MeuCba({ onBack, onOpenAgenda, onProfileSaved }) {
     const controller = new AbortController();
     setState({ loading: true, data: null, error: '' });
     setMessage(''); setSaveError(''); setDraft(null);
+    setRoundDate(null);
     portalPost('getMyProfile', { year: Number(year) }, { signal: controller.signal })
       .then(data => { if (!controller.signal.aborted) { setState({ loading: false, data, error: '' }); setDraft(fields(data.profile)); } })
       .catch(error => { if (!controller.signal.aborted) setState({ loading: false, data: null, error: error.message || 'Não foi possível carregar seu perfil.' }); });
     return () => controller.abort();
   }, [year, attempt]);
   const athlete = useMemo(() => state.data ? buildMySeason(state.data) : null, [state.data]);
+  const rounds = useMemo(() => state.data ? buildMyRounds(state.data, year) : [], [state.data, year]);
+  const selectedRound = rounds.find(round => round.date === roundDate);
   const achievements = useMemo(() => buildSeasonAchievements(athlete), [athlete]);
   const cardAthlete = useMemo(() => athlete ? { ...athlete, achievement: achievements.featured } : null, [athlete, achievements]);
   const dirty = !!draft && JSON.stringify(draft) !== JSON.stringify(fields(state.data?.profile || {}));
@@ -107,6 +111,14 @@ export default function MeuCba({ onBack, onOpenAgenda, onProfileSaved }) {
         <div className="mt-5 flex flex-wrap gap-3"><button type="button" onClick={() => setCardOpen(true)} className={buttonClass}><Share2 size={16} aria-hidden="true"/>Meu card da temporada</button><button type="button" onClick={onOpenAgenda} className={buttonClass}><CalendarDays size={16} aria-hidden="true"/>Minha agenda</button></div>
       </section>
       <AthleteAchievements achievements={achievements} year={year} onOpenCard={() => setCardOpen(true)} />
+      <section className="rounded-3xl border border-slate-700 bg-slate-900 p-5" aria-labelledby="my-rounds-title">
+        <h3 id="my-rounds-title" className="text-xl font-black">Minhas rodadas</h3>
+        <p className="mt-2 text-sm text-slate-400">Meu desempenho na rodada · {year}. Totais por data; uma rodada pode reunir várias partidas. — indica dado não registrado.</p>
+        {rounds.length ? <ul className="mt-4 divide-y divide-slate-700">{rounds.map(round => <li key={round.date} className="flex flex-wrap items-center justify-between gap-3 py-4">
+          <div><h4 className="font-bold">Rodada de {formatDate(round.date)}</h4><p className="mt-1 text-sm text-slate-300">{round.pts ?? '—'} pontos · {round.reb ?? '—'} rebotes · {round.ast ?? '—'} assistências · {round.blk ?? '—'} tocos</p></div>
+          <button type="button" className={buttonClass} aria-label={`Compartilhar minha rodada de ${formatDate(round.date)}`} onClick={() => setRoundDate(round.date)}><Share2 size={16} aria-hidden="true"/>Compartilhar minha rodada</button>
+        </li>)}</ul> : <p className="mt-4 text-sm text-slate-300">Nenhuma rodada com súmula registrada para você nesta temporada.</p>}
+      </section>
       <section className="rounded-3xl border border-slate-700 bg-slate-900 p-5" aria-labelledby="my-attendance-title">
         <h3 id="my-attendance-title" className="flex items-center gap-2 text-xl font-black"><UserRound size={20} aria-hidden="true"/>Minha presença</h3>
         <p className="mt-4 text-3xl font-black text-emerald-300">{athlete.attendanceRate === null ? '—' : `${Math.round(athlete.attendanceRate)}%`}</p>
@@ -114,6 +126,7 @@ export default function MeuCba({ onBack, onOpenAgenda, onProfileSaved }) {
         {!!state.data.attendance.length && <details className="mt-5"><summary className="min-h-11 cursor-pointer text-sm font-bold">Ver histórico de presença</summary><ul className="mt-2 max-h-64 divide-y divide-slate-700 overflow-y-auto pr-2">{[...state.data.attendance].reverse().map(row => <li key={row.attendance_date} className="flex justify-between gap-3 py-3 text-sm"><span>{formatDate(row.attendance_date)}</span><span className={row.status === 'present' ? 'text-emerald-300' : 'text-slate-400'}>{{ present: 'Presente', absent: 'Ausente', justified: 'Justificado', na: 'Não se aplica' }[row.status] || 'Não informado'}</span></li>)}</ul></details>}
       </section>
       {cardOpen && <Suspense fallback={<p role="status">Preparando card...</p>}><AthleteCardModal athlete={cardAthlete} year={year} onClose={() => setCardOpen(false)} /></Suspense>}
+      {selectedRound && <Suspense fallback={<p role="status">Preparando rodada...</p>}><AthleteCardModal athlete={athlete} year={year} round={selectedRound} onClose={() => setRoundDate(null)} /></Suspense>}
     </>}
   </section>;
 }

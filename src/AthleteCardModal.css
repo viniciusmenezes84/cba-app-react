@@ -20,6 +20,7 @@
 .cba-card-modal__download { display: inline-flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 48px; margin-top: 19px; border: 0; border-radius: 11px; color: #18202b; background: #ff994d; font-size: 14px; font-weight: 900; cursor: pointer; }
 .cba-card-modal__download:hover:not(:disabled) { background: #ffaf72; }
 .cba-card-modal__download:disabled { opacity: .55; cursor: wait; }
+.cba-card-modal__share:disabled { opacity: .55; cursor: not-allowed; }
 .cba-card-modal__close:focus-visible, .cba-card-modal__download:focus-visible, .cba-card-modal__formats button:focus-visible, .cba-card-modal__share:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
 .cba-card-modal__aside .cba-card-modal__status { margin: 10px 0 0; color: #90eabb; font-size: 12px; }
 @media (max-width: 680px) {

@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Download, Share2, X } from 'lucide-react';
-import { CARD_HEIGHT, CARD_WIDTH, STORY_HEIGHT, drawAthleteCard, drawAthleteStory } from './athleteCardCanvas';
+import { Copy, Download, Share2, X } from 'lucide-react';
+import { CARD_HEIGHT, CARD_WIDTH, STORY_HEIGHT, drawAthleteCard, drawAthleteStory, drawMyRoundCard, drawMyRoundStory } from './athleteCardCanvas';
+import { formatDate } from './athleteDashboardData';
+import { myRoundCaption } from './myCbaStats';
 import './AthleteCardModal.css';
 
-export default function AthleteCardModal({ athlete, year, onClose }) {
+export default function AthleteCardModal({ athlete, year, round = null, onClose }) {
   const canvasRef = useRef(null);
   const closeRef = useRef(null);
   const dialogRef = useRef(null);
@@ -16,6 +18,11 @@ export default function AthleteCardModal({ athlete, year, onClose }) {
   const [photoAttempt, setPhotoAttempt] = useState(0);
   const [renderRevision, setRenderRevision] = useState(0);
   const [message, setMessage] = useState('');
+  const caption = round ? myRoundCaption(round) : '';
+  const title = round ? `Minha rodada de ${formatDate(round.date)} • CBA` : `Temporada ${year} • CBA`;
+  const slug = String(athlete.name || 'atleta').normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const filename = `cba-${slug || 'atleta'}-${round ? `${round.date}-${format}` : `${year}${format === 'story' ? '-story' : ''}`}.png`;
 
   useEffect(() => {
     const oldOverflow = document.body.style.overflow;
@@ -34,7 +41,8 @@ export default function AthleteCardModal({ athlete, year, onClose }) {
     const canvas = canvasRef.current;
     setReady(false); setShareFile(null); setPhotoUnavailable(false); setPhotoSlow(false); setMessage('');
     const draw = photo => {
-      (format === 'story' ? drawAthleteStory : drawAthleteCard)(canvas, athlete, year, photo);
+      if (round) (format === 'story' ? drawMyRoundStory : drawMyRoundCard)(canvas, athlete, round, photo);
+      else (format === 'story' ? drawAthleteStory : drawAthleteCard)(canvas, athlete, year, photo);
       setShareFile(null);
       setRenderRevision(value => value + 1);
     };
@@ -83,28 +91,25 @@ export default function AthleteCardModal({ athlete, year, onClose }) {
       photo.onload = null;
       photo.onerror = null;
     };
-  }, [athlete, year, format, photoAttempt]);
+  }, [athlete, year, round, format, photoAttempt]);
 
   useEffect(() => {
-    if (!ready || !canvasRef.current || typeof navigator.share !== 'function') return undefined;
+    if (!ready || !canvasRef.current || typeof navigator.share !== 'function' || typeof navigator.canShare !== 'function') return undefined;
     let cancelled = false;
-    canvasRef.current.toBlob(blob => {
-      if (cancelled || !blob) return;
-      const file = new File([blob], filename(), { type: 'image/png' });
-      if (!navigator.canShare || navigator.canShare({ files: [file] })) setShareFile(file);
-    }, 'image/png');
+    try {
+      canvasRef.current.toBlob(blob => {
+        if (cancelled || !blob) return;
+        try {
+          const file = new File([blob], filename, { type: 'image/png' });
+          if (navigator.canShare({ files: [file] })) setShareFile(file);
+        } catch { /* Download remains available when file sharing is unsupported. */ }
+      }, 'image/png');
+    } catch { /* CORS/export errors are reported by the download action. */ }
     return () => { cancelled = true; };
-  // The canvas was redrawn whenever these values or ready changed.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, format, athlete, year, renderRevision]);
-
-  const filename = () => {
-    const slug = String(athlete.name || 'atleta').normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-    return `cba-${slug || 'atleta'}-${year}${format === 'story' ? '-story' : ''}.png`;
-  };
+  }, [ready, filename, renderRevision]);
 
   const changeFormat = next => {
+    if (next === format) return;
     setReady(false);
     setShareFile(null);
     setMessage('');
@@ -125,13 +130,21 @@ export default function AthleteCardModal({ athlete, year, onClose }) {
   };
 
   const share = async () => {
-    if (!shareFile) return;
+    if (!ready || !shareFile) return;
     try {
-      await navigator.share({ title: `Temporada ${year} • CBA`, files: [shareFile] });
+      await navigator.share({ title, files: [shareFile], ...(round ? { text: caption } : {}) });
       setMessage('Card compartilhado.');
     } catch (error) {
       if (error?.name !== 'AbortError') setMessage('Compartilhamento indisponível. Use Baixar PNG.');
     }
+  };
+
+  const copyCaption = async () => {
+    try {
+      if (typeof navigator.clipboard?.writeText !== 'function') throw new Error('Clipboard unavailable');
+      await navigator.clipboard.writeText(caption);
+      setMessage('Legenda copiada.');
+    } catch { setMessage('Não foi possível copiar. Selecione a legenda abaixo e copie manualmente.'); }
   };
 
   const download = () => {
@@ -145,7 +158,7 @@ export default function AthleteCardModal({ athlete, year, onClose }) {
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = filename();
+        link.download = filename;
         document.body.appendChild(link);
         link.click();
         link.remove();
@@ -161,28 +174,28 @@ export default function AthleteCardModal({ athlete, year, onClose }) {
     <div className="cba-card-modal__scrim" onClick={onClose} aria-hidden="true" />
     <section ref={dialogRef} className="cba-card-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="cba-card-title">
       <div className="cba-card-modal__header">
-        <div><span>Compartilhe a temporada</span><h2 id="cba-card-title">Card de {athlete.name}</h2></div>
+        <div><span>{round ? 'Compartilhar minha rodada' : 'Compartilhe a temporada'}</span><h2 id="cba-card-title">Card de {athlete.name}{round ? ` · ${formatDate(round.date)}` : ''}</h2></div>
         <button ref={closeRef} type="button" className="cba-card-modal__close" aria-label="Fechar card" onClick={onClose}><X size={21} /></button>
       </div>
       <div className="cba-card-modal__body">
         <div className="cba-card-modal__preview">
-          <canvas ref={canvasRef} width={CARD_WIDTH} height={format === 'story' ? STORY_HEIGHT : CARD_HEIGHT} style={{ aspectRatio: format === 'story' ? '9 / 16' : '4 / 5' }} role="img" aria-label={`Prévia do card de ${athlete.name} na temporada ${year}${format === 'story' ? ' para Stories' : ''}`} />
+          <canvas ref={canvasRef} width={CARD_WIDTH} height={format === 'story' ? STORY_HEIGHT : CARD_HEIGHT} style={{ aspectRatio: format === 'story' ? '9 / 16' : '4 / 5' }} role="img" aria-label={`Prévia do card de ${athlete.name} ${round ? `na rodada de ${formatDate(round.date)}` : `na temporada ${year}`}${format === 'story' ? ' para Stories' : ''}`} />
         </div>
         <div className="cba-card-modal__aside">
-          <span className="cba-card-modal__eyebrow">Temporada {year}</span>
-          <h3>Pronto para publicar.</h3>
+          <span className="cba-card-modal__eyebrow">{round ? `Rodada de ${formatDate(round.date)}` : `Temporada ${year}`}</span>
+          <h3>{round ? 'Meu desempenho na rodada' : 'Pronto para publicar.'}</h3>
           <div className="cba-card-modal__formats" role="group" aria-label="Formato do card"><button type="button" aria-pressed={format === 'post'} onClick={() => changeFormat('post')}>Post · 1080 × 1350</button><button type="button" aria-pressed={format === 'story'} onClick={() => changeFormat('story')}>Story · 1080 × 1920</button></div>
-          <p>O card mostra os números da temporada selecionada no formato {format === 'story' ? 'Story (1080 × 1920 px)' : 'post (1080 × 1350 px)'}.</p>
-          <p>As médias são por rodada com súmula; uma rodada pode incluir várias partidas na mesma data.</p>
-          {athlete.achievement?.earned && <p className="cba-card-modal__notice">Conquista no card: <strong>{athlete.achievement.title}</strong> · {year}</p>}
+          {round ? <><p>{round.pts ?? '—'} pontos · {round.reb ?? '—'} rebotes · {round.ast ?? '—'} assistências · {round.blk ?? '—'} tocos.</p><p>Totais da rodada, consolidados por data; podem reunir várias partidas. — indica dado não registrado.</p><p>Escolha o aplicativo e conclua a publicação. Se compartilhar arquivos não estiver disponível, use Baixar PNG.</p></> : <><p>O card mostra os números da temporada selecionada no formato {format === 'story' ? 'Story (1080 × 1920 px)' : 'post (1080 × 1350 px)'}.</p><p>As médias são por rodada com súmula; uma rodada pode incluir várias partidas na mesma data.</p></>}
+          {!round && athlete.achievement?.earned && <p className="cba-card-modal__notice">Conquista no card: <strong>{athlete.achievement.title}</strong> · {year}</p>}
           {photoUnavailable && <p className="cba-card-modal__notice">O card está usando a inicial do atleta. Você pode tentar carregar a foto novamente.</p>}
           {photoSlow && !ready && <><p className="cba-card-modal__notice">A foto ainda está carregando. Aguarde ou escolha continuar com a inicial.</p><button type="button" className="cba-card-modal__share" onClick={() => { setPhotoUnavailable(true); setPhotoSlow(false); setReady(true); }}>Continuar com a inicial</button></>}
           {photoUnavailable && <button type="button" className="cba-card-modal__share" onClick={() => setPhotoAttempt(value => value + 1)}>Tentar carregar foto novamente</button>}
           {!ready && !message && <p role="status">Preparando a foto do atleta…</p>}
-          {shareFile && <button type="button" className="cba-card-modal__share" onClick={share}><Share2 size={19} aria-hidden="true" /> Compartilhar imagem</button>}
+          {(round || shareFile) && <button type="button" className="cba-card-modal__share" onClick={share} disabled={!ready || !shareFile}><Share2 size={19} aria-hidden="true" /> Compartilhar imagem</button>}
           <button type="button" className="cba-card-modal__download" onClick={download} disabled={!ready}>
             <Download size={19} aria-hidden="true" /> Baixar PNG
           </button>
+          {round && <><button type="button" className="cba-card-modal__share" onClick={copyCaption}><Copy size={19} aria-hidden="true"/> Copiar legenda</button><p aria-label="Legenda da rodada">{caption}</p></>}
           {message && <p className="cba-card-modal__status" role="status">{message}</p>}
         </div>
       </div>

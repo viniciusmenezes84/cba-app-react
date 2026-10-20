@@ -28,6 +28,14 @@ npm run build
 
 Toque em Meu CBA no cabeçalho de qualquer aba, no celular ou computador, para abrir o perfil pessoal. O cartão de saudação no Início também abre o perfil. É possível editar apelido, posição e camisa preferida; a foto é enviada pelo botão Alterar foto; o nome cadastrado é preservado. A tela mostra a temporada, frequência e histórico de presença, com acesso ao card e à agenda. As ações `getMyProfile` e `updateMyProfile` usam exclusivamente o atleta vinculado à sessão validada no servidor. A migração `20261009173459_athlete_nickname.sql` deve ser aplicada antes de publicar a nova `cba-portal`. Verificação das permissões: `npm run test:profile`.
 
+## Compartilhar minha rodada
+
+No Meu CBA, selecione a temporada e acesse Minhas rodadas. As datas com súmula do próprio atleta aparecem da mais recente para a mais antiga. Toque em Compartilhar minha rodada para conferir a prévia em Post (1080 × 1350) ou Story (1080 × 1920), compartilhar o PNG pelo seletor do aparelho, baixar a imagem ou copiar a legenda. O atleta escolhe o aplicativo e conclui a publicação.
+
+Os cards reutilizam os dados autorizados de `getMyProfile`, sem consulta adicional. Pontos seguem `pts2 * 2 + pts3 * 3`; os totais são consolidados por data e podem reunir várias partidas. Súmulas zeradas continuam disponíveis; presença sem súmula não gera card. Campos não registrados aparecem como `—`. A foto precisa carregar ou ser substituída pela inicial antes da exportação; as proteções CORS do card da temporada são preservadas. Se o navegador não compartilhar arquivos, Baixar PNG continua disponível, e a legenda permanece visível para cópia manual.
+
+Para testar localmente: execute `npm start`, entre com uma conta vinculada a atleta, abra Meu CBA e escolha uma rodada com súmula. Confira os dois formatos, o download, a legenda e, em aparelho compatível, o compartilhamento nativo. Verificação automatizada: `npm test -- --watch=false --runInBand` e `npm run build`.
+
 ## Conquistas do atleta (0.4.14)
 
 No Meu CBA, a seção Minhas conquistas calcula seis marcos por temporada: primeira presença, 100 pontos, 50 rebotes, 50 assistências, 20 presenças e 25 presenças. Mostra progresso, próximo objetivo e regras em uma área expansível. O card pessoal leva uma conquista sobre a área da foto, nos formatos Post e Story. O destaque prioriza 25 presenças, 20 presenças, assistências, rebotes, pontos e primeira presença.

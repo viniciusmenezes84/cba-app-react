@@ -81,9 +81,9 @@ function drawPhoto(ctx, photo, athlete) {
   ctx.stroke();
 }
 
-function statTile(ctx, x, label, value) {
+function statTile(ctx, x, label, value, width = 224) {
   ctx.fillStyle = '#15263a';
-  roundedRect(ctx, x, 1041, 224, 149, 21);
+  roundedRect(ctx, x, 1041, width, 149, 21);
   ctx.fill();
   ctx.strokeStyle = '#2e4055';
   ctx.lineWidth = 2;
@@ -196,4 +196,61 @@ export function drawAthleteStory(canvas, athlete, year, photo = null) {
   ctx.drawImage(post, 0, 290, CARD_WIDTH, CARD_HEIGHT);
   drawText(ctx, 'MEU DESEMPENHO NA QUADRA', 78, 1701, 37, INK, 900);
   drawText(ctx, 'Portal CBA  •  Compartilhe sua temporada', 78, 1766, 25, MUTED, 700);
+}
+
+/** Uses the same CBA palette, typography and CORS-approved portrait as the season card. */
+export function drawMyRoundCard(canvas, athlete, round, photo = null) {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas indisponível neste navegador.');
+  canvas.width = CARD_WIDTH;
+  canvas.height = CARD_HEIGHT;
+  const background = ctx.createLinearGradient(0, 0, CARD_WIDTH, CARD_HEIGHT);
+  background.addColorStop(0, '#172d44');
+  background.addColorStop(1, '#07121f');
+  ctx.fillStyle = background;
+  ctx.fillRect(0, 0, CARD_WIDTH, CARD_HEIGHT);
+  ctx.fillStyle = ORANGE;
+  ctx.fillRect(0, 0, 13, CARD_HEIGHT);
+  drawText(ctx, 'CBA', 76, 80, 72, INK, 900);
+  drawText(ctx, 'BASQUETE', 80, 162, 20, ORANGE, 900);
+  ctx.textAlign = 'right';
+  drawText(ctx, 'MINHA RODADA', 1004, 110, 26, ORANGE, 900);
+  ctx.textAlign = 'left';
+  drawPhoto(ctx, photo, athlete);
+  drawText(ctx, 'MEU DESEMPENHO NA RODADA', 76, 244, 23, ORANGE, 900);
+  const { lines, size } = nameLines(ctx, athlete.name, 495, 3);
+  lines.forEach((line, index) => {
+    ctx.fillStyle = INK;
+    ctx.font = `900 ${size}px Inter, system-ui, sans-serif`;
+    ctx.fillText(line, 76, 306 + index * (size + 4), 495);
+  });
+  drawText(ctx, 'RODADA DE', 78, 608, 22, MUTED, 800);
+  drawText(ctx, round.date.split('-').reverse().join('/'), 76, 650, 44, INK, 900);
+  ctx.fillStyle = '#15263a';
+  roundedRect(ctx, 76, 786, 928, 231, 27);
+  ctx.fill();
+  drawText(ctx, 'PONTOS NA RODADA', 101, 814, 25, MUTED, 900);
+  drawText(ctx, round.pts ?? '—', 94, 858, 125, INK, 900);
+  statTile(ctx, 76, 'REBOTES', round.reb ?? '—', 296);
+  statTile(ctx, 392, 'ASSISTÊNCIAS', round.ast ?? '—', 296);
+  statTile(ctx, 708, 'TOCOS', round.blk ?? '—', 296);
+  drawText(ctx, 'Súmula consolidada por data; pode incluir várias partidas.', 77, 1220, 23, MUTED, 600);
+  drawText(ctx, '— indica dado não registrado.', 77, 1257, 20, MUTED, 600);
+  drawText(ctx, 'PORTAL CBA / MEU DESEMPENHO NA RODADA', 77, 1310, 21, ORANGE, 900);
+}
+
+export function drawMyRoundStory(canvas, athlete, round, photo = null) {
+  const post = document.createElement('canvas');
+  drawMyRoundCard(post, athlete, round, photo);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas indisponível neste navegador.');
+  canvas.width = CARD_WIDTH;
+  canvas.height = STORY_HEIGHT;
+  ctx.fillStyle = '#091827';
+  ctx.fillRect(0, 0, CARD_WIDTH, STORY_HEIGHT);
+  drawText(ctx, 'CBA / MINHA RODADA', 78, 146, 44, INK, 900);
+  drawText(ctx, 'O BASQUETE EM NÚMEROS', 78, 211, 23, ORANGE, 900);
+  ctx.drawImage(post, 0, 290, CARD_WIDTH, CARD_HEIGHT);
+  drawText(ctx, 'MEU DESEMPENHO NA RODADA', 78, 1701, 38, INK, 900);
+  drawText(ctx, 'Portal CBA • Compartilhe sua rodada', 78, 1766, 25, MUTED, 700);
 }

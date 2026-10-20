@@ -5,13 +5,46 @@ import { InitialDataContext } from './InitialDataContext';
 import { buildMySeason } from './myCbaStats';
 import { portalPost } from './cbaApi';
 jest.mock('./cbaApi', () => ({ portalPost: jest.fn() }));
-jest.mock('./AthleteCardModal', () => ({ athlete, onClose }) => <div role="dialog">Card de {athlete.name}{athlete.achievement?.title && <span>Conquista: {athlete.achievement.title}</span>}<button onClick={onClose}>Fechar card</button></div>);
+jest.mock('./AthleteCardModal', () => ({ athlete, round, onClose }) => <div role="dialog">Card de {athlete.name}{round && <span>Rodada {round.date}: {round.pts} pontos</span>}{athlete.achievement?.title && <span>Conquista: {athlete.achievement.title}</span>}<button onClick={onClose}>Fechar card</button></div>);
 const data = {
   profile: { athleteId: 'own', name: 'Atleta', nickname: '', photoUrl: '', position: 'Pivô', jerseyNumber: '00' },
   attendance: [{ attendance_date: '2026-01-01', status: 'present' }, { attendance_date: '2026-01-08', status: 'absent' }, { attendance_date: '2026-01-15', status: 'na' }],
   stats: [{ stat_date: '2026-01-01', pts2: 3, pts3: 2, reb: 5, ast: 1, blk: 2 }]
 };
 beforeEach(() => portalPost.mockReset());
+
+test('abre a rodada correta do perfil próprio, filtra a temporada e reutiliza os dados carregados', async () => {
+  const stats = [
+    { stat_date: '2026-01-08', pts2: 3, pts3: 3, reb: 2, ast: 1, blk: 0 },
+    { stat_date: '2026-01-01', pts2: 0, pts3: 0, reb: 0, ast: 0, blk: 0 },
+    { stat_date: '2025-10-18', pts2: 1, pts3: 0, reb: 0, ast: 0, blk: 0 }
+  ];
+  portalPost.mockResolvedValue({ ...data, profile: { ...data.profile, nickname: 'Gigante' }, stats });
+  render(<InitialDataContext.Provider value={{ dashboard: { dates: ['2025-10-18'], players: [{ name: 'Outro', dailyStats: { '2026-01-15': { pts2: 99 } } }] } }}><MeuCba /></InitialDataContext.Provider>);
+  const buttons = await screen.findAllByRole('button', { name: /Compartilhar minha rodada de/ });
+  expect(buttons.map(button => button.getAttribute('aria-label'))).toEqual([
+    'Compartilhar minha rodada de 08/01/2026', 'Compartilhar minha rodada de 01/01/2026'
+  ]);
+  fireEvent.click(buttons[0]);
+  expect(await screen.findByRole('dialog')).toHaveTextContent('Card de GiganteRodada 2026-01-08: 15 pontos');
+  expect(portalPost).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByText('Fechar card'));
+  fireEvent.click(buttons[1]);
+  expect(await screen.findByRole('dialog')).toHaveTextContent('2026-01-01: 0 pontos');
+  fireEvent.click(screen.getByText('Fechar card'));
+  fireEvent.change(screen.getByLabelText('Temporada'), { target: { value: '2025' } });
+  expect(await screen.findByRole('button', { name: 'Compartilhar minha rodada de 18/10/2025' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Compartilhar minha rodada de 08/01/2026' })).not.toBeInTheDocument();
+  expect(portalPost.mock.calls.map(call => call[0])).toEqual(['getMyProfile', 'getMyProfile']);
+});
+
+test('sem súmula mantém o card da temporada mas não oferece desempenho de presença sem registro', async () => {
+  portalPost.mockResolvedValue({ ...data, stats: [] });
+  render(<MeuCba />);
+  expect(await screen.findByText('Nenhuma rodada com súmula registrada para você nesta temporada.')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /Compartilhar minha rodada de/ })).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Meu card da temporada' })).toBeInTheDocument();
+});
 test('temporada preserva faltas no denominador e não conta N/A; pontos são cestas convertidas', () => {
   expect(buildMySeason(data)).toMatchObject({ totals: { pts: 12 }, attendanceRate: 50, validDates: 2, presences: 1, statDates: 1, numero: '00' });
   expect(buildMySeason({ profile: data.profile })).toMatchObject({ attendanceRate: null, statDates: 0 });
