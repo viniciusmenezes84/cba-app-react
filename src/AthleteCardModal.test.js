@@ -46,11 +46,15 @@ test('gera, baixa e compartilha o card nos formatos de post e Story', async () =
     fireEvent.click(screen.getByRole('button', { name: 'Baixar PNG' }));
     expect(toBlob).toHaveBeenCalledWith(expect.any(Function), 'image/png');
     expect(filename).toBe('cba-ana-souza-2026.png');
-    fireEvent.click(await screen.findByRole('button', { name: 'Compartilhar imagem' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Compartilhar', exact: true }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Outros aplicativos' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Abrir seletor de aplicativos' }));
     await waitFor(() => expect(navigator.share).toHaveBeenCalledWith(expect.objectContaining({
       files: [expect.objectContaining({ name: 'cba-ana-souza-2026.png' })]
     })));
-    fireEvent.click(screen.getByRole('button', { name: 'Story · 1080 × 1920' }));
+    await screen.findByText('Conclua o envio no aplicativo escolhido.');
+    fireEvent.click(screen.getByRole('button', { name: 'Escolher formato' }));
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Story' }));
     const story = screen.getByRole('img', { name: 'Prévia do card de Ana Souza na temporada 2026 para Stories' });
     expect(story).toHaveAttribute('width', '1080');
     expect(story).toHaveAttribute('height', '1920');

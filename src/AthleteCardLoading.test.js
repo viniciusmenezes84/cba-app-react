@@ -11,16 +11,18 @@ test.each([null, { date: '2026-10-18', pts: 0, reb: 0, ast: 0, blk: 0 }])('foto 
  try {
   render(<AthleteCardModal athlete={{name:'Atleta',fotoUrl:'https://photo.test/own.jpg'}} year="2026" round={round} onClose={jest.fn()}/>);
   expect(images[0].crossOrigin).toBe('anonymous');
-  expect(screen.getByText('Baixar PNG')).toBeDisabled();
+  expect(screen.getByRole('button',{name:'Baixar PNG'})).toBeDisabled();
+  expect(toBlob).not.toHaveBeenCalled();
   act(()=>jest.advanceTimersByTime(7000));
-  expect(screen.getByText('Baixar PNG')).toBeDisabled();
+  expect(screen.getByRole('button',{name:'Baixar PNG'})).toBeDisabled();
   fireEvent.click(screen.getByText('Continuar com a inicial'));
-  const firstButton = await screen.findByText('Compartilhar imagem');
+  fireEvent.click(screen.getByRole('button',{name:'Compartilhar no WhatsApp'}));
+  const firstButton = await screen.findByText('Abrir seletor de aplicativos');
   await act(async()=>{fireEvent.click(firstButton);});
   const first=navigator.share.mock.calls[0][0].files[0];
   act(()=>images[0].onload());
   await waitFor(()=>expect(toBlob).toHaveBeenCalledTimes(2));
-  const secondButton = await screen.findByText('Compartilhar imagem');
+  const secondButton = await screen.findByText('Abrir seletor de aplicativos');
   await act(async()=>{fireEvent.click(secondButton);});
   expect(navigator.share.mock.calls[1][0].files[0]).not.toBe(first);
   expect(screen.queryByText('Tentar carregar foto novamente')).not.toBeInTheDocument();

@@ -950,17 +950,17 @@ const MainApp = ({ user, onLogout, logoutPending, onProfileUpdated }) => {
     const TAB_CONFIG = {
         inicio: { Icon: Home, color: 'text-emerald-500 dark:text-emerald-400', activeBg: 'bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20', label: 'Início' },
         presenca: { Icon: Activity, color: 'text-emerald-500 dark:text-emerald-400', activeBg: 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30', label: 'Presença' },
-        jogos: { Icon: CalendarDays, color: 'text-orange-500 dark:text-orange-400', activeBg: 'bg-orange-500 text-white shadow-lg shadow-orange-500/30', label: 'Jogos' },
-        estatuto: { Icon: BookOpen, color: 'text-teal-500 dark:text-teal-400', activeBg: 'bg-teal-500 text-white shadow-lg shadow-teal-500/30', label: 'Estatuto' },
-        financas: { Icon: DollarSign, color: 'text-rose-500 dark:text-rose-400', activeBg: 'bg-rose-500 text-white shadow-lg shadow-rose-500/30', label: 'Finanças' },
-        sorteio: { Icon: Users, color: 'text-amber-500 dark:text-amber-400', activeBg: 'bg-amber-500 text-white shadow-lg shadow-amber-500/30', label: 'Sorteio' },
-        eventos: { Icon: PartyPopper, color: 'text-purple-500 dark:text-purple-400', activeBg: 'bg-purple-500 text-white shadow-lg shadow-purple-500/30', label: 'Eventos' },
-        relatorios: { Icon: BarChart, color: 'text-blue-500 dark:text-blue-400', activeBg: 'bg-blue-600 text-white shadow-lg shadow-blue-500/30', label: 'Relatórios' },
-        atleta: { Icon: Trophy, color: 'text-orange-500 dark:text-orange-400', activeBg: 'bg-orange-500 text-slate-950 shadow-lg shadow-orange-500/30', label: 'Desempenho do Atleta' },
-        mesario: { Icon: ClipboardList, color: 'text-cyan-500 dark:text-cyan-400', activeBg: 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/30', label: 'Mesário' },
-        dm: { Icon: Stethoscope, color: 'text-red-500 dark:text-red-400', activeBg: 'bg-red-500 text-white shadow-lg shadow-red-500/30', label: 'Departamento Médico' },
-        halldafama: { Icon: Crown, color: 'text-yellow-500 dark:text-yellow-400', activeBg: 'bg-gradient-to-r from-yellow-500 to-amber-600 text-white shadow-lg shadow-yellow-500/30', label: 'Hall da Fama' },
-        notificacoes: { Icon: BellRing, color: 'text-pink-500 dark:text-pink-400', activeBg: 'bg-pink-500 text-white shadow-lg shadow-pink-500/30', label: 'Avisos' },
+        jogos: { Icon: CalendarDays, color: 'text-emerald-500 dark:text-emerald-400', activeBg: 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30', label: 'Jogos' },
+        estatuto: { Icon: BookOpen, color: 'text-emerald-500 dark:text-emerald-400', activeBg: 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30', label: 'Estatuto' },
+        financas: { Icon: DollarSign, color: 'text-emerald-500 dark:text-emerald-400', activeBg: 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30', label: 'Finanças' },
+        sorteio: { Icon: Users, color: 'text-emerald-500 dark:text-emerald-400', activeBg: 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30', label: 'Sorteio' },
+        eventos: { Icon: PartyPopper, color: 'text-emerald-500 dark:text-emerald-400', activeBg: 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30', label: 'Eventos' },
+        relatorios: { Icon: BarChart, color: 'text-emerald-500 dark:text-emerald-400', activeBg: 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30', label: 'Relatórios' },
+        atleta: { Icon: Trophy, color: 'text-emerald-500 dark:text-emerald-400', activeBg: 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30', label: 'Desempenho do Atleta' },
+        mesario: { Icon: ClipboardList, color: 'text-emerald-500 dark:text-emerald-400', activeBg: 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30', label: 'Mesário' },
+        dm: { Icon: Stethoscope, color: 'text-emerald-500 dark:text-emerald-400', activeBg: 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30', label: 'Departamento Médico' },
+        halldafama: { Icon: Crown, color: 'text-emerald-500 dark:text-emerald-400', activeBg: 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30', label: 'Hall da Fama' },
+        notificacoes: { Icon: BellRing, color: 'text-emerald-500 dark:text-emerald-400', activeBg: 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30', label: 'Avisos' },
     };
 
     const renderContent = () => {
@@ -1010,11 +1010,11 @@ const MainApp = ({ user, onLogout, logoutPending, onProfileUpdated }) => {
 
             <nav id="cba-menu-principal" aria-label="Menu principal" className={`cba-mobile-sidebar fixed inset-y-0 left-0 z-50 md:relative transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-300 w-64 md:w-56 shrink-0 h-full flex flex-col items-stretch py-5 px-3 bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl border-r border-slate-200/50 dark:border-slate-700/50 shadow-2xl md:shadow-lg overflow-y-auto overscroll-contain hide-scrollbar gap-2`}>
                 <div className="flex items-center gap-3 px-2 mb-4"><img src="https://lh3.googleusercontent.com/d/131DvcfgiRLLp9irVnVY8m9qNuM-0y7f8" alt="Logo" className="w-12 h-12 rounded-full shrink-0" /><div className="min-w-0 flex-1"><p className="font-black text-slate-900 dark:text-white">Portal CBA</p><p className="text-[10px] uppercase tracking-wider font-black text-slate-400">Menu principal</p></div><button type="button" onClick={() => setIsSidebarOpen(false)} aria-label="Fechar menu" className="md:hidden rounded-xl p-2 text-slate-400 hover:text-white hover:bg-slate-800"><X className="w-5 h-5" /></button></div>
-                {isAdmin && <button type="button" onClick={() => { setIsSidebarOpen(false); setAdminOpen(true); }} className="flex w-full min-h-12 items-center gap-3 rounded-2xl border border-indigo-500/40 bg-indigo-500/10 px-3.5 text-left font-black text-sm text-indigo-400"><KeyRound className="h-5 w-5 shrink-0"/>Administração</button>}
+                {isAdmin && <button type="button" onClick={() => { setIsSidebarOpen(false); setAdminOpen(true); }} className="cba-sidebar-nav-item flex w-full min-h-12 items-center gap-3 rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-3.5 text-left font-black text-sm text-emerald-500 dark:text-emerald-400 hover:bg-slate-100 dark:hover:bg-slate-800"><KeyRound className="h-5 w-5 shrink-0"/>Administração</button>}
                 {TABS.map(tab => {
                     const { Icon, activeBg, color, label } = TAB_CONFIG[tab];
                     return (
-                        <button key={tab} title={label} onClick={() => { setActiveTab(tab); setIsSidebarOpen(false); }} className={`flex items-center gap-3 w-full min-h-12 px-3.5 rounded-2xl transition-all duration-300 text-left ${activeTab === tab ? `${activeBg} shadow-lg md:scale-[1.02]` : `${color} hover:bg-slate-100 dark:hover:bg-slate-800`}`}>
+                        <button key={tab} title={label} aria-current={activeTab === tab ? 'page' : undefined} onClick={() => { setActiveTab(tab); setIsSidebarOpen(false); }} className={`${tab === 'inicio' ? '' : 'cba-sidebar-nav-item '}flex items-center gap-3 w-full min-h-12 px-3.5 rounded-2xl transition-all duration-300 text-left ${activeTab === tab ? `${activeBg} shadow-lg md:scale-[1.02]` : `${color} hover:bg-slate-100 dark:hover:bg-slate-800`}`}>
                             <Icon className="w-5 h-5 shrink-0" />
                             <span className="font-black text-sm truncate">{label}</span>
                         </button>

@@ -23,6 +23,32 @@
 .cba-card-modal__share:disabled { opacity: .55; cursor: not-allowed; }
 .cba-card-modal__close:focus-visible, .cba-card-modal__download:focus-visible, .cba-card-modal__formats button:focus-visible, .cba-card-modal__share:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
 .cba-card-modal__aside .cba-card-modal__status { margin: 10px 0 0; color: #90eabb; font-size: 12px; }
+.cba-card-modal__dialog--individual { width: min(560px, 100%); }
+.cba-card-modal__dialog--individual .cba-card-modal__header { align-items: center; padding: 12px 18px; }
+.cba-card-modal__accessible-title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.cba-card-modal__dialog--individual .cba-card-modal__body { display: flex; flex-direction: column; align-items: stretch; gap: 14px; padding: 18px; }
+.cba-card-modal__dialog--individual .cba-card-modal__preview { width: min(100%, 330px); margin: 0 auto; }
+.cba-card-actions__format { display: flex; justify-content: flex-end; margin-bottom: 7px; }
+.cba-card-actions__format button { display: inline-flex; gap: 5px; align-items: center; padding: 5px 9px; border: 1px solid #344b65; border-radius: 8px; background: #14263a; color: #c4d3e2; font-size: 12px; }
+.cba-card-actions__toolbar { display: grid; grid-template-columns: repeat(auto-fit, minmax(78px, 1fr)); gap: 6px; }
+.cba-card-actions__toolbar button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; min-height: 64px; padding: 8px 4px; border: 1px solid #344b65; border-radius: 11px; background: #15283c; color: #edf5fc; font-size: 11px; font-weight: 700; }
+.cba-card-actions__toolbar .cba-card-actions__whatsapp { color: #50e0a5; }
+.cba-card-actions__toolbar .cba-card-actions__download { background: #ff994d; color: #15202c; border-color: #ff994d; }
+.cba-card-actions button:hover:not(:disabled) { filter: brightness(1.15); }
+.cba-card-actions button:focus-visible { outline: 3px solid #63e7b8; outline-offset: 2px; }
+.cba-card-actions button:disabled { opacity: .5; cursor: not-allowed; }
+.cba-card-actions__panel { margin-top: 12px; padding: 14px; border: 1px solid #344b65; border-radius: 12px; background: #122337; }
+.cba-card-actions__panel-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.cba-card-actions__panel-heading h3 { margin: 3px 0; font-size: 15px; font-weight: 800; }
+.cba-card-actions__panel button { border: 1px solid #40566d; border-radius: 8px; background: #1b334d; color: #edf5fc; padding: 9px 12px; min-height: 40px; font-size: 13px; font-weight: 700; }
+.cba-card-actions__panel-heading button { flex-shrink: 0; min-height: 32px; padding: 6px; }
+.cba-card-actions__panel [role="menu"] { display: grid; gap: 5px; }
+.cba-card-actions__panel [role="menu"] button { text-align: left; }
+.cba-card-actions__panel [aria-checked="true"] { border-color: #63e7b8; color: #63e7b8; }
+.cba-card-actions__panel p, .cba-card-modal__feedback p { margin: 8px 0; color: #b8c9db; font-size: 13px; line-height: 1.55; }
+.cba-card-modal__feedback:empty { display: none; }
+.cba-card-modal__feedback .cba-card-modal__share { width: auto; min-height: 40px; padding: 8px 12px; margin: 4px 0; font-size: 12px; }
+.cba-card-modal__feedback .cba-card-modal__status { color: #90eabb; }
 @media (max-width: 680px) {
   .cba-card-modal { padding: 8px; }
   .cba-card-modal__dialog { max-height: 96dvh; border-radius: 15px; }
@@ -32,4 +58,7 @@
   .cba-card-modal__aside h3 { margin: 5px 0 8px; font-size: 21px; }
   .cba-card-modal__aside p { margin: 7px 0; font-size: 12px; }
   .cba-card-modal__download { margin-top: 10px; }
+  .cba-card-modal__dialog--individual .cba-card-modal__body { padding: 12px; gap: 10px; }
+  .cba-card-modal__dialog--individual .cba-card-modal__preview { width: min(100%, 300px); }
+  .cba-card-actions__toolbar { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }

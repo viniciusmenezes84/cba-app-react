@@ -1,3 +1,19 @@
+.cba-sidebar-nav-item:focus-visible { outline: 2px solid #34d399; outline-offset: 2px; }
+
+/* Only actionable controls use the hand; editable text keeps its native cursor. */
+a[href]:not([aria-disabled="true"]),
+button:enabled:not([aria-disabled="true"]):not([aria-busy="true"]),
+select:enabled,
+summary,
+input:is([type="button"], [type="submit"], [type="reset"], [type="checkbox"], [type="radio"]):enabled,
+[role="button"]:not([aria-disabled="true"]):not([aria-busy="true"]),
+[role="tab"]:not([aria-disabled="true"]),
+[role="menuitem"]:not([aria-disabled="true"]),
+[role="menuitemradio"]:not([aria-disabled="true"]) { cursor: pointer; }
+
+button:disabled, input:disabled, select:disabled, [aria-disabled="true"] { cursor: not-allowed; }
+[aria-busy="true"] { cursor: progress; }
+
 .hide-scrollbar {
   /* Mantém a rolagem por toque, mouse e teclado sem a faixa visual. */
   -ms-overflow-style: none;

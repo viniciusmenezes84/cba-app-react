@@ -30,6 +30,14 @@ Toque em Meu CBA no cabeçalho de qualquer aba, no celular ou computador, para a
 
 ## Compartilhar minha rodada
 
+### Ações sociais nos cards individuais
+
+Os cards da temporada e da rodada destacam a arte, com uma barra de ações abaixo da prévia. O menu compacto Post/Story escolhe o formato, sem incluir os controles no PNG. WhatsApp e os destinos Telegram, X, Slack e Outros aplicativos usam o seletor nativo de arquivos quando `navigator.canShare({ files })` confirmar suporte; o usuário escolhe o aplicativo e conclui o envio. Sem suporte, baixe o PNG e copie a legenda da rodada. A legenda pode precisar ser colada separadamente no aplicativo de destino.
+
+Instagram pergunta Feed, Story ou Reels: Feed prepara o Post; Story prepara a arte vertical. Depois, Abrir seletor de aplicativos permite encaminhar o PNG, mas não controla o destino dentro do Instagram. Reels oferece somente uma arte vertical para baixar e importar no editor: o PNG não é vídeo. TikTok também oferece importação manual da imagem. Não há publicação direta nem integração de conta social.
+
+Referências consultadas: [WhatsApp Click to Chat](https://faq.whatsapp.com/5913398998672934) documenta texto pré-preenchido, não anexos PNG; [Web Share](https://developer.mozilla.org/en-US/docs/Web/API/Navigator/share) define suporte a arquivos e seleção pelo aparelho; a [coleção oficial da Meta para Reels](https://www.postman.com/meta/instagram/folder/f95kq5e/reels-publishing) exige vídeo para publicação via API. Os cards não usam essas APIs de publicação.
+
 No Meu CBA, selecione a temporada e acesse Minhas rodadas. As datas com súmula do próprio atleta aparecem da mais recente para a mais antiga. Toque em Compartilhar minha rodada para conferir a prévia em Post (1080 × 1350) ou Story (1080 × 1920), compartilhar o PNG pelo seletor do aparelho, baixar a imagem ou copiar a legenda. O atleta escolhe o aplicativo e conclui a publicação.
 
 Os cards reutilizam os dados autorizados de `getMyProfile`, sem consulta adicional. Pontos seguem `pts2 * 2 + pts3 * 3`; os totais são consolidados por data e podem reunir várias partidas. Súmulas zeradas continuam disponíveis; presença sem súmula não gera card. Campos não registrados aparecem como `—`. A foto precisa carregar ou ser substituída pela inicial antes da exportação; as proteções CORS do card da temporada são preservadas. Se o navegador não compartilhar arquivos, Baixar PNG continua disponível, e a legenda permanece visível para cópia manual.

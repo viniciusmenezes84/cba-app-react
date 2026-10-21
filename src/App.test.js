@@ -8,6 +8,42 @@ test('mostra a entrada do Portal CBA', () => {
   expect(screen.getByRole('button', { name: 'Entrar no Portal' })).toBeInTheDocument();
 });
 
+test.each(['ADMIN', 'MEMBER'])('menu lateral verde mantém Início e as permissões de %s', role => {
+  window.localStorage.setItem('cba_session_v1', JSON.stringify({
+    user: { role, name: 'Atleta', token: 'sessao-de-teste' }, savedAt: Date.now()
+  }));
+  window.localStorage.setItem('cba_last_tab_v1', 'inicio');
+  const previousFetch = global.fetch;
+  global.fetch = jest.fn(() => new Promise(() => {}));
+  try {
+    render(<App />);
+    const menu = within(screen.getByRole('navigation', { name: 'Menu principal' }));
+    const home = menu.getByRole('button', { name: 'Início', exact: true });
+    expect(home).toHaveClass('bg-emerald-500', 'text-slate-950', 'shadow-emerald-500/20');
+    expect(home).not.toHaveClass('cba-sidebar-nav-item');
+    const labels = ['Presença', 'Relatórios', 'Desempenho do Atleta', 'Finanças', 'Jogos', 'Eventos', 'Sorteio', 'Departamento Médico', 'Hall da Fama', 'Estatuto'];
+    if (role === 'ADMIN') labels.push('Mesário', 'Avisos');
+    else {
+      expect(menu.queryByRole('button', { name: 'Mesário', exact: true })).not.toBeInTheDocument();
+      expect(menu.queryByRole('button', { name: 'Administração', exact: true })).not.toBeInTheDocument();
+    }
+    for (const label of labels) {
+      const item = menu.getByRole('button', { name: label, exact: true });
+      expect(item).toHaveClass('text-emerald-500', 'dark:text-emerald-400', 'hover:bg-slate-100', 'dark:hover:bg-slate-800');
+      fireEvent.click(item);
+      expect(item).toHaveClass('bg-emerald-500', 'text-white', 'shadow-emerald-500/30');
+      expect(item).toHaveAttribute('aria-current', 'page');
+    }
+    fireEvent.click(home);
+    expect(home).toHaveClass('bg-emerald-500', 'text-slate-950', 'shadow-emerald-500/20');
+    if (role === 'ADMIN') expect(menu.getByRole('button', { name: 'Administração', exact: true })).toHaveClass('text-emerald-500', 'dark:text-emerald-400');
+  } finally {
+    global.fetch = previousFetch;
+    window.localStorage.removeItem('cba_session_v1');
+    window.localStorage.removeItem('cba_last_tab_v1');
+  }
+});
+
 test('login entra pelo gateway e carrega os painéis com a sessão recebida', async () => {
   const token = 'c'.repeat(64);
   const previousFetch = global.fetch;
