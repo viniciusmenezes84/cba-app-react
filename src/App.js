@@ -947,21 +947,27 @@ const MainApp = ({ user, onLogout, logoutPending, onProfileUpdated }) => {
         }
     };
 
+    // Identity and navigation are kept separate from feature permissions.
     const TAB_CONFIG = {
-        inicio: { Icon: Home, color: 'text-emerald-500 dark:text-emerald-400', activeBg: 'bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20', label: 'Início' },
-        presenca: { Icon: Activity, color: 'text-emerald-500 dark:text-emerald-400', activeBg: 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30', label: 'Presença' },
-        jogos: { Icon: CalendarDays, color: 'text-emerald-500 dark:text-emerald-400', activeBg: 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30', label: 'Jogos' },
-        estatuto: { Icon: BookOpen, color: 'text-emerald-500 dark:text-emerald-400', activeBg: 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30', label: 'Estatuto' },
-        financas: { Icon: DollarSign, color: 'text-emerald-500 dark:text-emerald-400', activeBg: 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30', label: 'Finanças' },
-        sorteio: { Icon: Users, color: 'text-emerald-500 dark:text-emerald-400', activeBg: 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30', label: 'Sorteio' },
-        eventos: { Icon: PartyPopper, color: 'text-emerald-500 dark:text-emerald-400', activeBg: 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30', label: 'Eventos' },
-        relatorios: { Icon: BarChart, color: 'text-emerald-500 dark:text-emerald-400', activeBg: 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30', label: 'Relatórios' },
-        atleta: { Icon: Trophy, color: 'text-emerald-500 dark:text-emerald-400', activeBg: 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30', label: 'Desempenho do Atleta' },
-        mesario: { Icon: ClipboardList, color: 'text-emerald-500 dark:text-emerald-400', activeBg: 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30', label: 'Mesário' },
-        dm: { Icon: Stethoscope, color: 'text-emerald-500 dark:text-emerald-400', activeBg: 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30', label: 'Departamento Médico' },
-        halldafama: { Icon: Crown, color: 'text-emerald-500 dark:text-emerald-400', activeBg: 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30', label: 'Hall da Fama' },
-        notificacoes: { Icon: BellRing, color: 'text-emerald-500 dark:text-emerald-400', activeBg: 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30', label: 'Avisos' },
+        inicio: { Icon: Home, label: 'Início' },
+        presenca: { Icon: Activity, label: 'Presença' },
+        relatorios: { Icon: BarChart, label: 'Relatórios' },
+        atleta: { Icon: Trophy, label: 'Desempenho do Atleta' },
+        mesario: { Icon: ClipboardList, label: 'Mesário' },
+        jogos: { Icon: CalendarDays, label: 'Jogos' },
+        eventos: { Icon: PartyPopper, label: 'Eventos' },
+        sorteio: { Icon: Users, label: 'Sorteio' },
+        financas: { Icon: DollarSign, label: 'Finanças' },
+        dm: { Icon: Stethoscope, label: 'Departamento Médico' },
+        halldafama: { Icon: Crown, label: 'Hall da Fama' },
+        estatuto: { Icon: BookOpen, label: 'Estatuto' },
+        notificacoes: { Icon: BellRing, label: 'Avisos' },
     };
+    const NAV_GROUPS = [
+        { title: 'PRINCIPAL', tabs: ['inicio', 'presenca', 'relatorios', 'atleta'] },
+        { title: 'PARTIDAS E EVENTOS', tabs: ['mesario', 'jogos', 'eventos', 'sorteio'] },
+        { title: 'CLUBE', tabs: ['financas', 'dm', 'halldafama', 'estatuto', 'notificacoes'] },
+    ];
 
     const renderContent = () => {
         if (isLoading && !initialData) return <Loader message="Carregando dados na quadra..." />;
@@ -1008,17 +1014,28 @@ const MainApp = ({ user, onLogout, logoutPending, onProfileUpdated }) => {
                 )}
             </AnimatePresence>
 
-            <nav id="cba-menu-principal" aria-label="Menu principal" className={`cba-mobile-sidebar fixed inset-y-0 left-0 z-50 md:relative transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-300 w-64 md:w-56 shrink-0 h-full flex flex-col items-stretch py-5 px-3 bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl border-r border-slate-200/50 dark:border-slate-700/50 shadow-2xl md:shadow-lg overflow-y-auto overscroll-contain hide-scrollbar gap-2`}>
-                <div className="flex items-center gap-3 px-2 mb-4"><img src="https://lh3.googleusercontent.com/d/131DvcfgiRLLp9irVnVY8m9qNuM-0y7f8" alt="Logo" className="w-12 h-12 rounded-full shrink-0" /><div className="min-w-0 flex-1"><p className="font-black text-slate-900 dark:text-white">Portal CBA</p><p className="text-[10px] uppercase tracking-wider font-black text-slate-400">Menu principal</p></div><button type="button" onClick={() => setIsSidebarOpen(false)} aria-label="Fechar menu" className="md:hidden rounded-xl p-2 text-slate-400 hover:text-white hover:bg-slate-800"><X className="w-5 h-5" /></button></div>
-                {isAdmin && <button type="button" onClick={() => { setIsSidebarOpen(false); setAdminOpen(true); }} className="cba-sidebar-nav-item flex w-full min-h-12 items-center gap-3 rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-3.5 text-left font-black text-sm text-emerald-500 dark:text-emerald-400 hover:bg-slate-100 dark:hover:bg-slate-800"><KeyRound className="h-5 w-5 shrink-0"/>Administração</button>}
-                {TABS.map(tab => {
-                    const { Icon, activeBg, color, label } = TAB_CONFIG[tab];
-                    return (
-                        <button key={tab} title={label} aria-current={activeTab === tab ? 'page' : undefined} onClick={() => { setActiveTab(tab); setIsSidebarOpen(false); }} className={`${tab === 'inicio' ? '' : 'cba-sidebar-nav-item '}flex items-center gap-3 w-full min-h-12 px-3.5 rounded-2xl transition-all duration-300 text-left ${activeTab === tab ? `${activeBg} shadow-lg md:scale-[1.02]` : `${color} hover:bg-slate-100 dark:hover:bg-slate-800`}`}>
-                            <Icon className="w-5 h-5 shrink-0" />
-                            <span className="font-black text-sm truncate">{label}</span>
-                        </button>
-                    );
+            <nav id="cba-menu-principal" aria-label="Menu principal" className={`cba-premium-sidebar cba-mobile-sidebar fixed inset-y-0 left-0 z-50 md:relative transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 transition-transform duration-300 shrink-0 h-full flex flex-col items-stretch py-5 px-3 overflow-y-auto overscroll-contain hide-scrollbar gap-2`}>
+                <div className="cba-premium-sidebar__identity flex items-center gap-3 px-2 mb-2">
+                    <img src="https://lh3.googleusercontent.com/d/131DvcfgiRLLp9irVnVY8m9qNuM-0y7f8" alt="Logo CBA" className="w-12 h-12 rounded-full shrink-0" />
+                    <div className="min-w-0 flex-1"><p className="cba-premium-sidebar__brand">Portal CBA</p><p className="cba-premium-sidebar__subtitle">PAINEL DE GESTÃO</p></div>
+                    <button type="button" onClick={() => setIsSidebarOpen(false)} aria-label="Fechar menu" className="cba-premium-sidebar__close md:hidden rounded-xl p-2"><X className="w-5 h-5" /></button>
+                </div>
+                {isAdmin && <button type="button" onClick={() => { setIsSidebarOpen(false); setAdminOpen(true); }} className="cba-premium-sidebar__admin flex w-full items-center gap-3 text-left">
+                    <KeyRound className="h-5 w-5 shrink-0" aria-hidden="true"/><span className="cba-premium-sidebar__label">Administração</span>
+                </button>}
+                {NAV_GROUPS.map(group => {
+                    const availableTabs = group.tabs.filter(tab => TABS.includes(tab));
+                    if (!availableTabs.length) return null;
+                    return <div key={group.title} className="cba-premium-sidebar__group">
+                        <p className="cba-premium-sidebar__section-label">{group.title}</p>
+                        {availableTabs.map(tab => {
+                            const { Icon, label } = TAB_CONFIG[tab];
+                            return <button key={tab} type="button" title={label} aria-current={activeTab === tab ? 'page' : undefined} onClick={() => { setActiveTab(tab); setIsSidebarOpen(false); }} className="cba-premium-sidebar__item">
+                                <Icon className="w-5 h-5 shrink-0" aria-hidden="true" />
+                                <span className="cba-premium-sidebar__label">{label}</span>
+                            </button>;
+                        })}
+                    </div>;
                 })}
             </nav>
 
@@ -1073,7 +1090,7 @@ const MainApp = ({ user, onLogout, logoutPending, onProfileUpdated }) => {
                         ['presenca','Presença',Activity],
                         ['financas','Finanças',DollarSign]
                     ].map(([key,label,Icon]) => (
-                        <button key={key} onClick={() => setActiveTab(key)} className={`min-h-12 rounded-xl flex flex-col items-center justify-center gap-0.5 ${activeTab === key ? 'bg-emerald-500 text-slate-950' : 'text-slate-400'}`}>
+                        <button key={key} onClick={() => setActiveTab(key)} className={`cba-premium-bottom-item min-h-12 rounded-xl flex flex-col items-center justify-center gap-0.5 ${activeTab === key ? 'cba-premium-bottom-item--active' : 'text-slate-400'}`}>
                             <Icon className="w-5 h-5"/><span className="text-[9px] font-black">{label}</span>
                         </button>
                     ))}
