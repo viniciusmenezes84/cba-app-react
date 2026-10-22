@@ -8,7 +8,7 @@ test('mostra a entrada do Portal CBA', () => {
   expect(screen.getByRole('button', { name: 'Entrar no Portal' })).toBeInTheDocument();
 });
 
-test.each(['ADMIN', 'MEMBER'])('menu lateral verde mantém Início e as permissões de %s', role => {
+test.each(['ADMIN', 'MEMBER'])('menu CBA Premium mantém navegação e permissões de %s', role => {
   window.localStorage.setItem('cba_session_v1', JSON.stringify({
     user: { role, name: 'Atleta', token: 'sessao-de-teste' }, savedAt: Date.now()
   }));
@@ -17,10 +17,15 @@ test.each(['ADMIN', 'MEMBER'])('menu lateral verde mantém Início e as permiss�
   global.fetch = jest.fn(() => new Promise(() => {}));
   try {
     render(<App />);
-    const menu = within(screen.getByRole('navigation', { name: 'Menu principal' }));
+    const nav = screen.getByRole('navigation', { name: 'Menu principal' });
+    expect(nav).toHaveClass('cba-premium-sidebar');
+    const menu = within(nav);
+    expect(menu.getByText('PRINCIPAL')).toBeInTheDocument();
+    expect(menu.getByText('PARTIDAS E EVENTOS')).toBeInTheDocument();
+    expect(menu.getByText('CLUBE')).toBeInTheDocument();
     const home = menu.getByRole('button', { name: 'Início', exact: true });
-    expect(home).toHaveClass('bg-emerald-500', 'text-slate-950', 'shadow-emerald-500/20');
-    expect(home).not.toHaveClass('cba-sidebar-nav-item');
+    expect(home).toHaveClass('cba-premium-sidebar__item');
+    expect(home).toHaveAttribute('aria-current', 'page');
     const labels = ['Presença', 'Relatórios', 'Desempenho do Atleta', 'Finanças', 'Jogos', 'Eventos', 'Sorteio', 'Departamento Médico', 'Hall da Fama', 'Estatuto'];
     if (role === 'ADMIN') labels.push('Mesário', 'Avisos');
     else {
@@ -29,14 +34,15 @@ test.each(['ADMIN', 'MEMBER'])('menu lateral verde mantém Início e as permiss�
     }
     for (const label of labels) {
       const item = menu.getByRole('button', { name: label, exact: true });
-      expect(item).toHaveClass('text-emerald-500', 'dark:text-emerald-400', 'hover:bg-slate-100', 'dark:hover:bg-slate-800');
+      expect(item).toHaveClass('cba-premium-sidebar__item');
+      expect(item.querySelector('.cba-premium-sidebar__label')).toHaveTextContent(label);
       fireEvent.click(item);
-      expect(item).toHaveClass('bg-emerald-500', 'text-white', 'shadow-emerald-500/30');
       expect(item).toHaveAttribute('aria-current', 'page');
+      expect(home).not.toHaveAttribute('aria-current', 'page');
     }
     fireEvent.click(home);
-    expect(home).toHaveClass('bg-emerald-500', 'text-slate-950', 'shadow-emerald-500/20');
-    if (role === 'ADMIN') expect(menu.getByRole('button', { name: 'Administração', exact: true })).toHaveClass('text-emerald-500', 'dark:text-emerald-400');
+    expect(home).toHaveAttribute('aria-current', 'page');
+    if (role === 'ADMIN') expect(menu.getByRole('button', { name: 'Administração', exact: true })).toHaveClass('cba-premium-sidebar__admin');
   } finally {
     global.fetch = previousFetch;
     window.localStorage.removeItem('cba_session_v1');
