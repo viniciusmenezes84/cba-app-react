@@ -5,7 +5,7 @@ import {
   ShieldCheck, X, LayoutDashboard, Users, ClipboardCheck, DollarSign, BarChart3,
   CalendarDays, PartyPopper, Stethoscope, BellRing, Settings, History, Search,
   Plus, Save, Trash2, UserCheck, UserX, RefreshCw, CheckCircle2, AlertTriangle,
-  CreditCard, Activity, LockKeyhole, ChevronRight
+  CreditCard, Activity, LockKeyhole, ChevronRight, FileDown
 } from 'lucide-react';
 
 const ADMIN_EMAIL = 'vinicius.m84@gmail.com';
@@ -35,7 +35,7 @@ function Toast({ toast, onClose }) {
 
 const MODULES = [
   ['resumo', 'Resumo', LayoutDashboard], ['atletas', 'Atletas e usuários', Users], ['presencas', 'Presenças', ClipboardCheck],
-  ['financeiro', 'Financeiro', DollarSign], ['estatisticas', 'Estatísticas', BarChart3], ['jogos', 'Jogos', CalendarDays],
+  ['financeiro', 'Financeiro', DollarSign], ['estatisticas', 'Estatísticas', BarChart3], ['documentos', 'Documentos e impressões', FileDown], ['jogos', 'Jogos', CalendarDays],
   ['eventos', 'Eventos', PartyPopper], ['dm', 'Departamento médico', Stethoscope], ['notificacoes', 'Notificações', BellRing],
   ['configuracoes', 'Configurações', Settings], ['auditoria', 'Auditoria', History]
 ];
@@ -51,9 +51,53 @@ function Summary({ data, onGo }) {
     <div><h2 className="text-2xl font-black text-white">Central de Administração</h2><p className="text-sm text-slate-400 mt-1">Cadastre e mantenha todos os dados operacionais do CBA em um só lugar.</p></div>
     <div className="grid grid-cols-2 xl:grid-cols-5 gap-3">{cards.map(([label, value, Icon]) => <Panel key={label} className="p-4"><Icon className="w-5 h-5 text-indigo-400"/><p className="text-[10px] uppercase font-black tracking-wider text-slate-500 mt-4">{label}</p><p className="text-xl font-black text-white mt-1">{value}</p></Panel>)}</div>
     <Panel className="p-5"><p className="text-xs uppercase font-black tracking-wider text-slate-500 mb-4">Ações rápidas</p><div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3">{[
-      ['Lançar presença', 'presencas', ClipboardCheck], ['Cadastrar atleta', 'atletas', Plus], ['Atualizar mensalidade', 'financeiro', DollarSign], ['Lançar súmula', 'estatisticas', BarChart3]
+      ['Lançar presença', 'presencas', ClipboardCheck], ['Cadastrar atleta', 'atletas', Plus], ['Atualizar mensalidade', 'financeiro', DollarSign], ['Baixar súmula PDF', 'documentos', FileDown]
     ].map(([label, target, Icon]) => <button key={target} onClick={() => onGo(target)} className="flex items-center justify-between rounded-2xl border border-slate-700 bg-slate-900/50 p-4 text-left hover:border-indigo-500/60 hover:bg-indigo-950/20 transition"><div><Icon className="w-5 h-5 text-indigo-400 mb-3"/><p className="font-black text-white">{label}</p></div><ChevronRight className="w-5 h-5 text-slate-600"/></button>)}</div></Panel>
     <Panel className="p-5"><p className="text-xs uppercase font-black tracking-wider text-slate-500 mb-3">Últimas alterações</p><div className="divide-y divide-slate-700/60">{(data?.audit || []).slice(0, 8).map(item => <div key={item.id} className="py-3 flex items-center justify-between gap-4"><div><p className="text-sm font-bold text-slate-200">{item.action}</p><p className="text-xs text-slate-500">{item.entity_type || 'sistema'} · {item.entity_id || '--'}</p></div><span className="text-xs text-slate-500 shrink-0">{new Date(item.created_at).toLocaleString('pt-BR')}</span></div>)}</div></Panel>
+  </div>;
+}
+
+function DocumentsModule({ data, notify }) {
+  const [downloading, setDownloading] = useState(false);
+  const activeCount = (data?.athletes || []).filter(a =>
+    a.active !== false && typeof a.name === 'string' && a.name.trim() && !a.name.includes('*')
+  ).length;
+
+  const download = async () => {
+    if (downloading) return;
+    try {
+      setDownloading(true);
+      // Fetch the latest roster through the server-validated ADMIN endpoint.
+      // MEMBER accounts cannot request the data, even if they call this action directly.
+      const response = await adminPost('bootstrap');
+      const { buildPrintableSumulaPdf } = await import('./PrintableSumulaPdf');
+      const pdf = buildPrintableSumulaPdf(response.data?.athletes || []);
+      pdf.save('CBA_Sumula.pdf');
+      notify('Súmula gerada com os atletas ativos do cadastro.');
+    } catch (error) {
+      notify(error.message || 'Não foi possível gerar a súmula.', 'error');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  return <div className="space-y-5">
+    <div><h2 className="text-2xl font-black text-white">Documentos e impressões</h2>
+      <p className="mt-1 text-sm text-slate-400">Documentos disponíveis para os administradores do CBA.</p></div>
+    <Panel className="p-5 sm:p-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex items-center gap-3"><FileDown className="h-6 w-6 shrink-0 text-indigo-400" aria-hidden="true"/>
+            <h3 className="text-lg font-black text-white">Súmula para impressão (PDF)</h3></div>
+          <p className="mt-2 text-sm text-slate-300">CBA | SÚMULA — A4, com presença e espaços para marcar C2, C3, REB, AST, TOC e PTS.</p>
+          <p className="mt-1 text-xs text-slate-400">Lista todos os atletas ativos do cadastro, sem filtrar a presença do domingo. ${activeCount} atletas no painel.</p>
+          <p className="mt-1 text-xs text-slate-500">Geração local, usando cadastro revalidado no servidor. Nenhuma estatística é alterada.</p>
+        </div>
+        <button type="button" onClick={download} disabled={downloading} className={cx(btn, 'shrink-0 bg-indigo-600 text-white hover:bg-indigo-500')}>
+          <FileDown className="h-4 w-4" aria-hidden="true"/>{downloading ? 'Gerando PDF...' : 'Baixar súmula PDF'}
+        </button>
+      </div>
+    </Panel>
   </div>;
 }
 
@@ -341,7 +385,7 @@ function AdminConsole({ onClose }) {
   const reload=useCallback(async()=>{try{setLoading(true);const r=await adminPost('bootstrap');setData(r.data);}catch(e){notify(e.message,'error');}finally{setLoading(false);}},[notify]);
   useEffect(()=>{reload();},[reload]);
   const close=()=>{if(dirty){window.location.reload();return;}onClose();};
-  const content=()=>{if(loading&&!data)return <div className="h-full flex items-center justify-center text-slate-400"><RefreshCw className="w-6 h-6 animate-spin mr-3"/>Carregando administração...</div>;switch(module){case'resumo':return <Summary data={data} onGo={setModule}/>;case'atletas':return <AthletesModule data={data} reload={reload} notify={notify} setDirty={setDirty}/>;case'presencas':return <AttendanceModule notify={notify} setDirty={setDirty}/>;case'financeiro':return <FinanceModule data={data} reload={reload} notify={notify} setDirty={setDirty}/>;case'estatisticas':return <StatsModule notify={notify} setDirty={setDirty}/>;case'jogos':return <GamesModule data={data} reload={reload} notify={notify} setDirty={setDirty}/>;case'eventos':return <EventsModule data={data} reload={reload} notify={notify} setDirty={setDirty}/>;case'dm':return <MedicalModule data={data} reload={reload} notify={notify} setDirty={setDirty}/>;case'notificacoes':return <NotificationsModule data={data} reload={reload} notify={notify} setDirty={setDirty}/>;case'configuracoes':return <SettingsModule data={data} reload={reload} notify={notify} setDirty={setDirty}/>;case'auditoria':return <AuditModule data={data}/>;default:return null;}};
+  const content=()=>{if(loading&&!data)return <div className="h-full flex items-center justify-center text-slate-400"><RefreshCw className="w-6 h-6 animate-spin mr-3"/>Carregando administração...</div>;switch(module){case'resumo':return <Summary data={data} onGo={setModule}/>;case'atletas':return <AthletesModule data={data} reload={reload} notify={notify} setDirty={setDirty}/>;case'presencas':return <AttendanceModule notify={notify} setDirty={setDirty}/>;case'financeiro':return <FinanceModule data={data} reload={reload} notify={notify} setDirty={setDirty}/>;case'estatisticas':return <StatsModule notify={notify} setDirty={setDirty}/>;case'documentos':return <DocumentsModule data={data} notify={notify}/>;case'jogos':return <GamesModule data={data} reload={reload} notify={notify} setDirty={setDirty}/>;case'eventos':return <EventsModule data={data} reload={reload} notify={notify} setDirty={setDirty}/>;case'dm':return <MedicalModule data={data} reload={reload} notify={notify} setDirty={setDirty}/>;case'notificacoes':return <NotificationsModule data={data} reload={reload} notify={notify} setDirty={setDirty}/>;case'configuracoes':return <SettingsModule data={data} reload={reload} notify={notify} setDirty={setDirty}/>;case'auditoria':return <AuditModule data={data}/>;default:return null;}};
   return createPortal(<div role="dialog" aria-modal="true" aria-label="Administração" className="fixed inset-0 z-[150] bg-slate-950 text-slate-100 flex overflow-hidden"><Toast toast={toast} onClose={()=>setToast(null)}/><aside className="hidden lg:flex w-64 shrink-0 border-r border-slate-800 bg-slate-900/95 p-4 flex-col"><div className="flex items-center gap-3 p-3"><div className="w-10 h-10 rounded-2xl bg-indigo-600 flex items-center justify-center"><ShieldCheck className="w-5 h-5"/></div><div><p className="font-black">Administração</p><p className="text-[10px] text-slate-500">Portal CBA</p></div></div><div className="mt-4 space-y-1 overflow-y-auto">{MODULES.map(([key,label,Icon])=><button key={key} onClick={()=>setModule(key)} className={cx('w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition',module===key?'bg-indigo-600 text-white':'text-slate-400 hover:bg-slate-800 hover:text-white')}><Icon className="w-4 h-4"/>{label}</button>)}</div><div className="mt-auto pt-4 border-t border-slate-800"><p className="text-[10px] text-slate-600 px-3">Perfil administrativo<br/>Controle por permissão</p></div></aside><div className="flex-1 min-w-0 flex flex-col"><header className="min-h-16 shrink-0 border-b border-slate-800 bg-slate-900/85 backdrop-blur-xl flex items-center gap-3 px-4 pt-[env(safe-area-inset-top,0px)]"><div className="lg:hidden min-w-0 flex-1"><label className="sr-only" htmlFor="cba-admin-module">Área da administração</label><select id="cba-admin-module" value={module} onChange={e=>setModule(e.target.value)} className="w-full min-h-11 rounded-xl border border-slate-700 bg-slate-800 px-3 font-bold text-sm text-white">{MODULES.map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></div><div className="hidden lg:block flex-1"><p className="text-xs uppercase font-black tracking-wider text-slate-500">Administração</p><p className="font-black text-white">{MODULES.find(x=>x[0]===module)?.[1]}</p></div>{loading&&<RefreshCw className="w-4 h-4 animate-spin text-indigo-400"/>}<button onClick={reload} aria-label="Atualizar administração" className="p-2.5 rounded-xl bg-slate-800 text-slate-400 hover:text-white"><RefreshCw className="w-4 h-4"/></button><button onClick={close} aria-label="Fechar administração" className="p-2.5 rounded-xl bg-slate-800 text-slate-400 hover:text-white"><X className="w-5 h-5"/></button></header><main className="flex-1 overflow-y-auto p-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] md:p-6">{content()}</main></div></div>,document.body);
 }
 
