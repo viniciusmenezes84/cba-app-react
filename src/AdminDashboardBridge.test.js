@@ -24,3 +24,21 @@ test('o painel publicado permite escolher módulos por nome no celular', async (
     window.localStorage.removeItem('cba_session_v1');
   }
 });
+
+test('item Documentos e impressões permanece alinhado à esquerda mesmo com duas linhas', async () => {
+  window.localStorage.setItem('cba_session_v1', JSON.stringify({
+    user: { email: 'admin@cba.test', token: 'sessao-de-teste', role: 'ADMIN' }
+  }));
+  const previousFetch = global.fetch;
+  global.fetch = jest.fn(() => new Promise(() => {}));
+  try {
+    render(<AdminDashboardBridge open />);
+    const documents = await screen.findByRole('button', { name: 'Documentos e impressões' });
+    expect(documents).toHaveClass('text-left');
+    expect(documents.querySelector('svg')).toHaveClass('shrink-0');
+    expect(documents.querySelector('span')).toHaveClass('min-w-0', 'flex-1', 'text-left');
+  } finally {
+    global.fetch = previousFetch;
+    window.localStorage.removeItem('cba_session_v1');
+  }
+});
