@@ -27,6 +27,7 @@ const fakeDb = {
     const query = {
       select() { return query; },
       eq(key, value) { filters[key] = value; return query; },
+      in(key, values) { filters[key + '_in'] = values; return query; },
       ilike(key, value) { filters[key] = value; return query; },
       order() { return Promise.resolve({ data: [], error: null }); },
       async maybeSingle() {
@@ -54,6 +55,11 @@ const fakeDb = {
         if (table === 'app_sessions' && filters.token_hash && mutation === 'delete') sessions.delete(filters.token_hash);
         if (table === 'login_attempts' && filters.email_key) attemptedEmails.delete(filters.email_key);
         if (table === 'member_dues') return Promise.resolve({ data: [], error: null }).then(resolve, reject);
+        const own = filters.athlete_id === 'test-athlete';
+        if (table === 'game_confirmations') return Promise.resolve({ data: own ? [{ game_id:'game-uuid-own' }] : [], error: null }).then(resolve, reject);
+        if (table === 'event_attendees') return Promise.resolve({ data: own ? [{ event_id:'event-uuid-own' }] : [], error: null }).then(resolve, reject);
+        if (table === 'games') return Promise.resolve({ data:[{ id:'game-uuid-own', legacy_id:'old-game-own' }], error:null }).then(resolve, reject);
+        if (table === 'events') return Promise.resolve({ data:[{ id:'event-uuid-own', legacy_id:'old-event-own' }], error:null }).then(resolve, reject);
         return Promise.resolve({ error: null }).then(resolve, reject);
       },
     };
@@ -75,6 +81,14 @@ const fakeDb = {
         }
       }}
     };
+    if (name === 'get_games_compat') return { error:null, data:{result:'success',data:[
+      { id:'old-game-own',confirmados:['Teste','Pessoa Dois'] },
+      { id:'old-game-other',confirmados:['Pessoa Dois'] }
+    ]} };
+    if (name === 'get_events_compat') return { error:null, data:{result:'success',data:[
+      { id:'old-event-own',attendees:['Teste','Pessoa Dois'] },
+      { id:'old-event-other',attendees:['Pessoa Dois'] }
+    ]} };
     throw new Error('Unexpected RPC: ' + name);
   },
 };
@@ -134,6 +148,13 @@ const invoke = async (action, data) => {
   assert.deepEqual(member.body.data.dashboard.players.map(p => p.id), ['test-athlete']);
   assert.equal('summary' in member.body.data.finance, false, 'Members must not see overall balance');
   assert.deepEqual(member.body.data.finance.paymentStatus.map(p => p.player), ['Teste']);
+  const ownGames = await invoke('getGames', { token: valid.body.token });
+  assert.equal(ownGames.status, 200);
+  assert.deepEqual(ownGames.body.data.map(g=>g.confirmados), [['Teste'], []]);
+  const ownEvents = await invoke('getEvents', { token: valid.body.token });
+  assert.equal(ownEvents.status, 200);
+  assert.deepEqual(ownEvents.body.data.map(e=>e.attendees), [['Teste'], []]);
+
   const blocked = await invoke('getMatchStats', { token: valid.body.token, date:'2026-10-18' });
   assert.equal(blocked.status, 403);
   assert.equal(blocked.body.code, 'FORBIDDEN');
@@ -143,6 +164,10 @@ const invoke = async (action, data) => {
   assert.equal(admin.status, 200);
   assert.equal(admin.body.data.dashboard.players.length, 2);
   assert.equal(admin.body.data.finance.summary.balance, 90000);
+  const adminGames = await invoke('getGames', { token: valid.body.token });
+  assert.deepEqual(adminGames.body.data[0].confirmados, ['Teste', 'Pessoa Dois']);
+  const adminEvents = await invoke('getEvents', { token: valid.body.token });
+  assert.deepEqual(adminEvents.body.data[0].attendees, ['Teste', 'Pessoa Dois']);
   account.role = 'MEMBER';
 
   const logout = await invoke('logoutUser', { token: valid.body.token });
