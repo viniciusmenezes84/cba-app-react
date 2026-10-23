@@ -901,7 +901,7 @@ const MainApp = ({ user, onLogout, logoutPending, onProfileUpdated }) => {
         [refreshTrigger]
     );
     
-    const isAdmin = user?.role?.toUpperCase() === 'ADMIN';
+    const isAdmin = ['ADMIN','SUPER_ADMIN'].includes(String(user?.role || '').toUpperCase());
 
     useEffect(() => {
         let live=true;
