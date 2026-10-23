@@ -15,9 +15,10 @@ const Card = ({ children, className = '' }) => (
   <div className={`bg-slate-800/60 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-3xl p-6 ${className}`}>{children}</div>
 );
 
-function Insights({ data }) {
+function Insights({ data, isAdmin, athleteId }) {
   const appData = data?.data || data || {};
-  const players = appData?.dashboard?.players || [];
+  const sourcePlayers = appData?.dashboard?.players || [];
+  const players = isAdmin ? sourcePlayers : sourcePlayers.filter(player => Boolean(athleteId) && String(player?.id) === String(athleteId));
   const dates = appData?.dashboard?.dates || [];
   const years = useMemo(() => [...new Set(dates.map(d => d.substring(0, 4)))].sort((a, b) => b - a), [dates]);
   const [year, setYear] = useState(years[0] || new Date().getFullYear().toString());
@@ -110,6 +111,40 @@ function Insights({ data }) {
   const yearlyOptions = { ...common, plugins: { legend: { display: true, position: 'top', align: 'end', labels: { color: '#cbd5e1', usePointStyle: true } } } };
   const fmt = date => date ? date.split('-').reverse().join('/') : '--';
 
+  if (!isAdmin) {
+    const own = players[0];
+    const entries = Object.entries(own?.attendance || {})
+      .filter(([date]) => date.startsWith(year))
+      .sort(([a],[b]) => b.localeCompare(a));
+    const valid = entries.filter(([,status]) => status && status !== 'N/A');
+    const present = valid.filter(([,status]) => String(status).includes('✅')).length;
+    const attendancePct = valid.length ? (present / valid.length * 100) : 0;
+    return <section className="space-y-5 pt-6" aria-label="Meu histórico de presença">
+      <div className="rounded-3xl border border-indigo-500/30 bg-slate-900 p-6">
+        <p className="text-xs font-black uppercase tracking-wider text-indigo-300">Presença individual</p>
+        <h1 className="mt-2 text-2xl font-black text-white">Meu histórico de presença</h1>
+        <p className="mt-2 text-sm text-slate-300">Somente os seus registros são exibidos. Informações de outros atletas são restritas à Administração.</p>
+        <label className="mt-4 block text-xs font-bold text-slate-300">Temporada
+          <select aria-label="Temporada de presença" className="mt-2 block rounded-xl border border-slate-600 bg-slate-950 p-3 text-white" value={year} onChange={e=>setYear(e.target.value)}>
+            {(years.length ? years : [year]).map(value=><option key={value} value={value}>{value}</option>)}
+          </select>
+        </label>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Card><p className="text-xs text-slate-400">Minhas presenças</p><p className="mt-2 text-3xl font-black text-emerald-400">{present}</p></Card>
+        <Card><p className="text-xs text-slate-400">Minha frequência</p><p className="mt-2 text-3xl font-black text-indigo-300">{attendancePct.toFixed(0)}%</p></Card>
+      </div>
+      <Card><h2 className="text-lg font-black text-white">Registros da temporada</h2>
+        {!entries.length ? <p className="mt-4 text-sm text-slate-400">Nenhum registro de presença encontrado.</p> :
+          <ul className="mt-4 divide-y divide-slate-700">{entries.map(([date,status]) =>
+            <li key={date} className="flex justify-between gap-3 py-3 text-sm text-slate-300">
+              <span>{date.split('-').reverse().join('/')}</span><span className="text-right font-bold">{status || 'Não informado'}</span>
+            </li>
+          )}</ul>}
+      </Card>
+    </section>;
+  }
+
   return (
     <div className="space-y-6 pt-6">
       <div className="rounded-3xl overflow-hidden bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900 border border-indigo-500/10 shadow-2xl p-6 sm:p-8 text-white">
@@ -146,7 +181,7 @@ function Insights({ data }) {
   );
 }
 
-export default function PresenceDashboardBridge() {
+export default function PresenceDashboardBridge({ isAdmin = false, athleteId }) {
   const data = useContext(InitialDataContext);
-  return data ? <Insights data={data} /> : null;
+  return data ? <Insights data={data} isAdmin={isAdmin} athleteId={athleteId} /> : null;
 }

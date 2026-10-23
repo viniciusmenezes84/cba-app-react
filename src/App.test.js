@@ -26,11 +26,13 @@ test.each(['ADMIN', 'MEMBER'])('menu CBA Premium mantém navegação e permissõ
     const home = menu.getByRole('button', { name: 'Início', exact: true });
     expect(home).toHaveClass('cba-premium-sidebar__item');
     expect(home).toHaveAttribute('aria-current', 'page');
-    const labels = ['Presença', 'Relatórios', 'Desempenho do Atleta', 'Finanças', 'Jogos', 'Eventos', 'Sorteio', 'Departamento Médico', 'Hall da Fama', 'Estatuto'];
-    if (role === 'ADMIN') labels.push('Mesário', 'Avisos');
+    const labels = ['Presença', 'Relatórios', 'Desempenho do Atleta', 'Finanças', 'Jogos', 'Eventos', 'Departamento Médico', 'Estatuto'];
+    if (role === 'ADMIN') labels.push('Sorteio', 'Hall da Fama', 'Mesário', 'Avisos');
     else {
       expect(menu.queryByRole('button', { name: 'Mesário', exact: true })).not.toBeInTheDocument();
       expect(menu.queryByRole('button', { name: 'Administração', exact: true })).not.toBeInTheDocument();
+      expect(menu.queryByRole('button', { name: 'Sorteio', exact: true })).not.toBeInTheDocument();
+      expect(menu.queryByRole('button', { name: 'Hall da Fama', exact: true })).not.toBeInTheDocument();
     }
     for (const label of labels) {
       const item = menu.getByRole('button', { name: label, exact: true });
@@ -120,7 +122,7 @@ test('o painel de presença usa os dados iniciais sem repetir a consulta', async
   global.fetch = jest.fn(async () => ({ ok: true, json: async () => ({ data: { dashboard: { players: [], dates: [] }, finance: {} } }) }));
   try {
     render(<App />);
-    expect(await screen.findByText(/Visão do elenco em/)).toBeInTheDocument();
+    expect(await screen.findByText(/Meu histórico de presença/)).toBeInTheDocument();
     expect(global.fetch).toHaveBeenCalledTimes(1);
   } finally {
     global.fetch = previousFetch;
@@ -227,9 +229,9 @@ test('Mesário recupera a sessão antiga, mantém o placar e atualiza os dados a
   }
 }, 15000);
 
-test('menu móvel abre o Sorteio diretamente e usa os dados iniciais', async () => {
+test('menu móvel do ADMIN abre o Sorteio diretamente e usa os dados iniciais', async () => {
   window.localStorage.setItem('cba_session_v1', JSON.stringify({
-    user: { role: 'MEMBER', email: 'atleta@cba.test', name: 'Atleta', token: 'sessao-de-teste' }, savedAt: Date.now()
+    user: { role: 'ADMIN', email: 'admin@cba.test', name: 'Admin', token: 'sessao-de-teste' }, savedAt: Date.now()
   }));
   const previousFetch = global.fetch;
   global.fetch = jest.fn(async () => ({ ok: true, json: async () => ({
@@ -306,14 +308,14 @@ test('falha na revogação limpa a sessão local e avisa o usuário', async () =
   }
 });
 
-test('Relatórios abre diretamente com dados iniciais e filtros compartilhados', async () => {
+test('Relatórios ADM abre diretamente com visão completa', async () => {
   window.localStorage.setItem('cba_session_v1', JSON.stringify({
-    user: { role: 'MEMBER', email: 'atleta@cba.test', name: 'Atleta', token: 'sessao-de-teste' }, savedAt: Date.now()
+    user: { role: 'ADMIN', email: 'admin@cba.test', name: 'Admin', token: 'sessao-de-teste' }, savedAt: Date.now()
   }));
   window.localStorage.setItem('cba_last_tab_v1', 'relatorios');
   const previousFetch = global.fetch;
   global.fetch = jest.fn(async () => ({ ok: true, json: async () => ({ data: {
-    dashboard: { players: [{ name: 'Ana', attendance: { '2026-04-05': '✅' }, dailyStats: {} }], dates: ['2026-04-05'] }, finance: {}
+    dashboard: { players: [{ id: 'id-ana', name: 'Ana', attendance: { '2026-04-05': '✅' }, dailyStats: {} }], dates: ['2026-04-05'] }, finance: {}
   } }) }));
   try {
     render(<App />);
@@ -422,7 +424,7 @@ test('Meu CBA abre pelo cabeçalho de outra aba mesmo se o Início falhar; naveg
   });
   try {
     render(<App />);
-    await screen.findByText(/Visão do elenco em/);
+    await screen.findByText(/Meu histórico de presença/);
     fireEvent.click(screen.getByRole('button', { name: 'Abrir Meu CBA' }));
     expect(await screen.findByRole('heading', { name: 'Meu CBA' })).toBeInTheDocument();
     expect(await screen.findByText('Minha temporada')).toBeInTheDocument();
@@ -431,7 +433,7 @@ test('Meu CBA abre pelo cabeçalho de outra aba mesmo se o Início falhar; naveg
     fireEvent.click(screen.getByRole('button', { name: 'Abrir Meu CBA' }));
     expect(await screen.findByText('Minha temporada')).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole('button', { name: 'Presença' }).at(-1));
-    expect(await screen.findByText(/Visão do elenco em/)).toBeInTheDocument();
+    expect(await screen.findByText(/Meu histórico de presença/)).toBeInTheDocument();
   } finally {
     global.fetch = previousFetch;
     window.localStorage.removeItem('cba_session_v1');

@@ -87,7 +87,7 @@ Deno.serve(async (req: Request) => {
     };
 
     const sessionPayload = (actor: any, token: string, expiresAt: number) => {
-      const user = { id: actor.id, name: actor.name, email: actor.email, role: actor.role, fotoUrl: actor.fotoUrl };
+      const user = { id: actor.id, athleteId: actor.athlete_id, name: actor.name, email: actor.email, role: actor.role, fotoUrl: actor.fotoUrl };
       return { status: 'approved', token, expiresAt, ...user, user };
     };
 
@@ -227,16 +227,56 @@ Deno.serve(async (req: Request) => {
       return { error:'', startsAt:normalizedStart };
     };
 
+    // Roteiro legado: identificar presença própria por UUID (não por nome).
+    // Não devolver participantes de terceiros a perfis MEMBER.
+    const ownConfirmedLegacyIds = async (joinTable:string, foreignKey:string, targetTable:string) => {
+      const keys = new Set<string>();
+      if (!actor.athlete_id) return keys;
+      const { data: attend, error: attendError } = await sb.from(joinTable).select(foreignKey).eq('athlete_id', actor.athlete_id);
+      if (attendError) throw attendError;
+      const ids = [...new Set((attend || []).map((row:any) => String(row[foreignKey] || '')).filter(Boolean))];
+      if (!ids.length) return keys;
+      const { data: objects, error: objectsError } = await sb.from(targetTable).select('id,legacy_id').in('id', ids);
+      if (objectsError) throw objectsError;
+      for (const item of objects || []) {
+        keys.add(String(item.id));
+        if (item.legacy_id) keys.add(String(item.legacy_id));
+      }
+      return keys;
+    };
+
     switch (action) {
       case 'getInitialAppData': {
         const data: any = await rpc('get_initial_app_data_compat');
+        if (!isAdmin && data?.data?.dashboard) {
+          // All statistics and attendance must be scoped to the authenticated athlete_id.
+          // Player names are NOT an authorization identifier (duplicates/renames are possible).
+          const sourcePlayers = Array.isArray(data.data.dashboard.players) ? data.data.dashboard.players : [];
+          const ownPlayers = actor.athlete_id
+            ? sourcePlayers.filter((player:any) => String(player?.id || '') === String(actor.athlete_id))
+            : [];
+          data.data.dashboard = {
+            players:ownPlayers,
+            dates:[...new Set(ownPlayers.flatMap((player:any) => [
+              ...Object.keys(player.attendance || {}), ...Object.keys(player.dailyStats || {})
+            ]))].sort()
+          };
+        }
+        if (!isAdmin && data?.data?.nextGame) {
+          // Game metadata is shared; other athletes' attendance choices are private.
+          const next = data.data.nextGame;
+          data.data.nextGame = {
+            ...next,
+            confirmados: Array.isArray(next.confirmados) ? next.confirmados.filter((name:string) => name === actor.name) : []
+          };
+        }
         if (!isAdmin && data?.data?.finance) {
           // Allowlist: nunca devolva novos campos financeiros individuais criados no RPC legado
           // sem uma decisão explícita sobre a autorização de cada campo.
           const rawFinance = data.data.finance;
           data.data.finance = {
             year:rawFinance.year,
-            summary:rawFinance.summary,
+            // Overall revenue, expenses and balance are restricted to ADMIN.
             monthlyFee:rawFinance.monthlyFee,
             paymentHeaders:rawFinance.paymentHeaders,
             paymentStatus:[]
@@ -275,8 +315,22 @@ Deno.serve(async (req: Request) => {
         }
         return json(data);
       }
-      case 'getGames': return json(await rpc('get_games_compat'));
-      case 'getEvents': return json(await rpc('get_events_compat'));
+      case 'getGames': {
+        const response:any = await rpc('get_games_compat');
+        if (isAdmin) return json(response);
+        const ids = await ownConfirmedLegacyIds('game_confirmations', 'game_id', 'games');
+        return json({ ...response, data:(Array.isArray(response?.data) ? response.data : []).map((game:any) => ({
+          ...game, confirmados:ids.has(String(game.id)) && actor.name ? [actor.name] : []
+        })) });
+      }
+      case 'getEvents': {
+        const response:any = await rpc('get_events_compat');
+        if (isAdmin) return json(response);
+        const ids = await ownConfirmedLegacyIds('event_attendees', 'event_id', 'events');
+        return json({ ...response, data:(Array.isArray(response?.data) ? response.data : []).map((event:any) => ({
+          ...event, attendees:ids.has(String(event.id)) && actor.name ? [actor.name] : []
+        })) });
+      }
       case 'getNotifications': return json(await rpc('get_notifications_compat'));
       case 'getInjuries': {
         // Consulta de compatibilidade por athlete_id vinculado à sessão, sem comparação por nome.

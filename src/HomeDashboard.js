@@ -65,7 +65,8 @@ export function HomeView({ data, isAdmin, onNavigate, onOpenAgenda, onOpenProfil
         </div>
       </div>
     </div>
-    <HomeHighlights initialData={initialData} portalData={data} onNavigate={onNavigate} isAdmin={isAdmin}/>
+    {isAdmin ? <HomeHighlights initialData={initialData} portalData={data} onNavigate={onNavigate} isAdmin={isAdmin}/> :
+      <Panel><div className="p-5"><h3 className="text-lg font-black text-white">Meu desempenho</h3><p className="mt-2 text-sm text-slate-300">Consulte somente seu histórico, presenças e estatísticas no Meu CBA.</p><button type="button" onClick={onOpenProfile} className="mt-4 rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-black text-white">Ver minhas estatísticas</button></div></Panel>}
     <div className="grid gap-4 lg:grid-cols-2">
       <Panel>
         <div className="flex items-center justify-between"><div><Pill>Próximo jogo</Pill><h3 className="mt-3 text-xl font-black text-white">{nextGame ? fmtDate(nextGame.date) : 'Nenhum jogo agendado'}</h3></div><CalendarDays className="h-8 w-8 text-emerald-400" /></div>

@@ -330,11 +330,11 @@ const ProximoJogoCard = ({ game, currentUser, onAttendanceUpdate }) => {
 // ==========================================
 
 // 1. ABA PRESENÇA
-const PresencaTab = ({ nextGame, currentUser, onAttendanceUpdate }) => (
+const PresencaTab = ({ nextGame, currentUser, isAdmin, onAttendanceUpdate }) => (
     <div className="space-y-6">
         <ProximoJogoCard game={nextGame} currentUser={currentUser} onAttendanceUpdate={onAttendanceUpdate} />
         <Suspense fallback={<Loader message="Carregando presença..." />}>
-            <PresenceDashboardBridge />
+            <PresenceDashboardBridge isAdmin={isAdmin} athleteId={currentUser?.athleteId} />
         </Suspense>
     </div>
 );
@@ -387,11 +387,11 @@ const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin, pixC
 
     return (
         <div className="space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {isAdmin && <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <GlassCard className="bg-indigo-600 !text-white text-center"><h3 className="font-bold text-sm uppercase opacity-80">Saldo em Caixa</h3><p className="text-4xl font-black mt-1">R$ {financeData.summary.balance.toFixed(2)}</p></GlassCard>
                 <GlassCard className="text-center"><h3 className="text-slate-500 font-bold text-sm uppercase">Total Receitas</h3><p className="text-3xl font-bold text-emerald-500 mt-1">R$ {financeData.summary.revenue.toFixed(2)}</p></GlassCard>
                 <GlassCard className="text-center"><h3 className="text-slate-500 font-bold text-sm uppercase">Total Despesas</h3><p className="text-3xl font-bold text-rose-500 mt-1">R$ {financeData.summary.expense.toFixed(2)}</p></GlassCard>
-            </div>
+            </div>}
 
             {isAdmin && (
                 <GlassCard className="border-orange-500/30">
@@ -897,7 +897,7 @@ const MainApp = ({ user, onLogout, logoutPending, onProfileUpdated }) => {
     
     const isAdmin = user?.role?.toUpperCase() === 'ADMIN';
     
-    const TABS = useMemo(() => isAdmin ? ['inicio', 'presenca', 'relatorios', 'atleta', 'mesario', 'financas', 'jogos', 'eventos', 'sorteio', 'dm', 'halldafama', 'estatuto', 'notificacoes'] : ['inicio', 'presenca', 'relatorios', 'atleta', 'financas', 'jogos', 'eventos', 'sorteio', 'dm', 'halldafama', 'estatuto'], [isAdmin]);
+    const TABS = useMemo(() => isAdmin ? ['inicio', 'presenca', 'relatorios', 'atleta', 'mesario', 'financas', 'jogos', 'eventos', 'sorteio', 'dm', 'halldafama', 'estatuto', 'notificacoes'] : ['inicio', 'presenca', 'relatorios', 'atleta', 'financas', 'jogos', 'eventos', 'dm', 'estatuto'], [isAdmin]);
 
     useEffect(() => {
         if (!TABS.includes(activeTab)) {
@@ -972,6 +972,8 @@ const MainApp = ({ user, onLogout, logoutPending, onProfileUpdated }) => {
     ];
 
     const renderContent = () => {
+        // Impede renderização de módulos administrativos ao restaurar uma aba antiga do localStorage.
+        if (!TABS.includes(activeTab)) return <Loader message="Abrindo painel autorizado..." />;
         if (isLoading && !initialData) return <Loader message="Carregando dados na quadra..." />;
         if (dataError && !initialData) return <div role="alert" className="mx-auto max-w-lg rounded-3xl border border-rose-500/30 bg-slate-800 p-6 text-center text-white"><AlertCircle className="mx-auto mb-3 h-9 w-9 text-rose-400"/><h2 className="text-xl font-black">Não foi possível carregar o portal</h2><p className="mt-2 text-sm text-slate-300">Confira sua conexão e tente novamente.</p><button type="button" onClick={refetch} className="mt-5 rounded-xl bg-emerald-500 px-5 py-3 font-black text-slate-950">Tentar novamente</button></div>;
         
@@ -991,7 +993,7 @@ const MainApp = ({ user, onLogout, logoutPending, onProfileUpdated }) => {
                 <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
                     {activeTab === 'inicio' && <Suspense fallback={<Loader message="Carregando Início..." />}><HomeDashboard openProfile={openProfile} onProfileOpened={() => setOpenProfile(false)} onProfileSaved={profile => { onProfileUpdated?.(profile); refetch(); }} isAdmin={isAdmin} onNavigate={tab => { if (TABS.includes(tab)) setActiveTab(tab); }} refreshKey={refreshTrigger} /></Suspense>}
                     {activeTab === 'presenca' && <PresencaTab {...props} onAttendanceUpdate={handleForceRefresh} />}
-                    {activeTab === 'relatorios' && <Suspense fallback={<Loader message="Carregando Relatórios..." />}><ReportsDashboard data={initialData} /></Suspense>}
+                    {activeTab === 'relatorios' && <Suspense fallback={<Loader message="Carregando Relatórios..." />}><ReportsDashboard data={initialData} isAdmin={isAdmin} currentUser={user} /></Suspense>}
                     {activeTab === 'atleta' && <AthleteDashboard {...props} dataError={dataError} />}
                     {activeTab === 'mesario' && <Suspense fallback={<Loader message="Carregando Mesário..." />}><MesarioDashboard data={initialData} onStatsSaved={handleForceRefresh} onCourtModeChange={setCourtMode} /></Suspense>}
                     {activeTab === 'financas' && <FinancasTab {...props} />}

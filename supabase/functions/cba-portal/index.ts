@@ -218,7 +218,7 @@ Deno.serve(async (req: Request) => {
       const expense = entries.filter(e=>e.kind==='expense').reduce((s,e)=>s+Number(e.amount||0),0);
 
       // Permissões financeiras: o papel vem da conta autenticada no banco, nunca do payload.
-      // Todos podem consultar indicadores agregados; somente ADMIN recebe mensalidades alheias.
+      // Members may access ONLY their own financial records (no overall revenue or balance).
       const financeDues = isAdmin
         ? dues
         : dues.filter(d => account.athlete_id && d.athlete_id === account.athlete_id)
@@ -228,7 +228,7 @@ Deno.serve(async (req: Request) => {
           }));
       const yearByPeriod = new Map(periods.map(period => [period.id, Number(period.year)]));
       const aggregateByYear: Record<string,{amountDue:number,amountPaid:number,outstanding:number}> = {};
-      for (const due of dues) {
+      for (const due of financeDues) {
         const year = yearByPeriod.get(due.period_id);
         if (!Number.isInteger(year)) continue;
         const key = String(year);
@@ -247,6 +247,7 @@ Deno.serve(async (req: Request) => {
 
       const confirmationsByGame = new Map<string,string[]>();
       for (const c of gameConfirmationsQ.data || []) {
+        if (!isAdmin && String(c.athlete_id) !== String(account.athlete_id)) continue;
         const name = athleteById.get(c.athlete_id)?.name;
         if (!name) continue;
         if (!confirmationsByGame.has(c.game_id)) confirmationsByGame.set(c.game_id,[]);
@@ -254,6 +255,7 @@ Deno.serve(async (req: Request) => {
       }
       const attendeesByEvent = new Map<string,string[]>();
       for (const c of eventAttendeesQ.data || []) {
+        if (!isAdmin && String(c.athlete_id) !== String(account.athlete_id)) continue;
         const name = athleteById.get(c.athlete_id)?.name;
         if (!name) continue;
         if (!attendeesByEvent.has(c.event_id)) attendeesByEvent.set(c.event_id,[]);
@@ -293,8 +295,8 @@ Deno.serve(async (req: Request) => {
         user:{ email:account.email, role:account.role, athleteId:account.athlete_id, name:ownAthlete?.name || '', photoUrl:ownAthlete?.photo_url || '', nickname:ownAthlete?.nickname || '' },
         overview:{
           athletes:activeAthletes.length,
-          portalUsers:approvedAccounts.length,
-          dmActive:medicalActive.length,
+          portalUsers:isAdmin ? approvedAccounts.length : null,
+          dmActive:isAdmin ? medicalActive.length : null,
           upcomingGames:games.filter((g:any)=>!g.cancelledAt && g.date >= todayBahia()).length,
           upcomingEvents:events.filter((e:any)=>String(e.startsAt).slice(0,10) >= todayBahia()).length
         },
@@ -304,20 +306,20 @@ Deno.serve(async (req: Request) => {
           ownerAthleteId:account.athlete_id,
           aggregateByYear,
           entries:isAdmin ? entries : [],
-          summary:{ revenue,expense,balance:revenue-expense+adjustment },
+          summary:isAdmin ? { revenue,expense,balance:revenue-expense+adjustment } : null,
           monthlyFee:Number(settings.monthly_fee || 20),
           pixCode:String(settings.pix_code || '')
         },
-        games, events, hall,
-        roundMatches:(matchesQ.data || []).map((match:any) => ({
+        games, events, hall:isAdmin ? hall : hall.filter(h=>account.athlete_id && h.id===account.athlete_id),
+        roundMatches:(isAdmin ? (matchesQ.data || []) : []).map((match:any) => ({
           date:match.match_date, sessionKey:match.session_key, number:match.match_number,
           blackScore:match.black_score, greenScore:match.green_score, winner:match.winner,
           teamBlack:match.team_black, teamGreen:match.team_green, playerStats:match.player_stats
         })),
         statutes:statutesQ.data || [],
         notifications,
-        notificationAudience:approvedAccounts.length,
-        athletes:(isAdmin ? athletes : activeAthletes).map(a=>({id:a.id,name:a.name,photoUrl:a.photo_url,position:a.position,birthDate:a.birth_date}))
+        notificationAudience:isAdmin ? approvedAccounts.length : null,
+        athletes:(isAdmin ? athletes : athletes.filter(a=>account.athlete_id && a.id===account.athlete_id)).map(a=>({id:a.id,name:a.name,photoUrl:a.photo_url,position:a.position,birthDate:a.birth_date}))
       });
     }
 

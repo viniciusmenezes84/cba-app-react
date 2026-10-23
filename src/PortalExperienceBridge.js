@@ -138,18 +138,18 @@ function FinanceView({ data, refresh }) {
   };
 
   return <div className="space-y-5 pb-24 md:pb-8">
-    <Header icon={DollarSign} kicker="Financeiro" title="Finanças do CBA" text="Valores reais do Supabase, sem interpretação por texto ou mensalidade fixa no frontend.">
+    <Header icon={DollarSign} kicker="Financeiro" title={isAdmin ? "Finanças do CBA" : "Minhas finanças"} text={isAdmin ? "Gestão financeira completa do clube." : "Consulte somente seus pagamentos e pendências."}>
       <select value={year} onChange={e=>setYear(Number(e.target.value))} className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm font-black text-white outline-none">
         {(f.years||[f.currentYear]).map(y=><option key={y} value={y}>{y}</option>)}
       </select>
     </Header>
 
-    <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+    {isAdmin && <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
       {[['Saldo geral do CBA',money(f.summary?.balance),WalletCards,'text-white'],['Receitas gerais',money(f.summary?.revenue),BarChart3,'text-emerald-300'],['Despesas gerais',money(f.summary?.expense),CreditCard,'text-rose-300'],['A receber pelo CBA · '+year,money(group.outstanding),AlertTriangle,group.outstanding?'text-amber-300':'text-emerald-300']].map(([label,value,Icon,tone])=><Panel key={label} className="p-4"><div className="flex items-center justify-between"><p className="text-[9px] uppercase tracking-wider font-black text-slate-500">{label}</p><Icon className={cx('w-4 h-4',tone)}/></div><p className={cx('text-xl sm:text-2xl font-black mt-2 break-words',tone)}>{value}</p></Panel>)}
-    </div>
+    </div>}
 
     <Panel className="p-4 sm:p-5"><div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-      <div><Pill tone={isAdmin?'amber':'emerald'}>{isAdmin?'Gestão administrativa':'Meu histórico financeiro'}</Pill><h3 className="text-lg font-black text-white mt-2">{isAdmin?'Todos os pagamentos, atleta por atleta':'Apenas seus pagamentos individuais'}</h3><p className="text-xs text-slate-400 mt-1">{isAdmin?'Consulte quem pagou, quem está pendente, valores e competências.':'Você pode acompanhar suas mensalidades e os valores gerais do CBA. Os pagamentos de outros atletas não são compartilhados.'}</p></div>
+      <div><Pill tone={isAdmin?'amber':'emerald'}>{isAdmin?'Gestão administrativa':'Meu histórico financeiro'}</Pill><h3 className="text-lg font-black text-white mt-2">{isAdmin?'Todos os pagamentos, atleta por atleta':'Apenas seus pagamentos individuais'}</h3><p className="text-xs text-slate-400 mt-1">{isAdmin?'Consulte quem pagou, quem está pendente, valores e competências.':'Você pode acompanhar somente as suas mensalidades. Valores gerais do clube e pagamentos de outros atletas são restritos aos administradores.'}</p></div>
       <p className="text-sm font-black text-slate-300">{isAdmin?'Ano '+year:!ownAthleteId?'Conta sem atleta vinculado':recordedCount ? money(yearDebt)+' de pendência pessoal' : 'Nenhuma mensalidade lançada para você'}</p>
     </div></Panel>
     {!periods.length && <Empty icon={CalendarDays} title={`Exercício ${year} ainda não preparado`} text="Nenhuma competência foi criada para este ano. Isso não gera dívida automaticamente." action={isAdmin?<button onClick={prepare} disabled={busy} className="rounded-2xl bg-emerald-500 text-slate-950 px-5 py-3 font-black">{busy?'Preparando...':'Preparar 12 competências'}</button>:null}/>}

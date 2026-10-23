@@ -103,7 +103,8 @@ test('somente ADM vê emitir relatório e backend autoriza antes da geração', 
     const ui=render(<InitialDataContext.Provider value={{data:stats}}>
       <HomeDashboard isAdmin={false} onNavigate={jest.fn()}/>
     </InitialDataContext.Provider>);
-    await screen.findByRole('heading',{name:/O jogo em/});
+    await screen.findByRole('heading',{name:'Meu desempenho'});
+    expect(screen.queryByText('Ranking acumulado')).not.toBeInTheDocument();
     expect(screen.queryByRole('button',{name:'Relatório executivo PDF'})).not.toBeInTheDocument();
     expect(adminPost).not.toHaveBeenCalled();
     ui.rerender(<InitialDataContext.Provider value={{data:stats}}>
