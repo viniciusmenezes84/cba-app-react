@@ -85,7 +85,7 @@ Deno.serve(async (req: Request) => {
     const { data: account, error: accountError } = await sb.from('accounts').select('id,email,role,status,athlete_id,athletes(name,nickname,photo_url,position,jersey_number)').eq('id', session.account_id).maybeSingle();
     if (accountError) throw accountError;
     if (!account || account.status !== 'approved') return fail('Acesso não autorizado.', 'FORBIDDEN', 403);
-    const isAdmin = String(account.role || '').toUpperCase() === 'ADMIN';
+    const isAdmin = ['ADMIN','SUPER_ADMIN'].includes(String(account.role || '').toUpperCase());
     const athleteRaw:any = (account as any).athletes;
     const ownAthlete:any = Array.isArray(athleteRaw) ? athleteRaw[0] : athleteRaw;
 
