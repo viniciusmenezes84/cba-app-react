@@ -87,7 +87,7 @@ Deno.serve(async (req: Request) => {
     };
 
     const sessionPayload = (actor: any, token: string, expiresAt: number) => {
-      const user = { id: actor.id, name: actor.name, email: actor.email, role: actor.role, fotoUrl: actor.fotoUrl };
+      const user = { id: actor.id, athleteId: actor.athlete_id, name: actor.name, email: actor.email, role: actor.role, fotoUrl: actor.fotoUrl };
       return { status: 'approved', token, expiresAt, ...user, user };
     };
 
