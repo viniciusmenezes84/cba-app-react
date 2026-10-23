@@ -54,7 +54,7 @@ export async function registerPortalPwa() {
         }
       });
     });
-    window.addEventListener('visibilitychange', () => {
+    document.addEventListener('visibilitychange', () => {
       if (!document.hidden) registration.update().catch(() => {});
     });
   } catch (error) {
