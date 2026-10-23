@@ -265,6 +265,7 @@ Deno.serve(async (req: Request) => {
       const games = (gamesQ.data || []).map((g:any)=>({
         id:g.id, date:g.game_date, time:String(g.game_time||'').slice(0,5), location:g.location,
         cancelledAt:g.cancelled_at, cancelReason:g.cancel_reason || '',
+        confirmedCount:(gameConfirmationsQ.data || []).filter((c:any) => c.game_id === g.id).length,
         confirmed:(confirmationsByGame.get(g.id)||[]).sort((a,b)=>a.localeCompare(b))
       }));
       const events = (eventsQ.data || []).map((e:any)=>({
@@ -296,7 +297,8 @@ Deno.serve(async (req: Request) => {
         overview:{
           athletes:activeAthletes.length,
           portalUsers:isAdmin ? approvedAccounts.length : null,
-          dmActive:isAdmin ? medicalActive.length : null,
+          // Home displays only the aggregate; individual medical records remain protected.
+          dmActive:medicalActive.length,
           upcomingGames:games.filter((g:any)=>!g.cancelledAt && g.date >= todayBahia()).length,
           upcomingEvents:events.filter((e:any)=>String(e.startsAt).slice(0,10) >= todayBahia()).length
         },
@@ -311,10 +313,12 @@ Deno.serve(async (req: Request) => {
           pixCode:String(settings.pix_code || '')
         },
         games, events, hall:isAdmin ? hall : hall.filter(h=>account.athlete_id && h.id===account.athlete_id),
-        roundMatches:(isAdmin ? (matchesQ.data || []) : []).map((match:any) => ({
+        // Sports scores and statistics are shared in Home/Reports. Team rosters remain ADM-only.
+        roundMatches:(matchesQ.data || []).map((match:any) => ({
           date:match.match_date, sessionKey:match.session_key, number:match.match_number,
           blackScore:match.black_score, greenScore:match.green_score, winner:match.winner,
-          teamBlack:match.team_black, teamGreen:match.team_green, playerStats:match.player_stats
+          ...(isAdmin ? {teamBlack:match.team_black,teamGreen:match.team_green} : {}),
+          playerStats:match.player_stats
         })),
         statutes:statutesQ.data || [],
         notifications,
