@@ -8,7 +8,7 @@ const OLD_CACHES = ['cba-portal-cache-v1'];
 const OFFLINE_URL = '/offline.html';
 
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(OFFLINE_CACHE).then(cache => cache.add(OFFLINE_URL)));
+  event.waitUntil(caches.open(OFFLINE_CACHE).then(cache => cache.addAll([OFFLINE_URL, '/icon-192x192.png'])));
   // Wait for the athlete to accept an update to avoid interrupting a game.
 });
 
