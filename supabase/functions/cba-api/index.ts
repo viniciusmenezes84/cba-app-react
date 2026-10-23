@@ -168,11 +168,12 @@ Deno.serve(async (req: Request) => {
     const actor = session.actor;
     const role = String(actor.role || '').toUpperCase();
     const isAdmin = role === 'ADMIN';
-    const canRecordMatch = isAdmin || role === 'MEMBER';
-    // Somente a gravação da súmula é delegada aos membros. As demais operações administrativas permanecem exclusivas do ADMIN.
-    const adminActions = new Set(['saveTeams','createEvent','updateEvent','deleteEvent','createGame','updateGame','deleteGame','getMatchStats','sendPushNotificationToAll','sendFinanceReports','clearCache','createInjury','dischargeInjury','deleteInjury','resetPassword']);
+    const canManageSports = isAdmin || role === 'MEMBER';
+    // Delegações específicas: membros aprovados podem registrar súmulas e salvar sorteios 5x5.
+    // Demais ações administrativas não herdam essa permissão.
+    const adminActions = new Set(['createEvent','updateEvent','deleteEvent','createGame','updateGame','deleteGame','getMatchStats','sendPushNotificationToAll','sendFinanceReports','clearCache','createInjury','dischargeInjury','deleteInjury','resetPassword']);
     if (adminActions.has(action) && !isAdmin) return fail('Esta operação exige um administrador.', 'FORBIDDEN', 403);
-    if (action === 'saveMatchStats' && !canRecordMatch) return fail('Perfil não autorizado para registrar súmulas.', 'FORBIDDEN', 403);
+    if (new Set(['saveMatchStats','saveTeams']).has(action) && !canManageSports) return fail('Perfil não autorizado para operação esportiva.', 'FORBIDDEN', 403);
 
     const rpc = async (name: string, args: Record<string, unknown> = {}) => {
       const { data, error } = await sb.rpc(name, args);
