@@ -227,6 +227,24 @@ Deno.serve(async (req: Request) => {
       return { error:'', startsAt:normalizedStart };
     };
 
+    // Roteiro legado: identificar presença própria por UUID (não por nome).
+    // Não devolver participantes de terceiros a perfis MEMBER.
+    const ownConfirmedLegacyIds = async (joinTable:string, foreignKey:string, targetTable:string) => {
+      const keys = new Set<string>();
+      if (!actor.athlete_id) return keys;
+      const { data: attend, error: attendError } = await sb.from(joinTable).select(foreignKey).eq('athlete_id', actor.athlete_id);
+      if (attendError) throw attendError;
+      const ids = [...new Set((attend || []).map((row:any) => String(row[foreignKey] || '')).filter(Boolean))];
+      if (!ids.length) return keys;
+      const { data: objects, error: objectsError } = await sb.from(targetTable).select('id,legacy_id').in('id', ids);
+      if (objectsError) throw objectsError;
+      for (const item of objects || []) {
+        keys.add(String(item.id));
+        if (item.legacy_id) keys.add(String(item.legacy_id));
+      }
+      return keys;
+    };
+
     switch (action) {
       case 'getInitialAppData': {
         const data: any = await rpc('get_initial_app_data_compat');
@@ -297,8 +315,22 @@ Deno.serve(async (req: Request) => {
         }
         return json(data);
       }
-      case 'getGames': return json(await rpc('get_games_compat'));
-      case 'getEvents': return json(await rpc('get_events_compat'));
+      case 'getGames': {
+        const response:any = await rpc('get_games_compat');
+        if (isAdmin) return json(response);
+        const ids = await ownConfirmedLegacyIds('game_confirmations', 'game_id', 'games');
+        return json({ ...response, data:(Array.isArray(response?.data) ? response.data : []).map((game:any) => ({
+          ...game, confirmados:ids.has(String(game.id)) && actor.name ? [actor.name] : []
+        })) });
+      }
+      case 'getEvents': {
+        const response:any = await rpc('get_events_compat');
+        if (isAdmin) return json(response);
+        const ids = await ownConfirmedLegacyIds('event_attendees', 'event_id', 'events');
+        return json({ ...response, data:(Array.isArray(response?.data) ? response.data : []).map((event:any) => ({
+          ...event, attendees:ids.has(String(event.id)) && actor.name ? [actor.name] : []
+        })) });
+      }
       case 'getNotifications': return json(await rpc('get_notifications_compat'));
       case 'getInjuries': {
         // Consulta de compatibilidade por athlete_id vinculado à sessão, sem comparação por nome.
