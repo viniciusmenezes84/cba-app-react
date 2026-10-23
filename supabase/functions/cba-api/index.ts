@@ -244,6 +244,14 @@ Deno.serve(async (req: Request) => {
             ]))].sort()
           };
         }
+        if (!isAdmin && data?.data?.nextGame) {
+          // Game metadata is shared; other athletes' attendance choices are private.
+          const next = data.data.nextGame;
+          data.data.nextGame = {
+            ...next,
+            confirmados: Array.isArray(next.confirmados) ? next.confirmados.filter((name:string) => name === actor.name) : []
+          };
+        }
         if (!isAdmin && data?.data?.finance) {
           // Allowlist: nunca devolva novos campos financeiros individuais criados no RPC legado
           // sem uma decisão explícita sobre a autorização de cada campo.
