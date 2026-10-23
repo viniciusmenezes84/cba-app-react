@@ -8,7 +8,7 @@ test('mostra a entrada do Portal CBA', () => {
   expect(screen.getByRole('button', { name: 'Entrar no Portal' })).toBeInTheDocument();
 });
 
-test.each(['ADMIN', 'MEMBER'])('menu CBA Premium mantém navegação e permissões de %s', role => {
+test.each(['ADMIN', 'MEMBER', 'SUPER_ADMIN'])('menu CBA Premium mantém navegação e permissões de %s', role => {
   window.localStorage.setItem('cba_session_v1', JSON.stringify({
     user: { role, name: 'Atleta', token: 'sessao-de-teste' }, savedAt: Date.now()
   }));
@@ -27,7 +27,7 @@ test.each(['ADMIN', 'MEMBER'])('menu CBA Premium mantém navegação e permissõ
     expect(home).toHaveClass('cba-premium-sidebar__item');
     expect(home).toHaveAttribute('aria-current', 'page');
     const labels = ['Presença', 'Relatórios', 'Desempenho do Atleta', 'Mesário', 'Sorteio', 'Finanças', 'Jogos', 'Eventos', 'Departamento Médico', 'Estatuto'];
-    if (role === 'ADMIN') labels.push('Hall da Fama', 'Avisos');
+    if (role !== 'MEMBER') labels.push('Hall da Fama', 'Avisos');
     else {
       expect(menu.getByRole('button', { name: 'Mesário', exact: true })).toBeInTheDocument();
       expect(menu.queryByRole('button', { name: 'Administração', exact: true })).not.toBeInTheDocument();
@@ -44,7 +44,7 @@ test.each(['ADMIN', 'MEMBER'])('menu CBA Premium mantém navegação e permissõ
     }
     fireEvent.click(home);
     expect(home).toHaveAttribute('aria-current', 'page');
-    if (role === 'ADMIN') expect(menu.getByRole('button', { name: 'Administração', exact: true })).toHaveClass('cba-premium-sidebar__admin');
+    if (role !== 'MEMBER') expect(menu.getByRole('button', { name: 'Administração', exact: true })).toHaveClass('cba-premium-sidebar__admin');
   } finally {
     global.fetch = previousFetch;
     window.localStorage.removeItem('cba_session_v1');

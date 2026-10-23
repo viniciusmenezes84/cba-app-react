@@ -64,7 +64,7 @@ Deno.serve(async (req: Request) => {
     if (!account || account.status !== 'approved') return fail('Acesso não autorizado.', 'UNAUTHORIZED', 401);
     await sb.from('app_sessions').update({ last_seen_at: new Date().toISOString() }).eq('token_hash', tokenHash);
 
-    const isAdmin = String(account.role || '').toUpperCase() === 'ADMIN';
+    const isAdmin = ['ADMIN','SUPER_ADMIN'].includes(String(account.role || '').toUpperCase());
     const actorAthleteId = account.athlete_id || null;
     const athleteRaw: any = (account as any).athletes;
     const actorAthlete = Array.isArray(athleteRaw) ? athleteRaw[0] : athleteRaw;

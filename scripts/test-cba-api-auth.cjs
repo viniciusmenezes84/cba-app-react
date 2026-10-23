@@ -260,6 +260,12 @@ const invoke = async (action, data) => {
   assert.deepEqual(adminGames.body.data[0].confirmados, ['Teste', 'Pessoa Dois']);
   const adminEvents = await invoke('getEvents', { token: valid.body.token });
   assert.deepEqual(adminEvents.body.data[0].attendees, ['Teste', 'Pessoa Dois']);
+  account.role = 'SUPER_ADMIN';
+  const ownerView = await invoke('getInitialAppData', { token: valid.body.token });
+  assert.equal(ownerView.status, 200, 'SUPER_ADMIN deve herdar todos os dados ADMIN');
+  assert.equal(ownerView.body.data.finance.summary.balance, admin.body.data.finance.summary.balance);
+  const ownerEvents = await invoke('getEvents', { token: valid.body.token });
+  assert.deepEqual(ownerEvents.body.data[0].attendees, ['Teste', 'Pessoa Dois']);
   account.role = 'MEMBER';
 
   const logout = await invoke('logoutUser', { token: valid.body.token });

@@ -42,3 +42,24 @@ test('item Documentos e impressões permanece alinhado à esquerda mesmo com dua
     window.localStorage.removeItem('cba_session_v1');
   }
 });
+
+test('SUPER_ADMIN proprietário vê monitoramento, ADM comum não vê a área exclusiva', async () => {
+  const previousFetch = global.fetch;
+  global.fetch = jest.fn(() => new Promise(() => {}));
+  try {
+    window.localStorage.setItem('cba_session_v1', JSON.stringify({
+      user:{email:'vinicius.m84@gmail.com',token:'sessao-super',role:'SUPER_ADMIN'}
+    }));
+    const {unmount}=render(<AdminDashboardBridge open />);
+    expect(await screen.findByRole('button',{name:'Monitoramento de acessos'})).toBeInTheDocument();
+    unmount();
+    window.localStorage.setItem('cba_session_v1', JSON.stringify({
+      user:{email:'soulucaspportugal1985@gmail.com',token:'sessao-admin',role:'ADMIN'}
+    }));
+    render(<AdminDashboardBridge open />);
+    expect(screen.queryByRole('button',{name:'Monitoramento de acessos'})).not.toBeInTheDocument();
+  } finally {
+    global.fetch=previousFetch;
+    window.localStorage.removeItem('cba_session_v1');
+  }
+});
