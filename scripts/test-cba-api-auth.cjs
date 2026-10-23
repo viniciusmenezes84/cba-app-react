@@ -52,14 +52,29 @@ const fakeDb = {
       then(resolve, reject) {
         if (table === 'app_sessions' && filters.token_hash) sessions.delete(filters.token_hash);
         if (table === 'login_attempts' && filters.email_key) attemptedEmails.delete(filters.email_key);
+        if (table === 'member_dues') return Promise.resolve({ data: [], error: null }).then(resolve, reject);
         return Promise.resolve({ error: null }).then(resolve, reject);
       },
     };
     return query;
   },
   async rpc(name) {
-    assert.equal(name, 'cleanup_expired_app_sessions');
-    return { error: null };
+    if (name === 'cleanup_expired_app_sessions') return { error: null };
+    if (name === 'get_initial_app_data_compat') return {
+      error: null,
+      data: { result: 'success', data: {
+        dashboard: { dates: ['2026-10-18'], players: [
+          { id: 'test-athlete', name: 'Teste', attendance: { '2026-10-18': '✅' }, dailyStats: { '2026-10-18': { pts2: 2 } } },
+          { id: 'other-athlete', name: 'Pessoa Dois', attendance: { '2026-10-18': '✅' }, dailyStats: { '2026-10-18': { pts2: 7 } } }
+        ] },
+        finance: {
+          summary: { balance: 90000, revenue: 100000, expense: 10000 },
+          year: 2026, monthlyFee: 20, paymentHeaders: ['Outubro'],
+          paymentStatus: [{ player:'Pessoa Dois', statuses: { Outubro: '20' } }]
+        }
+      }}
+    };
+    throw new Error('Unexpected RPC: ' + name);
   },
 };
 
@@ -110,6 +125,24 @@ const invoke = async (action, data) => {
   assert.equal(valid.status, 200);
   assert.match(valid.body.token, /^[a-f0-9]{64}$/);
   assert.equal(sessions.size, 1);
+
+  const member = await invoke('getInitialAppData', {
+    token: valid.body.token, role: 'ADMIN', athleteId: 'other-athlete' // untrusted spoofing
+  });
+  assert.equal(member.status, 200);
+  assert.deepEqual(member.body.data.dashboard.players.map(p => p.id), ['test-athlete']);
+  assert.equal('summary' in member.body.data.finance, false, 'Members must not see overall balance');
+  assert.deepEqual(member.body.data.finance.paymentStatus.map(p => p.player), ['Teste']);
+  const blocked = await invoke('getMatchStats', { token: valid.body.token, date:'2026-10-18' });
+  assert.equal(blocked.status, 403);
+  assert.equal(blocked.body.code, 'FORBIDDEN');
+
+  account.role = 'ADMIN';
+  const admin = await invoke('getInitialAppData', { token: valid.body.token });
+  assert.equal(admin.status, 200);
+  assert.equal(admin.body.data.dashboard.players.length, 2);
+  assert.equal(admin.body.data.finance.summary.balance, 90000);
+  account.role = 'MEMBER';
 
   const logout = await invoke('logoutUser', { token: valid.body.token });
   assert.equal(logout.status, 200);
