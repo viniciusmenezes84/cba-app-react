@@ -29,7 +29,7 @@ test('gera, baixa e compartilha o card nos formatos de post e Story', async () =
     render(<AthleteDashboard
       allPlayersData={[{ name: 'Ana Souza', numero: '8', attendance: { '2026-09-06': '✅' },
         dailyStats: { '2026-09-06': { pts2: 2, pts3: 1, reb: 4, ast: 2, blk: 1 } } }]}
-      dates={['2026-09-06']} currentUser={{ name: 'Ana Souza' }}
+      dates={['2026-09-06']} currentUser={{ name: 'Ana Souza' }} isAdmin
     />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Gerar card' }));
