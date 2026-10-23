@@ -226,7 +226,7 @@ Deno.serve(async (req: Request) => {
       return json({result:'success'});
     }
     const role = String(actor.role || '').toUpperCase();
-    const isAdmin = role === 'ADMIN';
+    const isAdmin = role === 'ADMIN' || role === 'SUPER_ADMIN';
     const canManageSports = isAdmin || role === 'MEMBER';
     // Delegações específicas: membros aprovados podem registrar súmulas e salvar sorteios 5x5.
     // Demais ações administrativas não herdam essa permissão.
@@ -446,6 +446,10 @@ Deno.serve(async (req: Request) => {
         if (!email || newPassword.length < 8 || newPassword.length > 512) return fail('Use uma senha de 8 a 512 caracteres.', 'VALIDATION_ERROR');
         const target = await accountWithAthlete({ email });
         if (!target) return fail('Usuário não encontrado.', 'NOT_FOUND', 404);
+        // O proprietário altera sua senha exclusivamente com a senha atual (changeOwnPassword).
+        if (target.id === '66ea4f7f-f82f-40f5-a82d-cf178cbb84fb' || String(target.role).toUpperCase() === 'SUPER_ADMIN') {
+          return fail('A senha do SUPER_ADMIN só pode ser alterada pelo próprio usuário com sua senha atual.', 'FORBIDDEN', 403);
+        }
         const passwordHash = await hashPassword(newPassword);
         const { error } = await sb.from('accounts').update({ legacy_password_hash: passwordHash }).eq('id', target.id);
         if (error) throw error;
