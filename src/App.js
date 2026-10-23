@@ -991,7 +991,7 @@ const MainApp = ({ user, onLogout, logoutPending, onProfileUpdated }) => {
                 <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
                     {activeTab === 'inicio' && <Suspense fallback={<Loader message="Carregando Início..." />}><HomeDashboard openProfile={openProfile} onProfileOpened={() => setOpenProfile(false)} onProfileSaved={profile => { onProfileUpdated?.(profile); refetch(); }} isAdmin={isAdmin} onNavigate={tab => { if (TABS.includes(tab)) setActiveTab(tab); }} refreshKey={refreshTrigger} /></Suspense>}
                     {activeTab === 'presenca' && <PresencaTab {...props} onAttendanceUpdate={handleForceRefresh} />}
-                    {activeTab === 'relatorios' && <Suspense fallback={<Loader message="Carregando Relatórios..." />}><ReportsDashboard data={initialData} /></Suspense>}
+                    {activeTab === 'relatorios' && <Suspense fallback={<Loader message="Carregando Relatórios..." />}><ReportsDashboard data={initialData} isAdmin={isAdmin} currentUser={user} /></Suspense>}
                     {activeTab === 'atleta' && <AthleteDashboard {...props} dataError={dataError} />}
                     {activeTab === 'mesario' && <Suspense fallback={<Loader message="Carregando Mesário..." />}><MesarioDashboard data={initialData} onStatsSaved={handleForceRefresh} onCourtModeChange={setCourtMode} /></Suspense>}
                     {activeTab === 'financas' && <FinancasTab {...props} />}
