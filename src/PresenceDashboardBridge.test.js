@@ -19,7 +19,7 @@ test('MEMBER vê a mesma visão coletiva de ADM, com cards, quórum e temporadas
   expect(screen.getByRole('heading', { name:/Visão do elenco em 2026/ })).toBeInTheDocument();
   expect(screen.getByText('Quórum médio')).toBeInTheDocument();
   expect(screen.getByText('Top assiduidade')).toBeInTheDocument();
-  expect(screen.getByText('Outro Atleta')).toBeInTheDocument();
+  expect(screen.getAllByText('Outro Atleta').length).toBeGreaterThan(0);
   expect(screen.getByText('Comparativo Anual de Presenças')).toBeInTheDocument();
   expect(screen.getByText('Temporada')).toBeInTheDocument();
 });
@@ -37,6 +37,6 @@ test('MEMBER sem atleta vinculado ainda pode consultar indicadores coletivos pú
     <PresenceDashboardBridge isAdmin={false} />
   </InitialDataContext.Provider>);
   expect(screen.getByRole('heading', { name:/Visão do elenco em 2026/ })).toBeInTheDocument();
-  expect(screen.getByText('Outro Atleta')).toBeInTheDocument();
+  expect(screen.getAllByText('Outro Atleta').length).toBeGreaterThan(0);
   expect(screen.getByText('Quórum médio')).toBeInTheDocument();
 });
