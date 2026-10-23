@@ -330,11 +330,11 @@ const ProximoJogoCard = ({ game, currentUser, onAttendanceUpdate }) => {
 // ==========================================
 
 // 1. ABA PRESENÇA
-const PresencaTab = ({ nextGame, currentUser, onAttendanceUpdate }) => (
+const PresencaTab = ({ nextGame, currentUser, isAdmin, onAttendanceUpdate }) => (
     <div className="space-y-6">
         <ProximoJogoCard game={nextGame} currentUser={currentUser} onAttendanceUpdate={onAttendanceUpdate} />
         <Suspense fallback={<Loader message="Carregando presença..." />}>
-            <PresenceDashboardBridge />
+            <PresenceDashboardBridge isAdmin={isAdmin} />
         </Suspense>
     </div>
 );
