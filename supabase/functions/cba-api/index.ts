@@ -167,7 +167,7 @@ Deno.serve(async (req: Request) => {
     const session = await actorFor(params.token);
     const actor = session.actor;
     const role = String(actor.role || '').toUpperCase();
-    const isAdmin = role === 'ADMIN';
+    const isAdmin = role === 'ADMIN' || role === 'SUPER_ADMIN';
     const canManageSports = isAdmin || role === 'MEMBER';
     // Delegações específicas: membros aprovados podem registrar súmulas e salvar sorteios 5x5.
     // Demais ações administrativas não herdam essa permissão.
