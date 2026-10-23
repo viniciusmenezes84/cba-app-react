@@ -66,3 +66,13 @@ O perfil MEMBER aprovado pode abrir a aba **Mesário**, organizar os times em se
 **Não foram liberados** `saveTeams` (sorteio), `getMatchStats` administrativo, `clearCache`, administração de usuários, edição de cadastros, exportação de PDFs ou finanças do elenco. A lista compartilhada de atletas e presenças já disponível para os painéis esportivos é utilizada pela Mesa. Nenhuma estrutura de banco, tabela, RLS ou conta foi alterada por este aditivo.
 
 **Impacto operacional:** qualquer MEMBER aprovado poderá registrar resultados oficiais, alterando as estatísticas esportivas visíveis aos demais. A recuperação da sessão de jogo continua armazenada localmente no dispositivo; recomenda-se usar um dispositivo por mesário e fazer a conferência da súmula antes de salvá-la.
+
+## Aditivo — Sorteio para MEMBER (23/10/2026)
+
+O perfil **MEMBER** aprovado passa a ter acesso à aba **Sorteio**, com a mesma operação do ADMIN: seleção de atletas, seleção pelos presentes, sorteio avulso, formação balanceada dos times Preto e Verde (5x5), reservas, compartilhamento do resultado e **salvamento dos dois times no Supabase**.
+
+No frontend, `SorteioDashboard` recebe uma permissão de gravação específica para MEMBER ou ADMIN. No backend, a rota `saveTeams` consulta o perfil da sessão autenticada e permanece sujeita às validações existentes (dois times distintos de cinco atletas) e à auditoria com autoria de `actor.id`. A liberação **não** autoriza `getMatchStats`, `clearCache`, alterações de jogadores, sorteios em outras partes administrativas, finanças de terceiros, relatórios PDF ou gestão de usuários.
+
+O sorteio avulso somente compartilha o resultado; o salvamento na base continua exclusivo do formato 5x5, conforme funcionamento já existente. A lista de sorteios recentes guardada no dispositivo não é um histórico compartilhado entre usuários. Nenhum cadastro, RLS ou dado histórico foi alterado.
+
+**Observação operacional:** qualquer MEMBER aprovado poderá gravar novas formações 5x5 no histórico oficial. A autoria fica registrada; recomenda-se conferir os atletas antes de clicar em Salvar sorteio.
