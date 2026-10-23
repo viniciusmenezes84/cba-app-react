@@ -38,7 +38,7 @@ export async function checkForPortalBuildUpdate() {
   if (typeof document === 'undefined' || typeof fetch !== 'function') return false;
   const currentScript = Array.from(document.scripts)
     .map(script => script.src)
-    .find(src => /\/static\/js\/main\.[^/]+\.js(?:\?|$)/.test(src));
+    .find(src => src.includes('/static/js/main.') && /\.js(?:\?|$)/.test(src));
   if (!currentScript) return false;
   try {
     const response = await fetch('/asset-manifest.json', { cache: 'no-store', credentials: 'omit' });
