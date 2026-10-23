@@ -120,6 +120,12 @@ Deno.serve(async (req: Request) => {
         };
         const {error:telemetryError}=await sb.from('cba_access_history').insert(row);
         if (telemetryError) console.warn('CBA observability: session history unavailable');
+        // Bounded detailed retention: 90 days. This is best effort and never blocks login.
+        const cutoff=new Date(Date.now()-90*86400000).toISOString();
+        await Promise.all([
+          sb.from('cba_access_history').delete().lt('started_at',cutoff),
+          sb.from('cba_usage_events').delete().lt('created_at',cutoff)
+        ]);
       } catch { console.warn('CBA observability: session history unavailable'); }
       return { token, expiresAt };
     };
@@ -202,6 +208,10 @@ Deno.serve(async (req: Request) => {
         account_id:actor.id,analytics_opt_in:params.enabled,analytics_updated_at:new Date().toISOString()
       },{onConflict:'account_id'});
       if (error) throw error;
+      if (!params.enabled) {
+        const {error:deleteError}=await sb.from('cba_usage_events').delete().eq('account_id',actor.id);
+        if (deleteError) throw deleteError;
+      }
       return json({result:'success',analyticsOptIn:params.enabled});
     }
     if (action === 'recordUsageEvent') {
