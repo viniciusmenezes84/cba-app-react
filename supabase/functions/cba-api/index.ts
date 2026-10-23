@@ -249,17 +249,19 @@ Deno.serve(async (req: Request) => {
       case 'getInitialAppData': {
         const data: any = await rpc('get_initial_app_data_compat');
         if (!isAdmin && data?.data?.dashboard) {
-          // All statistics and attendance must be scoped to the authenticated athlete_id.
-          // Player names are NOT an authorization identifier (duplicates/renames are possible).
-          const sourcePlayers = Array.isArray(data.data.dashboard.players) ? data.data.dashboard.players : [];
-          const ownPlayers = actor.athlete_id
-            ? sourcePlayers.filter((player:any) => String(player?.id || '') === String(actor.athlete_id))
-            : [];
+          // Only sporting information is shared; future RPC profile fields stay private.
+          const visibleFields = new Set([
+            'id','name','fotoUrl','posicao','numero','altura','dataEntrada','especialidade',
+            'isEligibleForHoF','attendance','dailyStats','totalGames','presences',
+            'totalPoints','average','ppj','rpj','apj','tpj','unjustifiedAbsences','unjustifiedAbsenceDates'
+          ]);
+          const dashboard = data.data.dashboard;
           data.data.dashboard = {
-            players:ownPlayers,
-            dates:[...new Set(ownPlayers.flatMap((player:any) => [
-              ...Object.keys(player.attendance || {}), ...Object.keys(player.dailyStats || {})
-            ]))].sort()
+            dates:Array.isArray(dashboard.dates) ? dashboard.dates : [],
+            players:Array.isArray(dashboard.players)
+              ? dashboard.players.map((player:any) => Object.fromEntries(
+                  Object.entries(player || {}).filter(([key]) => visibleFields.has(key))))
+              : []
           };
         }
         if (!isAdmin && data?.data?.nextGame) {

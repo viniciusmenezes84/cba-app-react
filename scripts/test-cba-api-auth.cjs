@@ -72,7 +72,7 @@ const fakeDb = {
       data: { result: 'success', data: {
         dashboard: { dates: ['2026-10-18'], players: [
           { id: 'test-athlete', name: 'Teste', attendance: { '2026-10-18': '✅' }, dailyStats: { '2026-10-18': { pts2: 2 } } },
-          { id: 'other-athlete', name: 'Pessoa Dois', attendance: { '2026-10-18': '✅' }, dailyStats: { '2026-10-18': { pts2: 7 } } }
+          { id: 'other-athlete', name: 'Pessoa Dois', attendance: { '2026-10-18': '✅' }, dailyStats: { '2026-10-18': { pts2: 7 } }, secretNote: 'never-share-this' }
         ] },
         finance: {
           summary: { balance: 90000, revenue: 100000, expense: 10000 },
@@ -145,7 +145,10 @@ const invoke = async (action, data) => {
     token: valid.body.token, role: 'ADMIN', athleteId: 'other-athlete' // untrusted spoofing
   });
   assert.equal(member.status, 200);
-  assert.deepEqual(member.body.data.dashboard.players.map(p => p.id), ['test-athlete']);
+  assert.deepEqual(member.body.data.dashboard.players.map(p => p.id), ['test-athlete','other-athlete']);
+  assert.deepEqual(member.body.data.dashboard.dates, ['2026-10-18']);
+  assert.equal(member.body.data.dashboard.players[1].dailyStats['2026-10-18'].pts2, 7);
+  assert.equal('secretNote' in member.body.data.dashboard.players[1], false, 'RPC profile fields must be allowlisted');
   assert.equal('summary' in member.body.data.finance, false, 'Members must not see overall balance');
   assert.deepEqual(member.body.data.finance.paymentStatus.map(p => p.player), ['Teste']);
   const ownGames = await invoke('getGames', { token: valid.body.token });
