@@ -16,7 +16,7 @@ test('monitoramento exibe atividade por conta, separando sessões e atividade re
   }});
   render(<AccessMonitoringPanel/>);
   expect(await screen.findByText('Monitoramento de acessos')).toBeInTheDocument();
-  expect(screen.getByText('Online agora')).toBeInTheDocument();
+  expect(await screen.findByText('Online agora')).toBeInTheDocument();
   expect(screen.getByText('Abas mais utilizadas (com autorização)')).toBeInTheDocument();
   expect(screen.getByText('Teste')).toBeInTheDocument();
   expect(screen.getByText('● Online')).toBeInTheDocument();
