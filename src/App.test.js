@@ -26,11 +26,13 @@ test.each(['ADMIN', 'MEMBER'])('menu CBA Premium mantém navegação e permissõ
     const home = menu.getByRole('button', { name: 'Início', exact: true });
     expect(home).toHaveClass('cba-premium-sidebar__item');
     expect(home).toHaveAttribute('aria-current', 'page');
-    const labels = ['Presença', 'Relatórios', 'Desempenho do Atleta', 'Finanças', 'Jogos', 'Eventos', 'Sorteio', 'Departamento Médico', 'Hall da Fama', 'Estatuto'];
-    if (role === 'ADMIN') labels.push('Mesário', 'Avisos');
+    const labels = ['Presença', 'Relatórios', 'Desempenho do Atleta', 'Finanças', 'Jogos', 'Eventos', 'Departamento Médico', 'Estatuto'];
+    if (role === 'ADMIN') labels.push('Sorteio', 'Hall da Fama', 'Mesário', 'Avisos');
     else {
       expect(menu.queryByRole('button', { name: 'Mesário', exact: true })).not.toBeInTheDocument();
       expect(menu.queryByRole('button', { name: 'Administração', exact: true })).not.toBeInTheDocument();
+      expect(menu.queryByRole('button', { name: 'Sorteio', exact: true })).not.toBeInTheDocument();
+      expect(menu.queryByRole('button', { name: 'Hall da Fama', exact: true })).not.toBeInTheDocument();
     }
     for (const label of labels) {
       const item = menu.getByRole('button', { name: label, exact: true });
@@ -227,9 +229,9 @@ test('Mesário recupera a sessão antiga, mantém o placar e atualiza os dados a
   }
 }, 15000);
 
-test('menu móvel abre o Sorteio diretamente e usa os dados iniciais', async () => {
+test('menu móvel do ADMIN abre o Sorteio diretamente e usa os dados iniciais', async () => {
   window.localStorage.setItem('cba_session_v1', JSON.stringify({
-    user: { role: 'MEMBER', email: 'atleta@cba.test', name: 'Atleta', token: 'sessao-de-teste' }, savedAt: Date.now()
+    user: { role: 'ADMIN', email: 'admin@cba.test', name: 'Admin', token: 'sessao-de-teste' }, savedAt: Date.now()
   }));
   const previousFetch = global.fetch;
   global.fetch = jest.fn(async () => ({ ok: true, json: async () => ({
