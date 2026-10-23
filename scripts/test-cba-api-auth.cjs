@@ -20,6 +20,8 @@ let account;
 let handler;
 const sessions = new Map();
 const attemptedEmails = new Map();
+const savedSessions = [];
+const auditEvents = [];
 const fakeDb = {
   from(table) {
     const filters = {};
@@ -29,6 +31,7 @@ const fakeDb = {
       eq(key, value) { filters[key] = value; return query; },
       in(key, values) { filters[key + '_in'] = values; return query; },
       ilike(key, value) { filters[key] = value; return query; },
+      limit() { return query; },
       order() { return Promise.resolve({ data: [], error: null }); },
       async maybeSingle() {
         if (table === 'accounts') {
@@ -40,6 +43,10 @@ const fakeDb = {
         throw new Error(`Unexpected lookup in ${table}`);
       },
       async insert(row) {
+        if (table === 'audit_log') {
+          auditEvents.push(row);
+          return { error: null };
+        }
         assert.equal(table, 'app_sessions');
         sessions.set(row.token_hash, row);
         return { error: null };
@@ -54,6 +61,11 @@ const fakeDb = {
       then(resolve, reject) {
         if (table === 'app_sessions' && filters.token_hash && mutation === 'delete') sessions.delete(filters.token_hash);
         if (table === 'login_attempts' && filters.email_key) attemptedEmails.delete(filters.email_key);
+        if (table === 'athletes' && filters.name) {
+          const athletes = new Map([['Teste', '00000000-0000-4000-a000-000000000001'], ['Pessoa Dois', '00000000-0000-4000-a000-000000000002']]);
+          const athleteId = athletes.get(filters.name);
+          return Promise.resolve({data: athleteId ? [{id:athleteId,name:filters.name}] : [],error:null}).then(resolve,reject);
+        }
         if (table === 'member_dues') return Promise.resolve({ data: [], error: null }).then(resolve, reject);
         const own = filters.athlete_id === 'test-athlete';
         if (table === 'game_confirmations') return Promise.resolve({ data: own ? [{ game_id:'game-uuid-own' }] : [], error: null }).then(resolve, reject);
@@ -65,7 +77,13 @@ const fakeDb = {
     };
     return query;
   },
-  async rpc(name) {
+  async rpc(name, args) {
+    if (name === 'cba_save_round_session') {
+      assert.equal(args.p_recorded_by, 'test-account', 'A autoria deve vir da sessão validada');
+      assert.equal(args.p_matches.length, 1);
+      savedSessions.push(args);
+      return { data: {result:'success',gamesSaved:1}, error: null };
+    }
     if (name === 'cleanup_expired_app_sessions') return { error: null };
     if (name === 'get_initial_app_data_compat') return {
       error: null,
@@ -157,6 +175,35 @@ const invoke = async (action, data) => {
   const ownEvents = await invoke('getEvents', { token: valid.body.token });
   assert.equal(ownEvents.status, 200);
   assert.deepEqual(ownEvents.body.data.map(e=>e.attendees), [['Teste'], []]);
+
+  // Um MEMBER pode operar a mesa e salvar súmula oficial, mas não pode forjar papel ADMIN
+  // nem utilizar outras rotas privilegiadas.
+  const recordMatch = await invoke('saveMatchStats', {
+    token: valid.body.token, role: 'ADMIN', date:'2026-10-18',
+    sessionKey:'1792765000000',
+    stats:[
+      {playerName:'Teste',pts2:1,pts3:0,reb:1,ast:0,blk:0},
+      {playerName:'Pessoa Dois',pts2:0,pts3:0,reb:0,ast:0,blk:0}
+    ],
+    matches:[{
+      number:1,blackScore:2,greenScore:0,winner:'black',
+      teamBlack:['Teste'],teamGreen:['Pessoa Dois'],
+      playerStats:{
+        'Teste':{pts2:1,pts3:0,reb:1,ast:0,blk:0},
+        'Pessoa Dois':{pts2:0,pts3:0,reb:0,ast:0,blk:0}
+      }
+    }]
+  });
+  assert.equal(recordMatch.status, 200);
+  assert.equal(recordMatch.body.gamesSaved, 1);
+  assert.equal(savedSessions.length, 1);
+  assert.equal(savedSessions[0].p_session_key, '1792765000000');
+  assert.ok(auditEvents.some(event => event.actor_account_id === account.id && event.action === 'save_match_stats'));
+  for (const adminAction of ['saveTeams', 'getMatchStats', 'clearCache']) {
+    const denied = await invoke(adminAction, {token:valid.body.token,role:'ADMIN'});
+    assert.equal(denied.status, 403, adminAction + ' não pode ser executado por MEMBER');
+    assert.equal(denied.body.code, 'FORBIDDEN');
+  }
 
   const blocked = await invoke('getMatchStats', { token: valid.body.token, date:'2026-10-18' });
   assert.equal(blocked.status, 403);

@@ -26,10 +26,10 @@ test.each(['ADMIN', 'MEMBER'])('menu CBA Premium mantém navegação e permissõ
     const home = menu.getByRole('button', { name: 'Início', exact: true });
     expect(home).toHaveClass('cba-premium-sidebar__item');
     expect(home).toHaveAttribute('aria-current', 'page');
-    const labels = ['Presença', 'Relatórios', 'Desempenho do Atleta', 'Finanças', 'Jogos', 'Eventos', 'Departamento Médico', 'Estatuto'];
-    if (role === 'ADMIN') labels.push('Sorteio', 'Hall da Fama', 'Mesário', 'Avisos');
+    const labels = ['Presença', 'Relatórios', 'Desempenho do Atleta', 'Mesário', 'Finanças', 'Jogos', 'Eventos', 'Departamento Médico', 'Estatuto'];
+    if (role === 'ADMIN') labels.push('Sorteio', 'Hall da Fama', 'Avisos');
     else {
-      expect(menu.queryByRole('button', { name: 'Mesário', exact: true })).not.toBeInTheDocument();
+      expect(menu.getByRole('button', { name: 'Mesário', exact: true })).toBeInTheDocument();
       expect(menu.queryByRole('button', { name: 'Administração', exact: true })).not.toBeInTheDocument();
       expect(menu.queryByRole('button', { name: 'Sorteio', exact: true })).not.toBeInTheDocument();
       expect(menu.queryByRole('button', { name: 'Hall da Fama', exact: true })).not.toBeInTheDocument();
@@ -45,6 +45,34 @@ test.each(['ADMIN', 'MEMBER'])('menu CBA Premium mantém navegação e permissõ
     fireEvent.click(home);
     expect(home).toHaveAttribute('aria-current', 'page');
     if (role === 'ADMIN') expect(menu.getByRole('button', { name: 'Administração', exact: true })).toHaveClass('cba-premium-sidebar__admin');
+  } finally {
+    global.fetch = previousFetch;
+    window.localStorage.removeItem('cba_session_v1');
+    window.localStorage.removeItem('cba_last_tab_v1');
+  }
+});
+
+test('MEMBER abre o Mesário pelo menu sem receber acesso ao painel administrativo', async () => {
+  window.localStorage.setItem('cba_session_v1', JSON.stringify({
+    user: { role: 'MEMBER', name: 'Atleta', token: 'sessao-de-teste' }, savedAt: Date.now()
+  }));
+  window.localStorage.setItem('cba_last_tab_v1', 'mesario');
+  const previousFetch = global.fetch;
+  global.fetch = jest.fn(async (_, options) => {
+    const body = JSON.parse(options.body);
+    expect(body.action).toBe('getInitialAppData');
+    return { ok:true, json:async()=>({result:'success',data:{
+      dashboard:{ players:[{id:'atleta-1',name:'Atleta',attendance:{},dailyStats:{}}], dates:[] },
+      finance:{year:2026,monthlyFee:20,paymentStatus:[]}
+    }})};
+  });
+  try {
+    render(<App />);
+    expect(await screen.findByRole('heading', { name: 'Mesário' })).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name:'Menu principal' })).toHaveTextContent('Mesário');
+    expect(screen.queryByRole('button', { name:'Abrir Administração' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name:'Administração', exact:true })).not.toBeInTheDocument();
+    expect(global.fetch).toHaveBeenCalledTimes(1);
   } finally {
     global.fetch = previousFetch;
     window.localStorage.removeItem('cba_session_v1');

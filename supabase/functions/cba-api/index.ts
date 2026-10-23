@@ -166,9 +166,13 @@ Deno.serve(async (req: Request) => {
 
     const session = await actorFor(params.token);
     const actor = session.actor;
-    const isAdmin = String(actor.role || '').toUpperCase() === 'ADMIN';
-    const adminActions = new Set(['saveTeams','createEvent','updateEvent','deleteEvent','createGame','updateGame','deleteGame','saveMatchStats','getMatchStats','sendPushNotificationToAll','sendFinanceReports','clearCache','createInjury','dischargeInjury','deleteInjury','resetPassword']);
+    const role = String(actor.role || '').toUpperCase();
+    const isAdmin = role === 'ADMIN';
+    const canRecordMatch = isAdmin || role === 'MEMBER';
+    // Somente a gravação da súmula é delegada aos membros. As demais operações administrativas permanecem exclusivas do ADMIN.
+    const adminActions = new Set(['saveTeams','createEvent','updateEvent','deleteEvent','createGame','updateGame','deleteGame','getMatchStats','sendPushNotificationToAll','sendFinanceReports','clearCache','createInjury','dischargeInjury','deleteInjury','resetPassword']);
     if (adminActions.has(action) && !isAdmin) return fail('Esta operação exige um administrador.', 'FORBIDDEN', 403);
+    if (action === 'saveMatchStats' && !canRecordMatch) return fail('Perfil não autorizado para registrar súmulas.', 'FORBIDDEN', 403);
 
     const rpc = async (name: string, args: Record<string, unknown> = {}) => {
       const { data, error } = await sb.rpc(name, args);

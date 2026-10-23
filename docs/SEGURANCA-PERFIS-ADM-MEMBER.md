@@ -52,8 +52,17 @@
 | Relatórios esportivos, rankings, dados por data e seleção de qualquer atleta/temporada | Visualização completa | **Mesma visualização, sem exportação** |
 | Exportações de relatórios esportivos em PDF (inclusive o executivo no Início) | Permitidas mediante autorização | **Bloqueadas na interface** |
 | Finanças, caixa, receitas, despesas e cobranças de terceiros | Integral | **Somente mensalidades e histórico próprios** |
-| Meu CBA / edição do cadastro de terceiros / área administrativa / Mesário | Conforme perfil | **Somente Meu CBA pessoal** |
+| Meu CBA / edição de cadastro de terceiros / área administrativa | Conforme perfil | **Somente Meu CBA pessoal; sem edição de outros atletas** |
+| Mesário (mesa digital, anotação, finalização, gravação de súmulas) | Operação completa | **Operação completa com gravação auditada; sem acesso a outras funções ADMIN** |
 
 A API `getInitialAppData` compartilha apenas campos esportivos explicitamente autorizados dos atletas, sem liberar resumo financeiro global. No `cba-portal/bootstrap`, partidas e súmulas fornecem somente informações esportivas usadas pelos painéis; escalações detalhadas continuam restritas à administração. Confirmações individuais de terceiros não são expostas, apenas a contagem agregada na tela inicial. O indicador agregado de atletas em acompanhamento pode aparecer no Início sem revelar prontuários.
 
 A edição de dados alheios, a emissão auditada de PDFs e os endpoints administrativos continuam exigindo ADMIN no servidor. A supressão do botão PDF no frontend atende à permissão de uso do portal, mas dados esportivos exibidos em tela continuam passíveis de captura manual (prints/cópias). A revisão das políticas RLS e a homologação com conta MEMBER real continuam pendentes e independentes desta alteração.
+
+## Aditivo — Mesário para MEMBER (23/10/2026)
+
+O perfil MEMBER aprovado pode abrir a aba **Mesário**, organizar os times em sessão local, lançar e corrigir pontos/rebotes/assistências/tocos, finalizar partidas e **salvar a súmula no Supabase** por `saveMatchStats`. A autorização é verificada pelo perfil efetivo da conta autenticada no backend, não por parâmetros do cliente; `recorded_by` e auditoria vinculam os lançamentos à conta responsável. A gravação utiliza a RPC já existente `cba_save_round_session` com validação de totais, placares e sessão.
+
+**Não foram liberados** `saveTeams` (sorteio), `getMatchStats` administrativo, `clearCache`, administração de usuários, edição de cadastros, exportação de PDFs ou finanças do elenco. A lista compartilhada de atletas e presenças já disponível para os painéis esportivos é utilizada pela Mesa. Nenhuma estrutura de banco, tabela, RLS ou conta foi alterada por este aditivo.
+
+**Impacto operacional:** qualquer MEMBER aprovado poderá registrar resultados oficiais, alterando as estatísticas esportivas visíveis aos demais. A recuperação da sessão de jogo continua armazenada localmente no dispositivo; recomenda-se usar um dispositivo por mesário e fazer a conferência da súmula antes de salvá-la.
