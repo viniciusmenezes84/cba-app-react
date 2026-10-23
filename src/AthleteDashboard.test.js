@@ -10,7 +10,7 @@ const players = [
 ];
 
 test('abre o perfil do usuário e permite consultar outro atleta sem inventar súmulas', () => {
-  render(<AthleteDashboard allPlayersData={players} dates={['2026-09-06']} currentUser={{ name: 'Ana' }} />);
+  render(<AthleteDashboard allPlayersData={players} dates={['2026-09-06']} currentUser={{ name: 'Ana' }} isAdmin />);
 
   expect(screen.getByRole('heading', { name: 'Ana' })).toBeInTheDocument();
   expect(screen.getByTestId('season-chart')).toBeInTheDocument();
