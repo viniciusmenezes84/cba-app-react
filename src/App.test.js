@@ -122,7 +122,7 @@ test('o painel de presença usa os dados iniciais sem repetir a consulta', async
   global.fetch = jest.fn(async () => ({ ok: true, json: async () => ({ data: { dashboard: { players: [], dates: [] }, finance: {} } }) }));
   try {
     render(<App />);
-    expect(await screen.findByText(/Visão do elenco em/)).toBeInTheDocument();
+    expect(await screen.findByText(/Meu histórico de presença/)).toBeInTheDocument();
     expect(global.fetch).toHaveBeenCalledTimes(1);
   } finally {
     global.fetch = previousFetch;
@@ -424,7 +424,7 @@ test('Meu CBA abre pelo cabeçalho de outra aba mesmo se o Início falhar; naveg
   });
   try {
     render(<App />);
-    await screen.findByText(/Visão do elenco em/);
+    await screen.findByText(/Meu histórico de presença/);
     fireEvent.click(screen.getByRole('button', { name: 'Abrir Meu CBA' }));
     expect(await screen.findByRole('heading', { name: 'Meu CBA' })).toBeInTheDocument();
     expect(await screen.findByText('Minha temporada')).toBeInTheDocument();
@@ -433,7 +433,7 @@ test('Meu CBA abre pelo cabeçalho de outra aba mesmo se o Início falhar; naveg
     fireEvent.click(screen.getByRole('button', { name: 'Abrir Meu CBA' }));
     expect(await screen.findByText('Minha temporada')).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole('button', { name: 'Presença' }).at(-1));
-    expect(await screen.findByText(/Visão do elenco em/)).toBeInTheDocument();
+    expect(await screen.findByText(/Meu histórico de presença/)).toBeInTheDocument();
   } finally {
     global.fetch = previousFetch;
     window.localStorage.removeItem('cba_session_v1');
