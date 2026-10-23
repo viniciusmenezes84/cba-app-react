@@ -1,6 +1,8 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const OWNER_EMAIL = 'vinicius.m84@gmail.com';
+const OWNER_ACCOUNT_ID = '66ea4f7f-f82f-40f5-a82d-cf178cbb84fb';
+const OWNER_ATHLETE_ID = '7092ab86-f6c2-4c53-b9cf-e04c1b4bb296';
 const PBKDF2_ITERATIONS = 310000;
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -59,10 +61,11 @@ Deno.serve(async (req: Request) => {
 
     const { data: account, error: accountError } = await sb.from('accounts').select('id,email,role,status,athlete_id').eq('id', session.account_id).maybeSingle();
     if (accountError) throw accountError;
-    if (!account || account.status !== 'approved' || String(account.role).toUpperCase() !== 'ADMIN') {
+    if (!account || account.status !== 'approved' || !['ADMIN','SUPER_ADMIN'].includes(String(account.role).toUpperCase())) {
       return fail('Acesso administrativo não autorizado.', 'FORBIDDEN', 403);
     }
     await sb.from('app_sessions').update({ last_seen_at: nowIso() }).eq('token_hash', tokenHash);
+    const isSuperAdmin = String(account.role).toUpperCase() === 'SUPER_ADMIN' && account.id === OWNER_ACCOUNT_ID && lower(account.email) === OWNER_EMAIL;
 
     const audit = async (auditAction: string, entityType: string, entityId: string, payload?: unknown) => {
       const { error } = await sb.from('audit_log').insert({ actor_account_id: account.id, action: auditAction, entity_type: entityType, entity_id: entityId, payload: payload ?? null });
@@ -131,10 +134,8 @@ Deno.serve(async (req: Request) => {
         return json(await loadBootstrap());
 
       case 'accessMonitoring': {
-        // Monitor access restricted to the existing owner's ADMIN account on the server.
-        // SUPER_ADMIN migration is deliberately NOT activated in this telemetry release.
-        if (account.id !== '66ea4f7f-f82f-40f5-a82d-cf178cbb84fb' ||
-            lower(account.email) !== OWNER_EMAIL) return fail('Monitoramento reservado ao proprietário.','FORBIDDEN',403);
+        // A autorização usa papel e identidade real consultados no servidor.
+        if (!isSuperAdmin) return fail('Monitoramento reservado ao SUPER_ADMIN.','FORBIDDEN',403);
         const since90 = new Date(Date.now()-90*86400000).toISOString();
         const since30 = new Date(Date.now()-30*86400000).toISOString();
         const [historyQ,eventsQ,accountsQ,athletesQ,consentQ] = await Promise.all([
@@ -290,6 +291,13 @@ Deno.serve(async (req: Request) => {
 
       case 'saveAthlete': {
         const id = text(p.id);
+        // Verificar ANTES de escrever na tabela athletes para impedir alterações por outro ADM.
+        if (id === OWNER_ATHLETE_ID && !isSuperAdmin) {
+          return fail('Conta SUPER_ADMIN protegida.', 'FORBIDDEN', 403);
+        }
+        if (lower(p.account?.email) === OWNER_EMAIL && id !== OWNER_ATHLETE_ID) {
+          return fail('Este e-mail pertence à conta proprietária protegida.', 'FORBIDDEN', 403);
+        }
         const athlete = p.athlete || {};
         const name = text(athlete.name);
         if (!name) return fail('Nome do atleta é obrigatório.', 'VALIDATION_ERROR');
@@ -321,11 +329,14 @@ Deno.serve(async (req: Request) => {
           const password = typeof acc.password === 'string' ? acc.password : '';
           if (!existingAccount && password.length < 8) return fail('Nova conta exige senha inicial de pelo menos 8 caracteres.', 'VALIDATION_ERROR');
           const requestedRole = String(acc.role || '').toUpperCase() === 'ADMIN' ? 'ADMIN' : 'MEMBER';
-          const isOwnerAccount = lower(existingAccount?.email || email) === OWNER_EMAIL;
+          const isOwnerAccount = existingAccount?.id === OWNER_ACCOUNT_ID;
+          if ((isOwnerAccount || String(existingAccount?.role).toUpperCase() === 'SUPER_ADMIN') && !isSuperAdmin) {
+            return fail('Conta SUPER_ADMIN protegida.', 'FORBIDDEN', 403);
+          }
           const update: any = {
             athlete_id: athleteId,
             email: isOwnerAccount ? OWNER_EMAIL : email,
-            role: isOwnerAccount ? 'ADMIN' : requestedRole,
+            role: isOwnerAccount ? 'SUPER_ADMIN' : requestedRole,
             status: 'approved',
           };
           if (password) {
@@ -338,7 +349,9 @@ Deno.serve(async (req: Request) => {
           } else {
             const { error } = await sb.from('accounts').insert(update); if (error) throw error;
           }
-        } else if (existingAccount && lower(existingAccount.email) !== OWNER_EMAIL) {
+        } else if (existingAccount && existingAccount.id === OWNER_ACCOUNT_ID) {
+          return fail('A conta SUPER_ADMIN não pode ser desativada.', 'FORBIDDEN', 403);
+        } else if (existingAccount) {
           const { error } = await sb.from('accounts').update({ status: 'disabled' }).eq('id', existingAccount.id); if (error) throw error;
           await sb.from('app_sessions').delete().eq('account_id', existingAccount.id);
         }
@@ -355,6 +368,7 @@ Deno.serve(async (req: Request) => {
         const { data: target, error: targetError } = await sb.from('accounts').select('id,email,status').ilike('email', email).maybeSingle();
         if (targetError) throw targetError;
         if (!target) return fail('Usuário não encontrado.', 'NOT_FOUND', 404);
+        if (target.id === OWNER_ACCOUNT_ID) return fail('O SUPER_ADMIN deve alterar sua própria senha usando a senha atual.', 'FORBIDDEN', 403);
         if (target.status !== 'approved') return fail('O acesso deste usuário está desativado.', 'ACCOUNT_DISABLED', 409);
         const passwordHash = await hashPassword(newPassword);
         const { error: updateError } = await sb.from('accounts').update({ legacy_password_hash: passwordHash }).eq('id', target.id);
@@ -366,6 +380,7 @@ Deno.serve(async (req: Request) => {
 
       case 'setAthleteActive': {
         const id = text(p.id); const active = Boolean(p.active);
+        if (id === OWNER_ATHLETE_ID && !isSuperAdmin) return fail('Conta SUPER_ADMIN protegida.', 'FORBIDDEN', 403);
         const { error } = await sb.from('athletes').update({ active }).eq('id', id); if (error) throw error;
         if (!active) {
           const { data: acc } = await sb.from('accounts').select('id,email').eq('athlete_id', id).maybeSingle();
