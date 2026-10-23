@@ -42,8 +42,13 @@ self.addEventListener('fetch', event => {
     return;
   }
 
+  if (url.pathname === '/icon-192x192.png') {
+    event.respondWith(caches.match(request).then(cached => cached || fetch(request)));
+    return;
+  }
+
   const fingerprintedAsset =
-    /^\/static\/(js|css)\/[a-zA-Z0-9._-]+\.[a-f0-9]{8,}\.(js|css)$/.test(url.pathname);
+    /^\/static\/(?:js|css)\/.+\.[a-f0-9]{8,}(?:\.chunk)?\.(?:js|css)$/.test(url.pathname);
   if (!fingerprintedAsset) return;
 
   event.respondWith(
