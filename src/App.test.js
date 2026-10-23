@@ -26,10 +26,10 @@ test.each(['ADMIN', 'MEMBER'])('menu CBA Premium mantém navegação e permissõ
     const home = menu.getByRole('button', { name: 'Início', exact: true });
     expect(home).toHaveClass('cba-premium-sidebar__item');
     expect(home).toHaveAttribute('aria-current', 'page');
-    const labels = ['Presença', 'Relatórios', 'Desempenho do Atleta', 'Finanças', 'Jogos', 'Eventos', 'Departamento Médico', 'Estatuto'];
-    if (role === 'ADMIN') labels.push('Sorteio', 'Hall da Fama', 'Mesário', 'Avisos');
+    const labels = ['Presença', 'Relatórios', 'Desempenho do Atleta', 'Mesário', 'Finanças', 'Jogos', 'Eventos', 'Departamento Médico', 'Estatuto'];
+    if (role === 'ADMIN') labels.push('Sorteio', 'Hall da Fama', 'Avisos');
     else {
-      expect(menu.queryByRole('button', { name: 'Mesário', exact: true })).not.toBeInTheDocument();
+      expect(menu.getByRole('button', { name: 'Mesário', exact: true })).toBeInTheDocument();
       expect(menu.queryByRole('button', { name: 'Administração', exact: true })).not.toBeInTheDocument();
       expect(menu.queryByRole('button', { name: 'Sorteio', exact: true })).not.toBeInTheDocument();
       expect(menu.queryByRole('button', { name: 'Hall da Fama', exact: true })).not.toBeInTheDocument();
