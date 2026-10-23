@@ -334,7 +334,7 @@ const PresencaTab = ({ nextGame, currentUser, isAdmin, onAttendanceUpdate }) => 
     <div className="space-y-6">
         <ProximoJogoCard game={nextGame} currentUser={currentUser} onAttendanceUpdate={onAttendanceUpdate} />
         <Suspense fallback={<Loader message="Carregando presença..." />}>
-            <PresenceDashboardBridge isAdmin={isAdmin} />
+            <PresenceDashboardBridge isAdmin={isAdmin} athleteId={currentUser?.athleteId} />
         </Suspense>
     </div>
 );
