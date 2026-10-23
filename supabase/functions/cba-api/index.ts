@@ -230,13 +230,27 @@ Deno.serve(async (req: Request) => {
     switch (action) {
       case 'getInitialAppData': {
         const data: any = await rpc('get_initial_app_data_compat');
+        if (!isAdmin && data?.data?.dashboard) {
+          // All statistics and attendance must be scoped to the authenticated athlete_id.
+          // Player names are NOT an authorization identifier (duplicates/renames are possible).
+          const sourcePlayers = Array.isArray(data.data.dashboard.players) ? data.data.dashboard.players : [];
+          const ownPlayers = actor.athlete_id
+            ? sourcePlayers.filter((player:any) => String(player?.id || '') === String(actor.athlete_id))
+            : [];
+          data.data.dashboard = {
+            players:ownPlayers,
+            dates:[...new Set(ownPlayers.flatMap((player:any) => [
+              ...Object.keys(player.attendance || {}), ...Object.keys(player.dailyStats || {})
+            ]))].sort()
+          };
+        }
         if (!isAdmin && data?.data?.finance) {
           // Allowlist: nunca devolva novos campos financeiros individuais criados no RPC legado
           // sem uma decisão explícita sobre a autorização de cada campo.
           const rawFinance = data.data.finance;
           data.data.finance = {
             year:rawFinance.year,
-            summary:rawFinance.summary,
+            // Overall revenue, expenses and balance are restricted to ADMIN.
             monthlyFee:rawFinance.monthlyFee,
             paymentHeaders:rawFinance.paymentHeaders,
             paymentStatus:[]
