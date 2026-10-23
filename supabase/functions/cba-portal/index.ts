@@ -247,6 +247,7 @@ Deno.serve(async (req: Request) => {
 
       const confirmationsByGame = new Map<string,string[]>();
       for (const c of gameConfirmationsQ.data || []) {
+        if (!isAdmin && String(c.athlete_id) !== String(account.athlete_id)) continue;
         const name = athleteById.get(c.athlete_id)?.name;
         if (!name) continue;
         if (!confirmationsByGame.has(c.game_id)) confirmationsByGame.set(c.game_id,[]);
@@ -254,6 +255,7 @@ Deno.serve(async (req: Request) => {
       }
       const attendeesByEvent = new Map<string,string[]>();
       for (const c of eventAttendeesQ.data || []) {
+        if (!isAdmin && String(c.athlete_id) !== String(account.athlete_id)) continue;
         const name = athleteById.get(c.athlete_id)?.name;
         if (!name) continue;
         if (!attendeesByEvent.has(c.event_id)) attendeesByEvent.set(c.event_id,[]);
@@ -263,11 +265,11 @@ Deno.serve(async (req: Request) => {
       const games = (gamesQ.data || []).map((g:any)=>({
         id:g.id, date:g.game_date, time:String(g.game_time||'').slice(0,5), location:g.location,
         cancelledAt:g.cancelled_at, cancelReason:g.cancel_reason || '',
-        confirmed:(confirmationsByGame.get(g.id)||[]).filter((name:string)=>isAdmin || (ownAthlete && name===ownAthlete.name)).sort((a,b)=>a.localeCompare(b))
+        confirmed:(confirmationsByGame.get(g.id)||[]).sort((a,b)=>a.localeCompare(b))
       }));
       const events = (eventsQ.data || []).map((e:any)=>({
         id:e.id, name:e.name, startsAt:e.starts_at, location:e.location, description:e.description,
-        value:Number(e.value||0), deadline:e.deadline, attendees:(attendeesByEvent.get(e.id)||[]).filter((name:string)=>isAdmin || (ownAthlete && name===ownAthlete.name)).sort((a,b)=>a.localeCompare(b))
+        value:Number(e.value||0), deadline:e.deadline, attendees:(attendeesByEvent.get(e.id)||[]).sort((a,b)=>a.localeCompare(b))
       }));
 
       const hallMap = new Map<string,any>();
