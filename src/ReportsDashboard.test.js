@@ -27,3 +27,17 @@ test('filtros de temporada e atleta atualizam resumo, ranking e súmulas sem nov
     global.fetch = previousFetch;
   }
 });
+
+
+test('MEMBER não enxerga outros atletas, ranking global nem seletor liberado', () => {
+  const input={data:{dashboard:{dates:['2026-04-05'],players:[
+    {id:'athlete-member',name:'Minha Pessoa',attendance:{'2026-04-05':'✅'},dailyStats:{'2026-04-05':{pts2:2}}},
+    {id:'athlete-other',name:'Outro Atleta',attendance:{'2026-04-05':'✅'},dailyStats:{'2026-04-05':{pts2:12}}}
+  ]}}};
+  render(<ReportsDashboard data={input} isAdmin={false} currentUser={{athleteId:'athlete-member'}}/>);
+  expect(screen.getByLabelText('Atleta')).toBeDisabled();
+  expect(screen.getByLabelText('Atleta')).toHaveValue('Minha Pessoa');
+  expect(screen.queryByText('Outro Atleta')).not.toBeInTheDocument();
+  expect(screen.queryByText('Todos os atletas')).not.toBeInTheDocument();
+  expect(screen.queryByText('Ranking da temporada')).not.toBeInTheDocument();
+});
