@@ -130,6 +130,60 @@ Deno.serve(async (req: Request) => {
       case 'bootstrap':
         return json(await loadBootstrap());
 
+      case 'accessMonitoring': {
+        // Monitor access restricted to the existing owner's ADMIN account on the server.
+        // SUPER_ADMIN migration is deliberately NOT activated in this telemetry release.
+        if (account.id !== '66ea4f7f-f82f-40f5-a82d-cf178cbb84fb' ||
+            lower(account.email) !== OWNER_EMAIL) return fail('Monitoramento reservado ao proprietário.','FORBIDDEN',403);
+        const since90 = new Date(Date.now()-90*86400000).toISOString();
+        const since30 = new Date(Date.now()-30*86400000).toISOString();
+        const [historyQ,eventsQ,accountsQ,athletesQ,consentQ] = await Promise.all([
+          sb.from('cba_access_history').select('account_id,started_at,last_active_at,ended_at,expires_at,device_type,os_family,browser_family,app_mode,language,screen_class').gte('started_at',since90).order('started_at',{ascending:false}).limit(1000),
+          sb.from('cba_usage_events').select('account_id,tab_key,created_at').gte('created_at',since30).order('created_at',{ascending:false}).limit(4000),
+          sb.from('accounts').select('id,athlete_id,email,role,status'),
+          sb.from('athletes').select('id,name'),
+          sb.from('cba_usage_preferences').select('account_id,analytics_opt_in,marketing_opt_in'),
+        ]);
+        for (const q of [historyQ,eventsQ,accountsQ,athletesQ,consentQ]) if(q.error) throw q.error;
+        const names = new Map((athletesQ.data || []).map((a:any)=>[a.id,a.name]));
+        const accounts = new Map((accountsQ.data || []).map((a:any)=>[a.id,{
+          name:names.get(a.athlete_id) || 'Sem atleta vinculado',
+          email:a.email,role:a.role,status:a.status
+        }]));
+        const now = Date.now();
+        const sessions = (historyQ.data || []).map((row:any)=>{
+          const acc:any=accounts.get(row.account_id)||{};
+          const online= !row.ended_at && new Date(row.expires_at).getTime()>now &&
+            row.last_active_at && (now-new Date(row.last_active_at).getTime()) < 120000;
+          return {
+            name:acc.name || 'Conta indisponível',email:acc.email || '',
+            role:acc.role || '',status:acc.status || '',
+            startedAt:row.started_at,lastActiveAt:row.last_active_at,
+            endedAt:row.ended_at,online:Boolean(online),
+            device:row.device_type,os:row.os_family,browser:row.browser_family,
+            mode:row.app_mode,language:row.language,screen:row.screen_class
+          };
+        });
+        const onlineUsers=new Set((historyQ.data||[]).filter((r:any)=>!r.ended_at &&
+          new Date(r.expires_at).getTime()>now && r.last_active_at &&
+          now-new Date(r.last_active_at).getTime()<120000).map((r:any)=>r.account_id)).size;
+        const tabCounts:any={};
+        const dailyCounts:any={};
+        for(const event of eventsQ.data||[]){
+          tabCounts[event.tab_key]=(tabCounts[event.tab_key]||0)+1;
+          const day=String(event.created_at).slice(0,10);
+          dailyCounts[day]=(dailyCounts[day]||0)+1;
+        }
+        return json({result:'success',data:{
+          onlineUsers,nonExpiredSessions:sessions.filter((x:any)=>!x.endedAt && x.startedAt && x.lastActiveAt).length,
+          knownUsers:accounts.size,sessionCount:sessions.length,
+          sessions,tabCounts,dailyCounts,
+          consent:{yes:(consentQ.data||[]).filter((r:any)=>r.analytics_opt_in===true).length,
+                   no:(consentQ.data||[]).filter((r:any)=>r.analytics_opt_in===false).length},
+          note:'Registros somente após implantação; online = heartbeat visível recente (2 minutos). Histórico limitado a 90 dias e eventos a 30 dias, com limite de amostragem.'
+        }});
+      }
+
       case 'attendanceByDate': {
         const date = text(p.date);
         const [aQ, rQ] = await Promise.all([
