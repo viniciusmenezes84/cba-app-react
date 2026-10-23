@@ -65,6 +65,8 @@ Deno.serve(async (req: Request) => {
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const sb = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
 
+  // Only coarse device categories are kept, never raw user-agent, IP, precise GPS, or fingerprint.
+  const validDevice = (value:any, allowed:string[], fallback:string) => allowed.includes(String(value)) ? String(value) : fallback;
   try {
     const params = await req.json();
     const action = text(params?.action);
@@ -104,6 +106,21 @@ Deno.serve(async (req: Request) => {
       const expiresAt = Date.now() + SESSION_TTL_MS;
       const { error } = await sb.from('app_sessions').insert({ token_hash: tokenHash, account_id: actor.id, expires_at: new Date(expiresAt).toISOString() });
       if (error) throw error;
+      // Telemetry must never prevent a successful authentication.
+      try {
+        const device = params.device || {};
+        const row = {
+          account_id:actor.id,session_hash:tokenHash,expires_at:new Date(expiresAt).toISOString(),
+          device_type:validDevice(device.type,['desktop','celular','tablet'],'indefinido'),
+          os_family:validDevice(device.os,['Android','iOS','Windows','macOS','Linux','Outro'],'indefinido'),
+          browser_family:validDevice(device.browser,['Chrome','Safari','Edge','Firefox','Outro'],'indefinido'),
+          app_mode:validDevice(device.mode,['pwa','navegador'],'navegador'),
+          language:validDevice(device.language,['pt','en','es','outro'],'indefinido'),
+          screen_class:validDevice(device.screen,['compacta','media','ampla'],'indefinido')
+        };
+        const {error:telemetryError}=await sb.from('cba_access_history').insert(row);
+        if (telemetryError) console.warn('CBA observability: session history unavailable');
+      } catch { console.warn('CBA observability: session history unavailable'); }
       return { token, expiresAt };
     };
 
@@ -160,12 +177,44 @@ Deno.serve(async (req: Request) => {
 
     if (action === 'logoutUser') {
       const session = await actorFor(params.token);
+      try { await sb.from('cba_access_history').update({ended_at:new Date().toISOString()}).eq('session_hash',session.tokenHash); } catch { /* never block logout */ }
       await sb.from('app_sessions').delete().eq('token_hash', session.tokenHash);
       return json({ result: 'success', message: 'Sessão revogada.' });
     }
 
     const session = await actorFor(params.token);
     const actor = session.actor;
+    // Session presence records active/visible use only, not merely valid login tokens.
+    if (action === 'presencePing') {
+      const { error }=await sb.from('cba_access_history').update({last_active_at:new Date().toISOString()})
+        .eq('session_hash',session.tokenHash).is('ended_at',null);
+      if (error) console.warn('CBA observability: presence update unavailable');
+      return json({result:'success'});
+    }
+    if (action === 'getAnalyticsPreference') {
+      const {data,error}=await sb.from('cba_usage_preferences').select('analytics_opt_in').eq('account_id',actor.id).maybeSingle();
+      if (error) throw error;
+      return json({result:'success',analyticsOptIn: data?.analytics_opt_in ?? null});
+    }
+    if (action === 'setAnalyticsPreference') {
+      if (typeof params.enabled !== 'boolean') return fail('Preferência inválida.','VALIDATION_ERROR');
+      const {error}=await sb.from('cba_usage_preferences').upsert({
+        account_id:actor.id,analytics_opt_in:params.enabled,analytics_updated_at:new Date().toISOString()
+      },{onConflict:'account_id'});
+      if (error) throw error;
+      return json({result:'success',analyticsOptIn:params.enabled});
+    }
+    if (action === 'recordUsageEvent') {
+      const permittedTabs=new Set(['inicio','presenca','relatorios','atleta','mesario','financas','jogos','eventos','sorteio','dm','halldafama','estatuto','notificacoes']);
+      const tab=String(params.tab || '');
+      if (!permittedTabs.has(tab)) return fail('Aba inválida.','VALIDATION_ERROR');
+      const {data:pref,error:prefError}=await sb.from('cba_usage_preferences').select('analytics_opt_in').eq('account_id',actor.id).maybeSingle();
+      if (prefError) throw prefError;
+      if (pref?.analytics_opt_in !== true) return fail('Métricas opcionais não autorizadas.','FORBIDDEN',403);
+      const {error}=await sb.from('cba_usage_events').insert({account_id:actor.id,tab_key:tab,event_type:'tab_view'});
+      if (error) throw error;
+      return json({result:'success'});
+    }
     const role = String(actor.role || '').toUpperCase();
     const isAdmin = role === 'ADMIN';
     const canManageSports = isAdmin || role === 'MEMBER';
