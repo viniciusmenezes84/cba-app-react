@@ -23,6 +23,7 @@ const attemptedEmails = new Map();
 const fakeDb = {
   from(table) {
     const filters = {};
+    let mutation = null;
     const query = {
       select() { return query; },
       eq(key, value) { filters[key] = value; return query; },
@@ -47,10 +48,10 @@ const fakeDb = {
         attemptedEmails.set(row.email_key, row);
         return { error: null };
       },
-      delete() { return query; },
-      update() { return query; },
+      delete() { mutation = 'delete'; return query; },
+      update() { mutation = 'update'; return query; },
       then(resolve, reject) {
-        if (table === 'app_sessions' && filters.token_hash) sessions.delete(filters.token_hash);
+        if (table === 'app_sessions' && filters.token_hash && mutation === 'delete') sessions.delete(filters.token_hash);
         if (table === 'login_attempts' && filters.email_key) attemptedEmails.delete(filters.email_key);
         if (table === 'member_dues') return Promise.resolve({ data: [], error: null }).then(resolve, reject);
         return Promise.resolve({ error: null }).then(resolve, reject);
