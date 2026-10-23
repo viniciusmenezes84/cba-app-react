@@ -230,9 +230,21 @@ function ReportsExperience({ data, year, selectedPlayer, onSelectPlayer }) {
   );
 }
 
-export default function ReportsDashboard({ data, isAdmin = false }) {
+export default function ReportsDashboard({ data, isAdmin = false, currentUser }) {
   const appData = data?.data || data || {};
-  const players = appData?.dashboard?.players || EMPTY_LIST;
+  const allPlayers = appData?.dashboard?.players || EMPTY_LIST;
+  const players = useMemo(() => isAdmin ? allPlayers : allPlayers.filter(player =>
+    Boolean(currentUser?.athleteId) && String(player?.id) === String(currentUser.athleteId)),
+    [allPlayers, isAdmin, currentUser?.athleteId]);
+  // Never pass unfiltered data to report subcomponents for MEMBER, even if a stale
+  // backend revision accidentally returns the whole roster.
+  const scopedData = useMemo(() => {
+    if (isAdmin) return data;
+    const dates = [...new Set(players.flatMap(player => [
+      ...Object.keys(player.attendance || {}), ...Object.keys(player.dailyStats || {})
+    ]))].sort();
+    return { data: { ...appData, dashboard: { ...(appData.dashboard || {}), players, dates }, roundMatches: [] } };
+  }, [isAdmin, data, appData, players]);
   const years = useMemo(() => {
     const dates = data?.data?.dashboard?.dates || data?.dashboard?.dates || EMPTY_LIST;
     const available = [...new Set(dates.map(date => String(date).slice(0, 4)))].filter(year => /^\d{4}$/.test(year));
@@ -257,10 +269,10 @@ export default function ReportsDashboard({ data, isAdmin = false }) {
       <label className="flex-1 text-xs font-black text-slate-500">Atleta
         <select aria-label="Atleta" disabled={!isAdmin} value={selectedPlayer} onChange={event => setSelectedPlayer(event.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 text-sm font-bold text-slate-900 dark:text-white">{isAdmin && <option value="todos">Todos os atletas</option>}{players.map(player => <option key={player.name} value={player.name}>{player.name}</option>)}</select>
       </label>
-      <div className="flex flex-wrap gap-2"><ReportsPdf data={data} year={year} selectedPlayer={selectedPlayer} /></div>
+      <div className="flex flex-wrap gap-2"><ReportsPdf data={scopedData} year={year} selectedPlayer={selectedPlayer} /></div>
     </div>
-    <ReportsExperience data={data} year={year} selectedPlayer={selectedPlayer} onSelectPlayer={setSelectedPlayer} />
-    {isAdmin && selectedPlayer === 'todos' && <ReportsRankingCompact data={data} year={year} onSelectPlayer={setSelectedPlayer} />}
-    <ReportsStatsByDate data={data} year={year} selectedPlayer={selectedPlayer} />
+    <ReportsExperience data={scopedData} year={year} selectedPlayer={selectedPlayer} onSelectPlayer={isAdmin ? setSelectedPlayer : () => {}} />
+    {isAdmin && selectedPlayer === 'todos' && <ReportsRankingCompact data={scopedData} year={year} onSelectPlayer={setSelectedPlayer} />}
+    <ReportsStatsByDate data={scopedData} year={year} selectedPlayer={selectedPlayer} />
   </div>;
 }
