@@ -897,7 +897,7 @@ const MainApp = ({ user, onLogout, logoutPending, onProfileUpdated }) => {
     
     const isAdmin = user?.role?.toUpperCase() === 'ADMIN';
     
-    const TABS = useMemo(() => isAdmin ? ['inicio', 'presenca', 'relatorios', 'atleta', 'mesario', 'financas', 'jogos', 'eventos', 'sorteio', 'dm', 'halldafama', 'estatuto', 'notificacoes'] : ['inicio', 'presenca', 'relatorios', 'atleta', 'mesario', 'financas', 'jogos', 'eventos', 'dm', 'estatuto'], [isAdmin]);
+    const TABS = useMemo(() => isAdmin ? ['inicio', 'presenca', 'relatorios', 'atleta', 'mesario', 'financas', 'jogos', 'eventos', 'sorteio', 'dm', 'halldafama', 'estatuto', 'notificacoes'] : ['inicio', 'presenca', 'relatorios', 'atleta', 'mesario', 'financas', 'jogos', 'eventos', 'sorteio', 'dm', 'estatuto'], [isAdmin]);
 
     useEffect(() => {
         if (!TABS.includes(activeTab)) {
@@ -1002,7 +1002,7 @@ const MainApp = ({ user, onLogout, logoutPending, onProfileUpdated }) => {
                     {activeTab === 'financas' && <FinancasTab {...props} />}
                     {activeTab === 'jogos' && <Suspense fallback={<Loader message="Carregando Jogos..." />}><ScheduleDashboard tab="jogos" refreshKey={refreshTrigger} players={props.allPlayersData} /></Suspense>}
                     {activeTab === 'eventos' && <Suspense fallback={<Loader message="Carregando Eventos..." />}><ScheduleDashboard tab="eventos" refreshKey={refreshTrigger} /></Suspense>}
-                    {activeTab === 'sorteio' && <Suspense fallback={<Loader message="Carregando Sorteio..." />}><SorteioDashboard players={props.allPlayersData} dates={props.dates} isAdmin={isAdmin} /></Suspense>}
+                    {activeTab === 'sorteio' && <Suspense fallback={<Loader message="Carregando Sorteio..." />}><SorteioDashboard players={props.allPlayersData} dates={props.dates} canSaveTeams={isAdmin || String(user?.role || '').toUpperCase() === 'MEMBER'} /></Suspense>}
                     {activeTab === 'dm' && <Suspense fallback={<Loader message="Carregando Departamento Médico..." />}><DmDashboard /></Suspense>}
                     {activeTab === 'halldafama' && <HallDaFamaTab {...props} />}
                     {activeTab === 'estatuto' && <EstatutoTab />}
