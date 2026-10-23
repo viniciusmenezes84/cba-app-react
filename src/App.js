@@ -897,7 +897,7 @@ const MainApp = ({ user, onLogout, logoutPending, onProfileUpdated }) => {
     
     const isAdmin = user?.role?.toUpperCase() === 'ADMIN';
     
-    const TABS = useMemo(() => isAdmin ? ['inicio', 'presenca', 'relatorios', 'atleta', 'mesario', 'financas', 'jogos', 'eventos', 'sorteio', 'dm', 'halldafama', 'estatuto', 'notificacoes'] : ['inicio', 'presenca', 'relatorios', 'atleta', 'financas', 'jogos', 'eventos', 'dm', 'estatuto'], [isAdmin]);
+    const TABS = useMemo(() => isAdmin ? ['inicio', 'presenca', 'relatorios', 'atleta', 'mesario', 'financas', 'jogos', 'eventos', 'sorteio', 'dm', 'halldafama', 'estatuto', 'notificacoes'] : ['inicio', 'presenca', 'relatorios', 'atleta', 'mesario', 'financas', 'jogos', 'eventos', 'dm', 'estatuto'], [isAdmin]);
 
     useEffect(() => {
         if (!TABS.includes(activeTab)) {
@@ -912,10 +912,13 @@ const MainApp = ({ user, onLogout, logoutPending, onProfileUpdated }) => {
     }, [activeTab]);
 
     const handleForceRefresh = async () => {
-        try {
-            await api.post({ action: 'clearCache' });
-        } catch (e) {
-            console.error("Erro ao limpar cache", e);
+        // MEMBERS podem registrar súmulas, mas não recebem a permissão ADMIN de limpar cache global.
+        if (isAdmin) {
+            try {
+                await api.post({ action: 'clearCache' });
+            } catch (e) {
+                console.error("Erro ao limpar cache", e);
+            }
         }
         setRefreshTrigger(prev => prev + 1);
     };
