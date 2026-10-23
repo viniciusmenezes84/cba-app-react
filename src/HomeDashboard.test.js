@@ -91,7 +91,7 @@ test('Início mantém os cards antigos e mostra o Sports Center com rankings por
 });
 
 
-test('somente ADM vê emitir relatório e backend autoriza antes da geração', async () => {
+test('MEMBER vê Sports Center completo sem exportar; somente ADM emite PDF com autorização', async () => {
   const stats={dashboard:{players:[{name:'Ana',dailyStats:{[today]:{pts2:5,pts3:0,reb:2,ast:1,blk:0}},attendance:{[today]:'✅'}}],dates:[today]}};
   portalPost.mockReset().mockResolvedValue(payload);
   adminPost.mockReset().mockResolvedValue({result:'success'});
@@ -103,8 +103,9 @@ test('somente ADM vê emitir relatório e backend autoriza antes da geração', 
     const ui=render(<InitialDataContext.Provider value={{data:stats}}>
       <HomeDashboard isAdmin={false} onNavigate={jest.fn()}/>
     </InitialDataContext.Provider>);
-    await screen.findByRole('heading',{name:'Meu desempenho'});
-    expect(screen.queryByText('Ranking acumulado')).not.toBeInTheDocument();
+    await screen.findByRole('heading',{name:/O jogo em/});
+    expect(screen.getByText('Ranking acumulado')).toBeInTheDocument();
+    expect(screen.getByText('Cestinha da rodada')).toBeInTheDocument();
     expect(screen.queryByRole('button',{name:'Relatório executivo PDF'})).not.toBeInTheDocument();
     expect(adminPost).not.toHaveBeenCalled();
     ui.rerender(<InitialDataContext.Provider value={{data:stats}}>
