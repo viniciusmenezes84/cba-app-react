@@ -897,7 +897,7 @@ const MainApp = ({ user, onLogout, logoutPending, onProfileUpdated }) => {
     
     const isAdmin = user?.role?.toUpperCase() === 'ADMIN';
     
-    const TABS = useMemo(() => isAdmin ? ['inicio', 'presenca', 'relatorios', 'atleta', 'mesario', 'financas', 'jogos', 'eventos', 'sorteio', 'dm', 'halldafama', 'estatuto', 'notificacoes'] : ['inicio', 'presenca', 'relatorios', 'atleta', 'financas', 'jogos', 'eventos', 'sorteio', 'dm', 'halldafama', 'estatuto'], [isAdmin]);
+    const TABS = useMemo(() => isAdmin ? ['inicio', 'presenca', 'relatorios', 'atleta', 'mesario', 'financas', 'jogos', 'eventos', 'sorteio', 'dm', 'halldafama', 'estatuto', 'notificacoes'] : ['inicio', 'presenca', 'relatorios', 'atleta', 'financas', 'jogos', 'eventos', 'dm', 'estatuto'], [isAdmin]);
 
     useEffect(() => {
         if (!TABS.includes(activeTab)) {
@@ -972,6 +972,8 @@ const MainApp = ({ user, onLogout, logoutPending, onProfileUpdated }) => {
     ];
 
     const renderContent = () => {
+        // Impede renderização de módulos administrativos ao restaurar uma aba antiga do localStorage.
+        if (!TABS.includes(activeTab)) return <Loader message="Abrindo painel autorizado..." />;
         if (isLoading && !initialData) return <Loader message="Carregando dados na quadra..." />;
         if (dataError && !initialData) return <div role="alert" className="mx-auto max-w-lg rounded-3xl border border-rose-500/30 bg-slate-800 p-6 text-center text-white"><AlertCircle className="mx-auto mb-3 h-9 w-9 text-rose-400"/><h2 className="text-xl font-black">Não foi possível carregar o portal</h2><p className="mt-2 text-sm text-slate-300">Confira sua conexão e tente novamente.</p><button type="button" onClick={refetch} className="mt-5 rounded-xl bg-emerald-500 px-5 py-3 font-black text-slate-950">Tentar novamente</button></div>;
         
