@@ -15,9 +15,10 @@ const Card = ({ children, className = '' }) => (
   <div className={`bg-slate-800/60 backdrop-blur-xl border border-slate-700/50 shadow-xl rounded-3xl p-6 ${className}`}>{children}</div>
 );
 
-function Insights({ data, isAdmin }) {
+function Insights({ data, isAdmin, athleteId }) {
   const appData = data?.data || data || {};
-  const players = appData?.dashboard?.players || [];
+  const sourcePlayers = appData?.dashboard?.players || [];
+  const players = isAdmin ? sourcePlayers : sourcePlayers.filter(player => Boolean(athleteId) && String(player?.id) === String(athleteId));
   const dates = appData?.dashboard?.dates || [];
   const years = useMemo(() => [...new Set(dates.map(d => d.substring(0, 4)))].sort((a, b) => b - a), [dates]);
   const [year, setYear] = useState(years[0] || new Date().getFullYear().toString());
@@ -180,7 +181,7 @@ function Insights({ data, isAdmin }) {
   );
 }
 
-export default function PresenceDashboardBridge({ isAdmin = false }) {
+export default function PresenceDashboardBridge({ isAdmin = false, athleteId }) {
   const data = useContext(InitialDataContext);
-  return data ? <Insights data={data} isAdmin={isAdmin} /> : null;
+  return data ? <Insights data={data} isAdmin={isAdmin} athleteId={athleteId} /> : null;
 }
