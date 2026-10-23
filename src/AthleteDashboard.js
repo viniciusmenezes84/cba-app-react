@@ -47,8 +47,9 @@ function Empty({ children }) {
 }
 
 export default function AthleteDashboard({ allPlayersData = [], dates = [], currentUser, isAdmin = false, dataError }) {
-  const players = useMemo(() => [...allPlayersData].sort((a, b) =>
-    String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR')), [allPlayersData]);
+  const players = useMemo(() => (isAdmin ? allPlayersData : allPlayersData.filter(player =>
+    Boolean(currentUser?.athleteId) && String(player?.id) === String(currentUser.athleteId))).slice().sort((a, b) =>
+    String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR')), [allPlayersData, isAdmin, currentUser?.athleteId]);
   const years = useMemo(() => availableAthleteYears(players, dates), [players, dates]);
   const [year, setYear] = useState(String(new Date().getFullYear()));
   const [selectedName, setSelectedName] = useState('');
