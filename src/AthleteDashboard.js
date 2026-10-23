@@ -46,9 +46,9 @@ function Empty({ children }) {
   return <div className="cba-player__empty"><BarChart3 size={25} aria-hidden="true"/><p>{children}</p></div>;
 }
 
-export default function AthleteDashboard({ allPlayersData = [], dates = [], currentUser, dataError }) {
-  const players = useMemo(() => [...allPlayersData].sort((a, b) =>
-    String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR')), [allPlayersData]);
+export default function AthleteDashboard({ allPlayersData = [], dates = [], currentUser, isAdmin = false, dataError }) {
+  const players = useMemo(() => (isAdmin ? [...allPlayersData] : allPlayersData.filter(player => String(player.id || '') === String(currentUser?.athleteId || currentUser?.athlete_id || ''))).sort((a, b) =>
+    String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR')), [allPlayersData, isAdmin, currentUser?.athleteId, currentUser?.athlete_id]);
   const years = useMemo(() => availableAthleteYears(players, dates), [players, dates]);
   const [year, setYear] = useState(String(new Date().getFullYear()));
   const [selectedName, setSelectedName] = useState('');
@@ -153,7 +153,7 @@ export default function AthleteDashboard({ allPlayersData = [], dates = [], curr
         <p>O desempenho de cada atleta, sua evolução e sua presença em um só lugar.</p></div>
       <div className="cba-player__filters">
         <label>Atleta
-          <select aria-label="Selecionar atleta" value={athlete.name} onChange={event => setSelectedName(event.target.value)}>
+          <select aria-label="Selecionar atleta" disabled={!isAdmin} value={athlete.name} onChange={event => setSelectedName(event.target.value)}>
             {players.map(player => <option key={player.name} value={player.name}>{player.name}</option>)}
           </select>
         </label>
