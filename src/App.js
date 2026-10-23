@@ -387,11 +387,11 @@ const FinancasTab = ({ financeData, isLoading, error, currentUser, isAdmin, pixC
 
     return (
         <div className="space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {isAdmin && <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <GlassCard className="bg-indigo-600 !text-white text-center"><h3 className="font-bold text-sm uppercase opacity-80">Saldo em Caixa</h3><p className="text-4xl font-black mt-1">R$ {financeData.summary.balance.toFixed(2)}</p></GlassCard>
                 <GlassCard className="text-center"><h3 className="text-slate-500 font-bold text-sm uppercase">Total Receitas</h3><p className="text-3xl font-bold text-emerald-500 mt-1">R$ {financeData.summary.revenue.toFixed(2)}</p></GlassCard>
                 <GlassCard className="text-center"><h3 className="text-slate-500 font-bold text-sm uppercase">Total Despesas</h3><p className="text-3xl font-bold text-rose-500 mt-1">R$ {financeData.summary.expense.toFixed(2)}</p></GlassCard>
-            </div>
+            </div>}
 
             {isAdmin && (
                 <GlassCard className="border-orange-500/30">
