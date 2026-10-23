@@ -121,7 +121,7 @@ function TeamCard({ title, players, green = false }) {
   </div>;
 }
 
-export default function SorteioDashboard({ players, dates, isAdmin }) {
+export default function SorteioDashboard({ players, dates, canSaveTeams = false }) {
   const [step, setStep] = useState('selection');
   const [selected, setSelected] = useState([]);
   const [query, setQuery] = useState('');
@@ -209,7 +209,7 @@ export default function SorteioDashboard({ players, dates, isAdmin }) {
   };
 
   const saveTeams = async () => {
-    if (!teams || !isAdmin) return;
+    if (!teams || !canSaveTeams) return;
     setSaving(true);
     try {
       // O backend preserva o nome legado teamRed por compatibilidade. Na interface o segundo time é Verde.
@@ -341,10 +341,10 @@ export default function SorteioDashboard({ players, dates, isAdmin }) {
       {teams.reserves.length > 0 && <div className="rounded-3xl border border-amber-500/30 bg-amber-950/20 p-4 sm:p-5"><div className="flex items-center gap-2 mb-3"><Users className="w-5 h-5 text-amber-400"/><h4 className="font-black text-white">Reservas · {teams.reserves.length}</h4></div><div className="flex flex-wrap gap-2">{teams.reserves.map((player, index) => <span key={player.name} className="rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs font-bold text-slate-200">{index + 1}. {player.name}</span>)}</div></div>}
       <div className="grid sm:grid-cols-3 gap-2.5">
         <button onClick={share} className="rounded-2xl border border-slate-700 bg-slate-800 py-3.5 font-black text-white flex items-center justify-center gap-2"><Share2 className="w-5 h-5"/> Compartilhar</button>
-        {isAdmin && <button onClick={saveTeams} disabled={saving} className="rounded-2xl bg-emerald-500 py-3.5 font-black text-slate-950 flex items-center justify-center gap-2 disabled:opacity-50"><Save className="w-5 h-5"/> {saving ? 'Salvando...' : 'Salvar sorteio'}</button>}
+        {canSaveTeams && <button onClick={saveTeams} disabled={saving} className="rounded-2xl bg-emerald-500 py-3.5 font-black text-slate-950 flex items-center justify-center gap-2 disabled:opacity-50"><Save className="w-5 h-5"/> {saving ? 'Salvando...' : 'Salvar sorteio'}</button>}
         <button onClick={repeatDraw} className="rounded-2xl bg-white py-3.5 font-black text-black flex items-center justify-center gap-2"><RotateCcw className="w-5 h-5"/> Sortear novamente</button>
       </div>
-      {!isAdmin && <p className="text-xs text-slate-500 text-center">Somente o administrador pode salvar o sorteio no histórico do sistema.</p>}
+      {!canSaveTeams && <p className="text-xs text-slate-500 text-center">Seu perfil pode consultar e compartilhar o sorteio, mas não salvá-lo no sistema.</p>}
     </div>}
 
     {step === 'result' && !teams && drawnPlayers.length > 0 && <div className="space-y-4">
