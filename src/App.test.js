@@ -72,7 +72,7 @@ test('MEMBER abre o Mesário pelo menu sem receber acesso ao painel administrati
     expect(screen.getByRole('navigation', { name:'Menu principal' })).toHaveTextContent('Mesário');
     expect(screen.queryByRole('button', { name:'Abrir Administração' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name:'Administração', exact:true })).not.toBeInTheDocument();
-    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(global.fetch.mock.calls.filter(([, options]) => JSON.parse(options.body).action !== 'getAnalyticsPreference')).toHaveLength(1);
   } finally {
     global.fetch = previousFetch;
     window.localStorage.removeItem('cba_session_v1');
@@ -100,7 +100,7 @@ test('MEMBER abre o Sorteio sem acesso à Administração e pode selecionar atle
     expect(screen.getByRole('button',{name:/Atleta Dois/})).toBeInTheDocument();
     expect(screen.queryByRole('button',{name:'Administração',exact:true})).not.toBeInTheDocument();
     expect(screen.queryByRole('button',{name:'Abrir Administração'})).not.toBeInTheDocument();
-    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(global.fetch.mock.calls.filter(([, options]) => JSON.parse(options.body).action !== 'getAnalyticsPreference')).toHaveLength(1);
   } finally {
     global.fetch = previousFetch;
     window.localStorage.removeItem('cba_session_v1');
@@ -127,7 +127,7 @@ test('login entra pelo gateway e carrega os painéis com a sessão recebida', as
     fireEvent.change(screen.getByLabelText('Senha'), { target: { value: 'senha-de-teste' } });
     fireEvent.click(screen.getByRole('button', { name: 'Entrar no Portal' }));
     expect(await screen.findByText('Carregando dados na quadra...')).toBeInTheDocument();
-    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(global.fetch.mock.calls.filter(([, options]) => JSON.parse(options.body).action !== 'getAnalyticsPreference')).toHaveLength(2);
     expect(JSON.parse(window.localStorage.getItem('cba_session_v1')).user.token).toBe(token);
   } finally {
     global.fetch = previousFetch;
@@ -162,7 +162,7 @@ test('uma falha inicial oferece nova tentativa', async () => {
     render(<App />);
     expect(await screen.findByRole('alert')).toHaveTextContent('Não foi possível carregar o portal');
     fireEvent.click(screen.getByRole('button', { name: 'Tentar novamente' }));
-    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(global.fetch.mock.calls.filter(([, options]) => JSON.parse(options.body).action !== 'getAnalyticsPreference')).toHaveLength(2);
   } finally {
     global.fetch = previousFetch;
     window.localStorage.removeItem('cba_session_v1');
@@ -179,7 +179,7 @@ test('o painel de presença usa os dados iniciais sem repetir a consulta', async
   try {
     render(<App />);
     expect(await screen.findByText(/Visão do elenco em/)).toBeInTheDocument();
-    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(global.fetch.mock.calls.filter(([, options]) => JSON.parse(options.body).action !== 'getAnalyticsPreference')).toHaveLength(1);
   } finally {
     global.fetch = previousFetch;
     window.localStorage.removeItem('cba_session_v1');
@@ -214,7 +214,7 @@ test('Departamento Médico abre diretamente e preserva a restrição dos detalhe
     expect(screen.getByText('Detalhes médicos restritos. Status operacional disponível.')).toBeInTheDocument();
     expect(screen.queryByText('Entorse no Tornozelo Direito')).not.toBeInTheDocument();
     expect(container.querySelector('[data-dm-dashboard-v2]')).toBeNull();
-    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(global.fetch.mock.calls.filter(([, options]) => JSON.parse(options.body).action !== 'getAnalyticsPreference')).toHaveLength(2);
     fireEvent.click(screen.getByText('Outro Atleta'));
     expect(screen.getByText(/Por privacidade, você pode ver apenas o status operacional/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Dar alta' })).not.toBeInTheDocument();
@@ -379,7 +379,7 @@ test('Relatórios ADM abre diretamente com visão completa', async () => {
     expect(screen.getByLabelText('Temporada')).toHaveValue('2026');
     expect(screen.getByLabelText('Atleta')).toHaveValue('todos');
     expect(screen.getByText('Súmulas por data')).toBeInTheDocument();
-    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(global.fetch.mock.calls.filter(([, options]) => JSON.parse(options.body).action !== 'getAnalyticsPreference')).toHaveLength(1);
   } finally {
     global.fetch = previousFetch;
     window.localStorage.removeItem('cba_session_v1');
@@ -405,11 +405,11 @@ test('Início abre diretamente, sem ponte pelo DOM, e os atalhos mudam de aba', 
     expect(await screen.findByRole('heading', { name: 'Olá, Atleta' })).toBeInTheDocument();
     expect(container.querySelector('[data-cba-home-anchor]')).toBeNull();
     expect(container.querySelector('[data-portal-experience-v3]')).toBeNull();
-    expect(global.fetch.mock.calls.map(([, options]) => JSON.parse(options.body).action)).toEqual(['getInitialAppData', 'bootstrap']);
+    expect(global.fetch.mock.calls.map(([, options]) => JSON.parse(options.body).action).filter(action => action !== 'getAnalyticsPreference')).toEqual(['getInitialAppData', 'bootstrap']);
     fireEvent.click(screen.getByRole('button', { name: 'Abrir minha agenda' }));
     expect(screen.getByRole('heading', { name: 'Minha agenda' })).toBeInTheDocument();
     expect(screen.queryByTitle('Minha agenda')).not.toBeInTheDocument();
-    expect(global.fetch.mock.calls.map(([, options]) => JSON.parse(options.body).action)).toEqual(['getInitialAppData', 'bootstrap']);
+    expect(global.fetch.mock.calls.map(([, options]) => JSON.parse(options.body).action).filter(action => action !== 'getAnalyticsPreference')).toEqual(['getInitialAppData', 'bootstrap']);
     fireEvent.click(screen.getByRole('button', { name: 'Voltar ao Início' }));
     fireEvent.click(screen.getByRole('button', { name: 'Ver financeiro' }));
     expect(await screen.findByText('Situação Anual')).toBeInTheDocument();
@@ -451,13 +451,13 @@ test('Eventos abre a tela nova diretamente e confirma presença com resposta vis
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar participação' }));
     expect(await screen.findByRole('status')).toHaveTextContent('Sua presença foi confirmada.');
     expect(await screen.findByRole('button', { name: 'Desistir da participação' })).toBeInTheDocument();
-    expect(global.fetch.mock.calls.map(([, options]) => JSON.parse(options.body).action)).toEqual([
+    expect(global.fetch.mock.calls.map(([, options]) => JSON.parse(options.body).action).filter(action => action !== 'getAnalyticsPreference')).toEqual([
       'getInitialAppData', 'bootstrap', 'handleAttendanceUpdate', 'bootstrap'
     ]);
     fireEvent.click(screen.getByTitle('Jogos'));
     expect(await screen.findByText('Nenhum jogo agendado')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Calendário de jogos' })).toBeInTheDocument();
-    expect(global.fetch.mock.calls.map(([, options]) => JSON.parse(options.body).action)).toEqual([
+    expect(global.fetch.mock.calls.map(([, options]) => JSON.parse(options.body).action).filter(action => action !== 'getAnalyticsPreference')).toEqual([
       'getInitialAppData', 'bootstrap', 'handleAttendanceUpdate', 'bootstrap', 'bootstrap'
     ]);
   } finally {

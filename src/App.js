@@ -5,6 +5,7 @@ import { PortalInstallGuide, PortalUpdateNotice } from './PortalPwaExperience';
 import AthleteDashboard from './AthleteDashboard';
 import { InitialDataContext } from './InitialDataContext';
 import { gatewayPost } from './cbaApi';
+import { getDeviceCategory } from './usageDeviceCategory';
 import { 
     Activity, CalendarDays, BookOpen, DollarSign, Users, PartyPopper, BarChart, BellRing, 
     X, Menu, Copy, LogOut, RefreshCw, Trophy, Flame, MapPin, ChevronDown, CheckCircle, AlertCircle, ClipboardList, Minus, Award, Crown, Star,
@@ -871,6 +872,8 @@ export const HallDaFamaTab = ({ allPlayersData, dates }) => {
     );
 };
 
+const TABS_SET = new Set(['inicio','presenca','relatorios','atleta','mesario','financas','jogos','eventos','sorteio','dm','halldafama','estatuto','notificacoes']);
+
 // --- MAIN APP ---
 const MainApp = ({ user, onLogout, logoutPending, onProfileUpdated }) => {
     const [activeTab, setActiveTab] = useState(() => {
@@ -885,6 +888,9 @@ const MainApp = ({ user, onLogout, logoutPending, onProfileUpdated }) => {
     const [openProfile, setOpenProfile] = useState(false);
     const mainScrollRef = useRef(null);
     const [adminOpen, setAdminOpen] = useState(false);
+    const [privacyOpen,setPrivacyOpen]=useState(false);
+    const [analyticsPreference,setAnalyticsPreference]=useState(undefined);
+    const [privacySaving,setPrivacySaving]=useState(false);
     const [refreshTrigger, setRefreshTrigger] = useState(0);
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
     const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
@@ -896,6 +902,51 @@ const MainApp = ({ user, onLogout, logoutPending, onProfileUpdated }) => {
     );
     
     const isAdmin = user?.role?.toUpperCase() === 'ADMIN';
+
+    useEffect(() => {
+        let live=true;
+        api.post({action:'getAnalyticsPreference'}).then(result => {
+            if (live) setAnalyticsPreference(result.analyticsOptIn);
+        }).catch(() => {
+            if (live) setAnalyticsPreference(false);
+        });
+        return () => {live=false;};
+    }, [user?.id]);
+
+    const updateAnalyticsConsent=async enabled => {
+        if (privacySaving) return;
+        setPrivacySaving(true);
+        try {
+            const result=await api.post({action:'setAnalyticsPreference',enabled});
+            setAnalyticsPreference(result.analyticsOptIn);
+            setPrivacyOpen(false);
+        } catch {
+            window.alert('Não foi possível salvar sua escolha. Tente novamente.');
+        } finally {setPrivacySaving(false);}
+    };
+
+    // Presence pings are only sent while the page is visible and recently interacted with.
+    // A session token being unexpired is NOT equivalent to a connected person.
+    useEffect(() => {
+        let lastInteraction=Date.now();
+        const markActivity=()=>{lastInteraction=Date.now();};
+        const ping=()=>{
+            if (document.visibilityState==='visible' && Date.now()-lastInteraction<120000) {
+                api.post({action:'presencePing'}).catch(()=>{});
+            }
+        };
+        ['pointerdown','keydown','touchstart'].forEach(e=>window.addEventListener(e,markActivity,{passive:true}));
+        const interval=window.setInterval(ping,60000);
+        return ()=>{
+            window.clearInterval(interval);
+            ['pointerdown','keydown','touchstart'].forEach(e=>window.removeEventListener(e,markActivity));
+        };
+    }, [user?.id]);
+
+    useEffect(() => {
+        if (analyticsPreference!==true || !TABS_SET.has(activeTab)) return;
+        api.post({action:'recordUsageEvent',tab:activeTab}).catch(()=>{});
+    }, [activeTab,analyticsPreference]);
     
     const TABS = useMemo(() => isAdmin ? ['inicio', 'presenca', 'relatorios', 'atleta', 'mesario', 'financas', 'jogos', 'eventos', 'sorteio', 'dm', 'halldafama', 'estatuto', 'notificacoes'] : ['inicio', 'presenca', 'relatorios', 'atleta', 'mesario', 'financas', 'jogos', 'eventos', 'sorteio', 'dm', 'estatuto'], [isAdmin]);
 
@@ -1045,6 +1096,10 @@ const MainApp = ({ user, onLogout, logoutPending, onProfileUpdated }) => {
                     </div>;
                 })}
                 <div className="mt-auto border-t border-slate-700/60 pt-3">
+                    <button type="button" onClick={() => { setIsSidebarOpen(false); setPrivacyOpen(true); }} className="cba-premium-sidebar__item">
+                        <Eye className="h-5 w-5 shrink-0" aria-hidden="true"/>
+                        <span className="cba-premium-sidebar__label">Privacidade e dados</span>
+                    </button>
                     <button type="button" onClick={() => { setIsSidebarOpen(false); setInstallGuideOpen(true); }} className="cba-premium-sidebar__item" aria-label="Instalar Portal CBA">
                         <Download className="h-5 w-5 shrink-0" aria-hidden="true"/>
                         <span className="cba-premium-sidebar__label">Instalar Portal CBA</span>
@@ -1067,6 +1122,17 @@ const MainApp = ({ user, onLogout, logoutPending, onProfileUpdated }) => {
                         <button onClick={() => onLogout()} disabled={logoutPending} className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-rose-500 font-bold text-sm rounded-xl hover:bg-rose-50 dark:hover:bg-rose-900/20 border border-slate-200 dark:border-slate-700 flex items-center gap-2 disabled:opacity-50"><LogOut className="w-4 h-4 hidden sm:block"/> {logoutPending ? 'Saindo...' : 'Sair'}</button>
                     </div>
                 </header>
+                {(privacyOpen || analyticsPreference === null) && (
+                    <div role="region" aria-label="Preferências de dados" className="border-b border-slate-700 bg-slate-900 px-4 py-3 text-sm text-slate-100">
+                        <p className="font-bold">Dados de uso do CBA</p>
+                        <p className="mt-1 text-xs text-slate-300">Registros de login e sessão são usados para segurança e funcionamento. Você pode autorizar, de forma opcional, contagens de visitas às abas para melhorar o portal. Não coletamos GPS, conteúdo digitado, IP bruto nem identificadores exclusivos do aparelho; seus dados não serão utilizados automaticamente para marketing.</p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                            <button type="button" disabled={privacySaving} onClick={()=>updateAnalyticsConsent(true)} className="rounded-lg bg-emerald-600 px-3 py-2 font-bold text-white">Autorizar métricas opcionais</button>
+                            <button type="button" disabled={privacySaving} onClick={()=>updateAnalyticsConsent(false)} className="rounded-lg bg-slate-700 px-3 py-2 font-bold text-white">{analyticsPreference === true ? 'Revogar autorização' : 'Não autorizar'}</button>
+                            {analyticsPreference !== null && <button type="button" onClick={()=>setPrivacyOpen(false)} className="rounded-lg px-3 py-2 font-bold text-slate-300">Fechar</button>}
+                        </div>
+                    </div>
+                )}
                 <main ref={mainScrollRef} className="flex-1 min-w-0 overflow-y-auto hide-scrollbar p-4 md:p-8"><div data-portal-content="true" className="max-w-7xl mx-auto min-h-full flex flex-col pb-24 md:pb-4"><div className="flex-1">{dataError && initialData && <div role="alert" className="mb-4 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">Não foi possível atualizar os dados. <button type="button" onClick={refetch} className="font-black underline">Tentar novamente</button></div>}{renderContent()}</div><footer className="mt-10 pt-4 border-t border-slate-200/30 dark:border-slate-700/40 text-center text-[10px] tracking-wide text-slate-500 dark:text-slate-400" aria-label={`Versão do Portal CBA ${SITE_VERSION}`}>Portal CBA · v{SITE_VERSION}</footer></div></main>
                 <AnimatePresence>
                     {isPasswordModalOpen && (
@@ -1170,7 +1236,7 @@ function AppInner() {
         setAuth({ status: 'loading', user: null, error: null });
         const formData = new FormData(e.currentTarget);
         try {
-            const data = await api.post({ action: 'loginUser', email: formData.get('email'), password: formData.get('password') });
+            const data = await api.post({ action: 'loginUser', email: formData.get('email'), password: formData.get('password'), device:getDeviceCategory() });
             if (data.status === 'approved') {
                 persistSession(data);
                 setAuth({ status: 'authenticated', user: data, error: null });
