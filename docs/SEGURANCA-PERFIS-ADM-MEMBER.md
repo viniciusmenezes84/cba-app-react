@@ -26,8 +26,9 @@
 ## Correções desta proposta
 - `cba-api`: lista esportiva filtrada por `actor.athlete_id`; dados de caixa global fora da resposta MEMBER; datas históricas vinculadas ao próprio atleta; sessão inclui `athleteId`; confirmação alheia de próximo jogo removida.
 - `cba-portal`: MEMBER só recebe seu cadastro, seus pagamentos, seu hall individual e seus dados de confirmação; sem `roundMatches` detalhadas, informações de saúde coletivas, caixa geral ou dados pessoais de outros jogadores.
-- `React`: visão geral de Finanças exclusiva de ADM; relatório e atleta fixos no `athleteId` quando MEMBER; home sem rankings gerais para MEMBER.
-- Testes para API com tentativa de forjar a role e atleta da requisição; testes de restrições de relatório e da visão ADMIN.
+- `React`: visão geral de Finanças exclusiva de ADM; relatório, atleta e presença fixos no `athleteId` quando MEMBER; home sem rankings gerais para MEMBER. O menu MEMBER não expõe Sorteio, Hall da Fama coletivo nem Mesário; tentativas de restaurar abas antigas são bloqueadas.
+- `cba-api/getGames` e `getEvents`: listas de confirmados/inscritos de MEMBER filtradas por vínculo de `athlete_id` com jogo/evento, sem confiar na coincidência de nomes; ADM continua vendo todas as confirmações.
+- Testes para API com tentativa de forjar a role e atleta da requisição; testes de restrições de relatórios, presença e rotas legadas Jogos/Eventos, além da visão completa do ADMIN.
 
 ## Homologação obrigatória antes do deploy
 1. Criar ou habilitar **uma conta de testes MEMBER** vinculada a atleta de teste, **após autorização do proprietário**. Não converter ADM reais em MEMBER.
