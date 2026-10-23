@@ -22,6 +22,8 @@ const sessions = new Map();
 const attemptedEmails = new Map();
 const savedSessions = [];
 const auditEvents = [];
+const savedDraws = [];
+const savedDrawMembers = [];
 const fakeDb = {
   from(table) {
     const filters = {};
@@ -33,6 +35,10 @@ const fakeDb = {
       ilike(key, value) { filters[key] = value; return query; },
       limit() { return query; },
       order() { return Promise.resolve({ data: [], error: null }); },
+      single() {
+        if (table === 'team_draws' && mutation === 'insert') return Promise.resolve({data:{id:'test-draw-uuid'},error:null});
+        throw new Error('Unexpected single in ' + table);
+      },
       async maybeSingle() {
         if (table === 'accounts') {
           const found = account && (filters.email === account.email || filters.id === account.id);
@@ -42,14 +48,23 @@ const fakeDb = {
         if (table === 'app_sessions') return { data: sessions.get(filters.token_hash) || null, error: null };
         throw new Error(`Unexpected lookup in ${table}`);
       },
-      async insert(row) {
+      insert(row) {
+        if (table === 'team_draws') {
+          savedDraws.push(row);
+          mutation = 'insert';
+          return query;
+        }
+        if (table === 'team_draw_members') {
+          savedDrawMembers.push(...row);
+          return Promise.resolve({error:null});
+        }
         if (table === 'audit_log') {
           auditEvents.push(row);
-          return { error: null };
+          return Promise.resolve({ error: null });
         }
         assert.equal(table, 'app_sessions');
         sessions.set(row.token_hash, row);
-        return { error: null };
+        return Promise.resolve({ error: null });
       },
       async upsert(row) {
         assert.equal(table, 'login_attempts');
@@ -62,7 +77,11 @@ const fakeDb = {
         if (table === 'app_sessions' && filters.token_hash && mutation === 'delete') sessions.delete(filters.token_hash);
         if (table === 'login_attempts' && filters.email_key) attemptedEmails.delete(filters.email_key);
         if (table === 'athletes' && filters.name) {
-          const athletes = new Map([['Teste', '00000000-0000-4000-a000-000000000001'], ['Pessoa Dois', '00000000-0000-4000-a000-000000000002']]);
+          const athletes = new Map([
+            ['Teste', '00000000-0000-4000-a000-000000000001'],
+            ['Pessoa Dois', '00000000-0000-4000-a000-000000000002'],
+            ...Array.from({length:10}, (_,i) => ['Jogador '+(i+1), '00000000-0000-4000-a000-'+String(i+3).padStart(12,'0')])
+          ]);
           const athleteId = athletes.get(filters.name);
           return Promise.resolve({data: athleteId ? [{id:athleteId,name:filters.name}] : [],error:null}).then(resolve,reject);
         }
@@ -199,7 +218,30 @@ const invoke = async (action, data) => {
   assert.equal(savedSessions.length, 1);
   assert.equal(savedSessions[0].p_session_key, '1792765000000');
   assert.ok(auditEvents.some(event => event.actor_account_id === account.id && event.action === 'save_match_stats'));
-  for (const adminAction of ['saveTeams', 'getMatchStats', 'clearCache']) {
+  const black = ['Jogador 1','Jogador 2','Jogador 3','Jogador 4','Jogador 5'];
+  const green = ['Jogador 6','Jogador 7','Jogador 8','Jogador 9','Jogador 10'];
+  const savedDraw = await invoke('saveTeams', {
+    token:valid.body.token,role:'ADMIN', // um parâmetro de role não promove a sessão
+    teamBlack:black.join(','),teamRed:green.join(',')
+  });
+  assert.equal(savedDraw.status, 200);
+  assert.equal(savedDraw.body.result, 'success');
+  assert.equal(savedDraws.length, 1);
+  assert.equal(savedDraws[0].created_by, account.id);
+  assert.equal(savedDrawMembers.length, 10);
+  assert.deepEqual(savedDrawMembers.map(m=>m.team), [
+    'black','black','black','black','black','red','red','red','red','red'
+  ]);
+  assert.ok(auditEvents.some(event => event.actor_account_id === account.id && event.action === 'save_teams'));
+
+  const invalidDraw = await invoke('saveTeams', {
+    token:valid.body.token,teamBlack:black.slice(0,4),teamRed:green
+  });
+  assert.equal(invalidDraw.status, 400);
+  assert.equal(invalidDraw.body.code,'VALIDATION_ERROR');
+  assert.equal(savedDraws.length, 1, 'Não gravar sorteios inválidos');
+
+  for (const adminAction of ['getMatchStats', 'clearCache', 'sendFinanceReports']) {
     const denied = await invoke(adminAction, {token:valid.body.token,role:'ADMIN'});
     assert.equal(denied.status, 403, adminAction + ' não pode ser executado por MEMBER');
     assert.equal(denied.body.code, 'FORBIDDEN');
