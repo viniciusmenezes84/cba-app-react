@@ -11,7 +11,7 @@ test('filtros de temporada e atleta atualizam resumo, ranking e súmulas sem nov
     dailyStats: { '2025-03-02': { pts2: 1 }, '2026-04-05': { pts2: 3, reb: 2 } }
   }] } } };
   try {
-    render(<ReportsDashboard data={data} />);
+    render(<ReportsDashboard data={data} isAdmin />);
     expect(screen.getByRole('heading', { name: 'Central de Relatórios 2026' })).toBeInTheDocument();
     expect(screen.getByText('Súmulas por data')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Temporada'), { target: { value: '2025' } });
