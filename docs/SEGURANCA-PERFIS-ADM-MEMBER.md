@@ -41,3 +41,19 @@
 8. Reautenticar perfis MEMBER com sessões antigas, se existirem, para receber `athleteId` no payload de login.
 
 **Fora do escopo deste PR:** alteração do schema/RLS em produção, criação de contas e migração de registros.
+
+## Aditivo — Painéis esportivos compartilhados (23/10/2026)
+**Este aditivo substitui as restrições de visualização esportiva MEMBER descritas acima para as três abas listadas.**
+
+| Recurso | ADMIN | MEMBER |
+| --- | --- | --- |
+| Início / CBA Sports Center, cards, recordes, rankings e temporadas | Visualização completa | **Mesma visualização** |
+| Presença, cards, quórum, temporadas e comparativos coletivos | Visualização completa | **Mesma visualização** |
+| Relatórios esportivos, rankings, dados por data e seleção de qualquer atleta/temporada | Visualização completa | **Mesma visualização, sem exportação** |
+| Exportações de relatórios esportivos em PDF (inclusive o executivo no Início) | Permitidas mediante autorização | **Bloqueadas na interface** |
+| Finanças, caixa, receitas, despesas e cobranças de terceiros | Integral | **Somente mensalidades e histórico próprios** |
+| Meu CBA / edição do cadastro de terceiros / área administrativa / Mesário | Conforme perfil | **Somente Meu CBA pessoal** |
+
+A API `getInitialAppData` compartilha apenas campos esportivos explicitamente autorizados dos atletas, sem liberar resumo financeiro global. No `cba-portal/bootstrap`, partidas e súmulas fornecem somente informações esportivas usadas pelos painéis; escalações detalhadas continuam restritas à administração. Confirmações individuais de terceiros não são expostas, apenas a contagem agregada na tela inicial. O indicador agregado de atletas em acompanhamento pode aparecer no Início sem revelar prontuários.
+
+A edição de dados alheios, a emissão auditada de PDFs e os endpoints administrativos continuam exigindo ADMIN no servidor. A supressão do botão PDF no frontend atende à permissão de uso do portal, mas dados esportivos exibidos em tela continuam passíveis de captura manual (prints/cópias). A revisão das políticas RLS e a homologação com conta MEMBER real continuam pendentes e independentes desta alteração.
