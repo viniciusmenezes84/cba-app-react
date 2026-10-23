@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SITE_VERSION } from './siteVersion';
+import { PortalInstallGuide, PortalUpdateNotice } from './PortalPwaExperience';
 import AthleteDashboard from './AthleteDashboard';
 import { InitialDataContext } from './InitialDataContext';
 import { gatewayPost } from './cbaApi';
 import { 
     Activity, CalendarDays, BookOpen, DollarSign, Users, PartyPopper, BarChart, BellRing, 
     X, Menu, Copy, LogOut, RefreshCw, Trophy, Flame, MapPin, ChevronDown, CheckCircle, AlertCircle, ClipboardList, Minus, Award, Crown, Star,
-    Stethoscope, KeyRound, Home, Eye, EyeOff
+    Stethoscope, KeyRound, Home, Eye, EyeOff, Download
 } from 'lucide-react';
 const AdminDashboardBridge = lazy(() => import('./AdminDashboardBridge'));
 const PresenceDashboardBridge = lazy(() => import('./PresenceDashboardBridge'));
@@ -879,6 +880,7 @@ const MainApp = ({ user, onLogout, logoutPending, onProfileUpdated }) => {
         } catch { return 'inicio'; }
     });
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [installGuideOpen, setInstallGuideOpen] = useState(false);
     const [courtMode, setCourtMode] = useState(false);
     const [openProfile, setOpenProfile] = useState(false);
     const mainScrollRef = useRef(null);
@@ -1037,6 +1039,12 @@ const MainApp = ({ user, onLogout, logoutPending, onProfileUpdated }) => {
                         })}
                     </div>;
                 })}
+                <div className="mt-auto border-t border-slate-700/60 pt-3">
+                    <button type="button" onClick={() => { setIsSidebarOpen(false); setInstallGuideOpen(true); }} className="cba-premium-sidebar__item" aria-label="Instalar Portal CBA">
+                        <Download className="h-5 w-5 shrink-0" aria-hidden="true"/>
+                        <span className="cba-premium-sidebar__label">Instalar Portal CBA</span>
+                    </button>
+                </div>
             </nav>
 
             <div className="flex-1 flex flex-col h-full overflow-hidden w-full relative">
@@ -1100,6 +1108,7 @@ const MainApp = ({ user, onLogout, logoutPending, onProfileUpdated }) => {
                     </button>
                 </div>
             </div>
+            {installGuideOpen && <PortalInstallGuide onClose={() => setInstallGuideOpen(false)} />}
             {initialData && <ActiveBridges tab={activeTab} />}
             {isAdmin && adminOpen && <Suspense fallback={null}><AdminDashboardBridge open onClose={() => setAdminOpen(false)} /></Suspense>}
         </div>
@@ -1227,6 +1236,7 @@ function AppInner() {
     return (
         <ThemeProvider>
             {auth.status === 'authenticated' ? <MainApp user={auth.user} onProfileUpdated={handleProfileUpdated} onLogout={handleLogout} logoutPending={logoutPending} /> : <LoginScreen onLogin={handleLogin} isLoading={auth.status === 'loading'} error={auth.error} />}
+            <PortalUpdateNotice />
         </ThemeProvider>
     );
 }

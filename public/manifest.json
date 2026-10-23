@@ -1,5 +1,8 @@
 {
+  "id": "/",
   "short_name": "Portal CBA",
+  "lang": "pt-BR",
+  "description": "Jogos, presenças, estatísticas e informações do CBA.",
   "name": "Portal do CBA - Basquete dos Aposentados",
   "icons": [
     {
@@ -13,10 +16,10 @@
       "sizes": "512x512"
     }
   ],
-  "start_url": ".",
+  "start_url": "/",
   "display": "standalone",
-  "theme_color": "#111827",
-  "background_color": "#111827",
+  "theme_color": "#0f172a",
+  "background_color": "#0f172a",
   "scope": "/"
 }
    
