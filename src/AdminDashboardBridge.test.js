@@ -52,12 +52,14 @@ test('SUPER_ADMIN proprietário vê monitoramento, ADM comum não vê a área ex
     }));
     const {unmount}=render(<AdminDashboardBridge open />);
     expect(await screen.findByRole('button',{name:'Monitoramento de acessos'})).toBeInTheDocument();
+    expect(screen.getByRole('button',{name:'Inteligência CBA'})).toBeInTheDocument();
     unmount();
     window.localStorage.setItem('cba_session_v1', JSON.stringify({
       user:{email:'soulucaspportugal1985@gmail.com',token:'sessao-admin',role:'ADMIN'}
     }));
     render(<AdminDashboardBridge open />);
     expect(screen.queryByRole('button',{name:'Monitoramento de acessos'})).not.toBeInTheDocument();
+    expect(screen.queryByRole('button',{name:'Inteligência CBA'})).not.toBeInTheDocument();
   } finally {
     global.fetch=previousFetch;
     window.localStorage.removeItem('cba_session_v1');
