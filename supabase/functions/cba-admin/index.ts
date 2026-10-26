@@ -133,6 +133,140 @@ Deno.serve(async (req: Request) => {
       case 'bootstrap':
         return json(await loadBootstrap());
 
+      case 'intelligenceDashboard': {
+        // Defense in depth: aggregates (and athlete rankings) are exclusively SUPER_ADMIN data.
+        // Never expose raw contact info, medical notes, geolocation, session hashes or marketing lists.
+        if (!isSuperAdmin) return fail('Inteligência CBA disponível somente para SUPER_ADMIN.', 'FORBIDDEN', 403);
+        const year = Number(p.year ?? Number(today().slice(0,4)));
+        if (!Number.isInteger(year) || year < 2020 || year > 2100) return fail('Ano inválido.', 'VALIDATION_ERROR');
+        const start = `${year}-01-01`, end = `${year}-12-31`;
+        const fetchRows = async (table: string, fields: string, options: {dateField?:string, since?:string, until?:string, cap?:number} = {}) => {
+          const cap = options.cap ?? 10000, batch = 500;
+          const all: any[] = [];
+          for(let offset = 0; offset < cap; offset += batch) {
+            let request = sb.from(table).select(fields);
+            if (options.dateField && options.since) request = request.gte(options.dateField, options.since);
+            if (options.dateField && options.until) request = request.lte(options.dateField, options.until);
+            // A stable order prevents missing/duplicate rows during pagination.
+            const orderField = ({
+              attendance_records:'attendance_date',member_dues:'athlete_id',
+              finance_entries:'occurred_on',match_player_stats:'match_id',
+              daily_stats:'stat_date',cba_access_history:'started_at',
+              cba_usage_events:'created_at'
+            } as Record<string,string>)[table] || 'id';
+            const secondOrder=({
+              attendance_records:'athlete_id',member_dues:'period_id',match_player_stats:'athlete_id',
+              finance_entries:'id',daily_stats:'athlete_id',cba_access_history:'id',cba_usage_events:'id'
+            } as Record<string,string>)[table];
+            request=request.order(orderField,{ascending:true});
+            if(secondOrder) request=request.order(secondOrder,{ascending:true});
+            const {data,error} = await request.range(offset,offset+batch-1);
+            if(error) throw error;
+            all.push(...(data || []));
+            if ((data || []).length < batch) return {rows:all,truncated:false};
+          }
+          return {rows:all,truncated:true};
+        };
+        const [
+          athletesQ,accountsQ,attendanceQ,roundsQ,matchStatsQ,
+          duesQ,periodsQ,financeQ,accessQ,usageQ,preferenceQ
+        ] = await Promise.all([
+          sb.from('athletes').select('id,name,active,joined_on'),
+          sb.from('accounts').select('id,athlete_id,status,role'),
+          fetchRows('attendance_records','athlete_id,attendance_date,status,source',{dateField:'attendance_date',since:start,until:end}),
+          sb.from('round_matches').select('id,match_date,black_score,green_score,winner').gte('match_date',start).lte('match_date',end).order('match_date',{ascending:true}).limit(500),
+          fetchRows('match_player_stats','match_id,athlete_id,pts2,pts3,reb,ast,blk',{cap:10000}),
+          fetchRows('member_dues','athlete_id,period_id,amount_due,amount_paid,status',{cap:10000}),
+          sb.from('finance_periods').select('id,year,month').eq('year',year).limit(200),
+          fetchRows('finance_entries','occurred_on,kind,amount,category',{dateField:'occurred_on',since:start,until:end}),
+          fetchRows('cba_access_history','account_id,started_at,device_type,app_mode',{dateField:'started_at',since:start+'T00:00:00Z',until:end+'T23:59:59.999Z'}),
+          fetchRows('cba_usage_events','account_id,tab_key,created_at',{dateField:'created_at',since:start+'T00:00:00Z',until:end+'T23:59:59.999Z'}),
+          sb.from('cba_usage_preferences').select('account_id,analytics_opt_in').limit(500)
+        ]);
+        for(const query of [athletesQ,accountsQ,roundsQ,periodsQ,preferenceQ]) if(query.error) throw query.error;
+        const athletes:any[]=athletesQ.data||[], accounts:any[]=accountsQ.data||[];
+        const attendance = attendanceQ.rows, rounds:any[]=roundsQ.data||[], matchStats=matchStatsQ.rows;
+        const months = Array.from({length:12},(_,i)=>`${year}-${String(i+1).padStart(2,'0')}`);
+        const athleteNames=new Map(athletes.map((a:any)=>[a.id,String(a.name||'Atleta')]));
+        const activeAthletes=athletes.filter((a:any)=>a.active!==false);
+        const approved=accounts.filter((a:any)=>a.status==='approved');
+        const approvedActive=approved.filter((a:any)=>activeAthletes.some((ath:any)=>ath.id===a.athlete_id));
+        const attendanceByDate=new Map<string,{date:string,present:number,registered:number}>();
+        const athleteAttend=new Map<string,{present:number,registered:number}>();
+        let legacy=0;
+        for(const r of attendance){
+          const date=String(r.attendance_date || '').slice(0,10);
+          if(!date)continue;
+          if(!attendanceByDate.has(date))attendanceByDate.set(date,{date,present:0,registered:0});
+          const daily=attendanceByDate.get(date)!;daily.registered++;
+          if(r.source==='legacy_sheet')legacy++;
+          if(!athleteAttend.has(r.athlete_id)) athleteAttend.set(r.athlete_id,{present:0,registered:0});
+          const item=athleteAttend.get(r.athlete_id)!;item.registered++;
+          if(r.status==='present') {daily.present++;item.present++;}
+        }
+        const dates=[...attendanceByDate.values()].sort((a,b)=>a.date.localeCompare(b.date));
+        const recent=dates.slice(-4);
+        const recentAvg=recent.length>=4 ? Math.round(recent.reduce((t,d)=>t+d.present,0)/recent.length) : null;
+        const leaderboard=[...athleteAttend.entries()].map(([id,row])=>({
+          name:athleteNames.get(id)||'Atleta',present:row.present,registered:row.registered,
+          rate:row.registered ? Math.round(row.present/row.registered*100):0
+        })).filter(x=>x.registered>=3).sort((a,b)=>b.present-a.present||b.rate-a.rate).slice(0,8);
+        const byMonth=new Map(months.map(month=>[month,{month,dates:0,present:0}]));
+        for(const d of dates){
+          const key=d.date.slice(0,7),val=byMonth.get(key);
+          if(val){val.dates++;val.present+=d.present;}
+        }
+        const matchIds = new Set(rounds.map((r:any)=>r.id));
+        const perAthlete=new Map<string,{games:number,points:number,rebounds:number,assists:number,blocks:number}>();
+        for(const row of matchStats){
+          if(!matchIds.has(row.match_id))continue;
+          if(!perAthlete.has(row.athlete_id))perAthlete.set(row.athlete_id,{games:0,points:0,rebounds:0,assists:0,blocks:0});
+          const a=perAthlete.get(row.athlete_id)!;
+          a.games++;
+          a.points+=2*num(row.pts2)+3*num(row.pts3);
+          a.rebounds+=num(row.reb);a.assists+=num(row.ast);a.blocks+=num(row.blk);
+        }
+        const performers=[...perAthlete.entries()].map(([id,value])=>({
+          name:athleteNames.get(id)||'Atleta',...value,
+          avgPoints:value.games?Number((value.points/value.games).toFixed(1)):0
+        })).sort((a,b)=>b.avgPoints-a.avgPoints||b.points-a.points).slice(0,8);
+        const periods = new Set((periodsQ.data||[]).map((r:any)=>r.id));
+        const filteredDues=duesQ.rows.filter((r:any)=>periods.has(r.period_id));
+        const due=filteredDues.reduce((s:number,r:any)=>s+num(r.amount_due),0);
+        const paid=filteredDues.reduce((s:number,r:any)=>s+num(r.amount_paid),0);
+        const overdue=filteredDues.filter((r:any)=>r.status==='pending'||r.status==='partial').length;
+        const monthFinance=new Map(months.map(month=>[month,{month,revenue:0,expense:0}]));
+        let revenue=0,expense=0;
+        for(const row of financeQ.rows){
+          const amount=num(row.amount);
+          if(row.kind==='revenue'){revenue+=amount;const b=monthFinance.get(String(row.occurred_on).slice(0,7));if(b)b.revenue+=amount;}
+          if(row.kind==='expense'){expense+=amount;const b=monthFinance.get(String(row.occurred_on).slice(0,7));if(b)b.expense+=amount;}
+        }
+        const sessions=accessQ.rows,usage=usageQ.rows;
+        const deviceCounts:Record<string,number>={},tabCounts:Record<string,number>={};
+        for(const r of sessions)deviceCounts[r.device_type||'indefinido']=(deviceCounts[r.device_type||'indefinido']||0)+1;
+        for(const r of usage)tabCounts[r.tab_key||'indefinido']=(tabCounts[r.tab_key||'indefinido']||0)+1;
+        const activeDigitally=new Set(sessions.map((s:any)=>s.account_id)).size;
+        const consented=(preferenceQ.data||[]).filter((r:any)=>r.analytics_opt_in===true).length;
+        const incomplete=[attendanceQ,matchStatsQ,duesQ,financeQ,accessQ,usageQ].some(q=>q.truncated) || rounds.length>=500;
+        return json({result:'success',data:{
+          year,generatedAt:nowIso(),truncated:incomplete,
+          engagement:{activeAthletes:activeAthletes.length,approvedAccounts:approved.length,
+            onboardedActiveAthletes:approvedActive.length,sessions:sessions.length,distinctLoginUsers:activeDigitally,
+            deviceCounts,tabCounts,consentedUsers:consented,usageEvents:usage.length},
+          attendance:{records:attendance.length,legacyRecords:legacy,dates:dates.length,
+            totalPresent:dates.reduce((s,d)=>s+d.present,0),recentEstimate:recentAvg,
+            recentCount:recent.length,recentDates:dates.slice(-12),monthly:[...byMonth.values()],
+            leaderboard},
+          sports:{matches:rounds.length,matchDays:new Set(rounds.map((r:any)=>r.match_date)).size,
+            statAthletes:perAthlete.size,scorePoints:rounds.reduce((s:number,r:any)=>s+num(r.black_score)+num(r.green_score),0),
+            performers,coverageNote:rounds.length<8?'Amostra limitada: são necessárias mais súmulas para tendências confiáveis.':null},
+          finance:{due,paid,dues:filteredDues.length,overdue,receipts:revenue,expenses:expense,
+            ledgerBalance:revenue-expense,monthly:[...monthFinance.values()],
+            note:'Mensalidades e lançamentos financeiros são fontes distintas e não devem ser somados.'}
+        }});
+      }
+
       case 'accessMonitoring': {
         // A autorização usa papel e identidade real consultados no servidor.
         if (!isSuperAdmin) return fail('Monitoramento reservado ao SUPER_ADMIN.','FORBIDDEN',403);

@@ -34,7 +34,7 @@
     "build": "react-scripts build",
     "pretest": "node scripts/build-tailwind.js",
     "test": "react-scripts test",
-    "test:backend": "node scripts/test-cba-api-auth.cjs",
+    "test:backend": "node scripts/test-cba-api-auth.cjs && node scripts/test-cba-admin-intelligence.cjs",
     "eject": "react-scripts eject",
     "test:profile": "node scripts/test-my-profile.cjs",
     "test:photo": "node scripts/test-profile-photo.cjs"
