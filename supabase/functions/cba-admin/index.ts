@@ -154,7 +154,13 @@ Deno.serve(async (req: Request) => {
               daily_stats:'stat_date',cba_access_history:'started_at',
               cba_usage_events:'created_at'
             } as Record<string,string>)[table] || 'id';
-            const {data,error} = await request.order(orderField,{ascending:true}).range(offset,offset+batch-1);
+            const secondOrder=({
+              attendance_records:'athlete_id',member_dues:'period_id',match_player_stats:'athlete_id',
+              finance_entries:'id',daily_stats:'athlete_id',cba_access_history:'id',cba_usage_events:'id'
+            } as Record<string,string>)[table];
+            request=request.order(orderField,{ascending:true});
+            if(secondOrder) request=request.order(secondOrder,{ascending:true});
+            const {data,error} = await request.range(offset,offset+batch-1);
             if(error) throw error;
             all.push(...(data || []));
             if ((data || []).length < batch) return {rows:all,truncated:false};
@@ -173,8 +179,8 @@ Deno.serve(async (req: Request) => {
           fetchRows('member_dues','athlete_id,period_id,amount_due,amount_paid,status',{cap:10000}),
           sb.from('finance_periods').select('id,year,month').eq('year',year).limit(200),
           fetchRows('finance_entries','occurred_on,kind,amount,category',{dateField:'occurred_on',since:start,until:end}),
-          fetchRows('cba_access_history','account_id,started_at,device_type,app_mode',{dateField:'started_at',since:start,until:end}),
-          fetchRows('cba_usage_events','account_id,tab_key,created_at',{dateField:'created_at',since:start,until:end}),
+          fetchRows('cba_access_history','account_id,started_at,device_type,app_mode',{dateField:'started_at',since:start+'T00:00:00Z',until:end+'T23:59:59.999Z'}),
+          fetchRows('cba_usage_events','account_id,tab_key,created_at',{dateField:'created_at',since:start+'T00:00:00Z',until:end+'T23:59:59.999Z'}),
           sb.from('cba_usage_preferences').select('account_id,analytics_opt_in').limit(500)
         ]);
         for(const query of [athletesQ,accountsQ,roundsQ,periodsQ,preferenceQ]) if(query.error) throw query.error;
