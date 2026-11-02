@@ -82,7 +82,7 @@ export const portalPost = (action, payload, options) => callFunction('cba-portal
 export const medicalPost = (action, payload, options) => callFunction('cba-medical', action, payload, options);
 
 // XHR exposes actual upload progress; the server still validates the session and image.
-export function uploadProfilePhoto(imageBase64, { onProgress, signal } = {}) {
+function uploadPhotoRequest(action, imageBase64, { onProgress, signal, athleteId } = {}) {
   return new Promise((resolve, reject) => {
     const token = readSession().token;
     if (!token) { reject(new CbaApiError('Sessão não encontrada. Entre novamente no portal.', 401, 'UNAUTHORIZED')); return; }
@@ -104,6 +104,15 @@ export function uploadProfilePhoto(imageBase64, { onProgress, signal } = {}) {
     if (signal?.aborted) { finish(new CbaApiError('Envio cancelado.', 0, 'ABORTED')); return; }
     signal?.addEventListener('abort', abort, { once: true });
     onProgress?.(0);
-    xhr.send(JSON.stringify({ action: 'uploadMyPhoto', token, imageBase64 }));
+    xhr.send(JSON.stringify({ action, token, imageBase64, ...(athleteId ? { athleteId } : {}) }));
   });
+}
+
+// Administrative upload uses the same progress handling and server-side JPEG verification.
+export function uploadProfilePhoto(imageBase64, options = {}) {
+  return uploadPhotoRequest('uploadMyPhoto', imageBase64, options);
+}
+export function uploadAthletePhoto(athleteId, imageBase64, options = {}) {
+  if (!athleteId) return Promise.reject(new CbaApiError('Cadastre o atleta antes de enviar a foto.', 400, 'VALIDATION_ERROR'));
+  return uploadPhotoRequest('uploadAthletePhoto', imageBase64, { ...options, athleteId });
 }
