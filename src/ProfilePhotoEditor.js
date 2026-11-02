@@ -1,13 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Camera, ImagePlus, Trash2 } from 'lucide-react';
-import { portalPost, uploadProfilePhoto } from './cbaApi';
+import { portalPost, uploadProfilePhoto, uploadAthletePhoto } from './cbaApi';
 import { drawProfileCrop, encodeProfilePhoto, prepareProfilePhoto } from './profilePhoto';
 
 const initialCrop = { zoom: 1, horizontal: 0, vertical: 0 };
 const button = 'min-h-11 rounded-xl border border-slate-600 px-3 py-2 text-sm font-bold text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400 disabled:opacity-50';
 const accept = 'image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif';
 
-export default function ProfilePhotoEditor({ photoUrl, disabled, onSaved, onEditingChange }) {
+export default function ProfilePhotoEditor({ photoUrl, disabled, onSaved, onEditingChange, athleteId }) {
   const [open, setOpen] = useState(false);
   const [source, setSource] = useState(null);
   const [crop, setCrop] = useState(initialCrop);
@@ -53,12 +53,14 @@ export default function ProfilePhotoEditor({ photoUrl, disabled, onSaved, onEdit
     setError(''); setMessage(''); setProgress(0); setPhase(remove ? 'Removendo foto…' : 'Comprimindo foto…');
     try {
       let result;
-      if (remove) result = await portalPost('removeMyPhoto', {}, { signal: controller.signal });
+      if (remove) result = await portalPost(athleteId ? 'removeAthletePhoto' : 'removeMyPhoto', athleteId ? { athleteId } : {}, { signal: controller.signal });
       else {
         const imageBase64 = await encodeProfilePhoto(source.image, crop);
         if (controller.signal.aborted) return;
         setPhase('Enviando foto…');
-        result = await uploadProfilePhoto(imageBase64, { signal: controller.signal, onProgress: setProgress });
+        result = athleteId
+          ? await uploadAthletePhoto(athleteId, imageBase64, { signal: controller.signal, onProgress: setProgress })
+          : await uploadProfilePhoto(imageBase64, { signal: controller.signal, onProgress: setProgress });
       }
       if (current !== generation.current) return;
       onSaved(result.profile);
@@ -71,7 +73,7 @@ export default function ProfilePhotoEditor({ photoUrl, disabled, onSaved, onEdit
     {!open && <button type="button" className={`${button} inline-flex items-center gap-2`} disabled={disabled} onClick={() => { setMessage(''); toggle(true); }}><Camera size={18} aria-hidden="true" />Alterar foto</button>}
     {!open && disabled && <p className="mt-2 text-xs text-slate-400">Salve a edição do perfil antes de alterar a foto.</p>}
     {open && <div className="space-y-4">
-      <h3 className="text-lg font-black">Sua foto de perfil</h3>
+      <h3 className="text-lg font-black">{athleteId ? 'Foto do jogador' : 'Sua foto de perfil'}</h3>
       <p className="text-sm leading-6 text-slate-400">Escolha uma foto e ajuste o enquadramento. JPG, PNG, WebP ou HEIC/HEIF, até 15 MB.</p>
       <input ref={picker} type="file" accept={accept} onChange={choose} disabled={busy} className="sr-only" tabIndex={-1} aria-label="Arquivo da foto" />
       <input ref={camera} type="file" accept={accept} capture="user" onChange={choose} disabled={busy} className="sr-only" tabIndex={-1} aria-label="Foto da câmera" />
@@ -93,7 +95,7 @@ export default function ProfilePhotoEditor({ photoUrl, disabled, onSaved, onEdit
         <button type="button" className={button} disabled={busy} onClick={() => toggle(false)}>Cancelar</button>
         {photoUrl && !confirmRemove && <button type="button" className={`${button} inline-flex items-center gap-2 text-rose-300`} disabled={busy} onClick={() => setConfirmRemove(true)}><Trash2 size={16} aria-hidden="true" />Remover foto</button>}
       </div>
-      {confirmRemove && <div className="rounded-xl border border-rose-500/30 p-3"><p className="text-sm">Remover sua foto atual? Seu perfil passará a mostrar sua inicial.</p><div className="mt-3 flex flex-wrap gap-2"><button type="button" className={button} disabled={busy} onClick={() => save(true)}>Confirmar remoção</button><button type="button" className={button} disabled={busy} onClick={() => setConfirmRemove(false)}>Manter foto</button></div></div>}
+      {confirmRemove && <div className="rounded-xl border border-rose-500/30 p-3"><p className="text-sm">{athleteId ? 'Remover a foto atual deste jogador?' : 'Remover sua foto atual?'} O perfil passará a mostrar a inicial.</p><div className="mt-3 flex flex-wrap gap-2"><button type="button" className={button} disabled={busy} onClick={() => save(true)}>Confirmar remoção</button><button type="button" className={button} disabled={busy} onClick={() => setConfirmRemove(false)}>Manter foto</button></div></div>}
       <p className="text-xs leading-5 text-slate-400">A imagem é reduzida automaticamente e usada no perfil e nos cards do CBA. Ela ficará acessível por link para exibição e compartilhamento.</p>
     </div>}
     {error && <p role="alert" className="mt-3 text-sm text-rose-300">{error}</p>}

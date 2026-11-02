@@ -131,3 +131,29 @@ test('cadastro de membro continua oferecendo somente Membro e Administrador', as
     window.localStorage.removeItem('cba_session_v1');
   }
 });
+
+
+test('Administração substitui Foto (URL) por botão de upload para jogador cadastrado', async () => {
+  window.localStorage.setItem('cba_session_v1', JSON.stringify({
+    user:{email:'admin@cba.test',token:'sessao-photo-admin',role:'ADMIN'}
+  }));
+  const previousFetch=global.fetch;
+  global.fetch=jest.fn(async()=>({ok:true,json:async()=>({result:'success',data:{
+    athletes:[{id:'player-1',name:'Jogador de Teste',photo_url:'https://example.com/photo.jpg',active:true}],
+    accounts:[],overview:{},audit:[]
+  }})}));
+  try {
+    render(<AdminDashboardBridge open/>);
+    fireEvent.change(await screen.findByRole('combobox',{name:'Área da administração'}),{target:{value:'atletas'}});
+    expect(screen.queryByText('Foto (URL)')).not.toBeInTheDocument();
+    expect(screen.getByText(/Salve o cadastro do atleta primeiro/)).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button',{name:/Jogador de Teste/}));
+    expect(await screen.findByRole('button',{name:'Alterar foto'})).toBeInTheDocument();
+    expect(screen.getByAltText('Foto atual de Jogador de Teste')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button',{name:'Alterar foto'}));
+    expect(screen.getByRole('button',{name:'Escolher foto'})).toBeInTheDocument();
+  } finally {
+    global.fetch=previousFetch;
+    window.localStorage.removeItem('cba_session_v1');
+  }
+});
