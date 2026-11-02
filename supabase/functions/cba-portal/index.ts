@@ -100,10 +100,30 @@ Deno.serve(async (req: Request) => {
       photoUrl:athlete.photo_url || '', position:athlete.position || '', jerseyNumber:athlete.jersey_number || ''
     });
 
-    if (action === 'uploadMyPhoto' || action === 'removeMyPhoto') {
-      if (!account.athlete_id || !ownAthlete) return fail('Sua conta ainda não está vinculada a um atleta. Procure a administração.', 'NO_ATHLETE', 409);
-      const allowed = new Set(['action', 'token', ...(action === 'uploadMyPhoto' ? ['imageBase64'] : [])]);
+    if (['uploadMyPhoto', 'removeMyPhoto', 'uploadAthletePhoto', 'removeAthletePhoto'].includes(action)) {
+      const administrative = action === 'uploadAthletePhoto' || action === 'removeAthletePhoto';
+      const uploading = action === 'uploadMyPhoto' || action === 'uploadAthletePhoto';
+      if (administrative && !isAdmin) return fail('Somente administradores podem alterar fotos de outros atletas.', 'FORBIDDEN', 403);
+      const allowed = new Set(['action', 'token', ...(administrative ? ['athleteId'] : []), ...(uploading ? ['imageBase64'] : [])]);
       if (Object.keys(p).some(key => !allowed.has(key))) return fail('Campo não permitido no envio da foto.', 'VALIDATION_ERROR');
+      const athleteId = administrative ? text(p.athleteId) : account.athlete_id;
+      if (administrative && !/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(athleteId)) return fail('Atleta inválido.', 'VALIDATION_ERROR');
+      if (!athleteId) return fail('Sua conta ainda não está vinculada a um atleta. Procure a administração.', 'NO_ATHLETE', 409);
+      // The owner is protected from edits by other ADMIN accounts, including photo changes.
+      if (administrative && athleteId === '7092ab86-f6c2-4c53-b9cf-e04c1b4bb296'
+        && !(String(account.role).toUpperCase() === 'SUPER_ADMIN'
+          && account.id === '66ea4f7f-f82f-40f5-a82d-cf178cbb84fb'
+          && lower(account.email) === 'vinicius.m84@gmail.com')) {
+        return fail('Conta SUPER_ADMIN protegida.', 'FORBIDDEN', 403);
+      }
+      let targetAthlete: any = ownAthlete;
+      if (administrative) {
+        const { data, error } = await sb.from('athletes').select('name,nickname,photo_url,position,jersey_number').eq('id', athleteId).maybeSingle();
+        if (error) throw error;
+        if (!data) return fail('Atleta não encontrado.', 'NOT_FOUND', 404);
+        targetAthlete = data;
+      }
+      if (!targetAthlete) return fail('Atleta não encontrado.', 'NOT_FOUND', 404);
       const bucket = sb.storage.from(PHOTO_BUCKET);
       const removeObject = async (path: string) => {
         try { const { error } = await bucket.remove([path]); if (error) console.error('photo_cleanup_failed'); }
@@ -111,20 +131,20 @@ Deno.serve(async (req: Request) => {
       };
       let path: string | null = null;
       let newUrl: string | null = null;
-      if (action === 'uploadMyPhoto') {
+      if (uploading) {
         let clean;
         try { clean = safePhoto(p.imageBase64); }
         catch { return fail('Foto inválida. Escolha a imagem novamente e ajuste o enquadramento.', 'INVALID_PHOTO'); }
-        path = `${account.athlete_id}/${crypto.randomUUID()}.jpg`;
+        path = `${athleteId}/${crypto.randomUUID()}.jpg`;
         const { error } = await bucket.upload(path, clean, { contentType: 'image/jpeg', cacheControl: '3600', upsert: false });
-        if (error) return fail('Não foi possível enviar a foto. Sua foto atual foi mantida. Tente novamente.', 'PHOTO_UPLOAD_FAILED', 502);
+        if (error) return fail('Não foi possível enviar a foto. A foto atual foi mantida. Tente novamente.', 'PHOTO_UPLOAD_FAILED', 502);
         newUrl = bucket.getPublicUrl(path).data.publicUrl;
       }
       let updated: any;
       try {
         // Compare-and-set prevents overlapping uploads from deleting a newer photo.
-        let query = sb.from('athletes').update({ photo_url: newUrl }).eq('id', account.athlete_id);
-        query = ownAthlete.photo_url == null ? query.is('photo_url', null) : query.eq('photo_url', ownAthlete.photo_url);
+        let query = sb.from('athletes').update({ photo_url: newUrl }).eq('id', athleteId);
+        query = targetAthlete.photo_url == null ? query.is('photo_url', null) : query.eq('photo_url', targetAthlete.photo_url);
         const result = await query.select('name,nickname,photo_url,position,jersey_number').maybeSingle();
         if (result.error) throw result.error;
         updated = result.data;
@@ -134,12 +154,14 @@ Deno.serve(async (req: Request) => {
       }
       if (!updated) {
         if (path) await removeObject(path);
-        return fail('Sua foto foi alterada em outro acesso. Atualize o perfil antes de tentar novamente.', 'PHOTO_CONFLICT', 409);
+        return fail('A foto foi alterada em outro acesso. Atualize o perfil antes de tentar novamente.', 'PHOTO_CONFLICT', 409);
       }
-      const previousPath = ownedPhotoPath(ownAthlete.photo_url, account.athlete_id);
+      const previousPath = ownedPhotoPath(targetAthlete.photo_url, athleteId);
       if (previousPath) await removeObject(previousPath);
-      await audit(action === 'uploadMyPhoto' ? 'self_upload_photo' : 'self_remove_photo', 'athlete', account.athlete_id);
-      return json({ result: 'success', profile: profile(updated) });
+      await audit(administrative
+        ? (uploading ? 'admin_upload_athlete_photo' : 'admin_remove_athlete_photo')
+        : (uploading ? 'self_upload_photo' : 'self_remove_photo'), 'athlete', athleteId);
+      return json({ result: 'success', profile: { ...profile(updated), athleteId } });
     }
 
     if (action === 'getMyProfile' || action === 'updateMyProfile') {
