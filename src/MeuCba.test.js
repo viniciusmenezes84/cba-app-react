@@ -40,7 +40,7 @@ test('abre a rodada correta do perfil próprio, filtra a temporada e reutiliza o
   fireEvent.click(screen.getByText('Fechar card'));
   fireEvent.change(screen.getByLabelText('Temporada'), { target: { value: '2025' } });
   await waitFor(() => expect(portalPost).toHaveBeenCalledTimes(2));
-  fireEvent.click(generator);
+  fireEvent.click(await screen.findByRole('button', { name: 'Gerar meu card' }));
   expect(screen.getByRole('dialog', { name: 'Gerar meu card' })).toHaveTextContent('Rodada de 18/10/2025');
   fireEvent.click(screen.getByRole('button', { name: 'Visualizar card' }));
   expect(await screen.findByRole('dialog')).toHaveTextContent('2025-10-18: 2 pontos');
