@@ -21,20 +21,30 @@ test('abre a rodada correta do perfil próprio, filtra a temporada e reutiliza o
   ];
   portalPost.mockResolvedValue({ ...data, profile: { ...data.profile, nickname: 'Gigante' }, stats });
   render(<InitialDataContext.Provider value={{ dashboard: { dates: ['2025-10-18'], players: [{ name: 'Outro', dailyStats: { '2026-01-15': { pts2: 99 } } }] } }}><MeuCba /></InitialDataContext.Provider>);
-  const buttons = await screen.findAllByRole('button', { name: /Compartilhar minha rodada de/ });
-  expect(buttons.map(button => button.getAttribute('aria-label'))).toEqual([
-    'Compartilhar minha rodada de 08/01/2026', 'Compartilhar minha rodada de 01/01/2026'
-  ]);
-  fireEvent.click(buttons[0]);
+  const generator = await screen.findByRole('button', { name: 'Gerar meu card' });
+  expect(screen.queryByRole('button', { name: /Compartilhar minha rodada de/ })).not.toBeInTheDocument();
+  fireEvent.click(generator);
+  expect(screen.getByRole('dialog', { name: 'Gerar meu card' })).toBeInTheDocument();
+  expect(screen.getByRole('dialog', { name: 'Gerar meu card' })).toHaveTextContent('Rodada de 08/01/2026');
+  fireEvent.click(screen.getByRole('button', { name: 'Visualizar card' }));
   expect(await screen.findByRole('dialog')).toHaveTextContent('Card de GiganteRodada 2026-01-08: 15 pontos');
   expect(portalPost).toHaveBeenCalledTimes(1);
   fireEvent.click(screen.getByText('Fechar card'));
-  fireEvent.click(buttons[1]);
+  fireEvent.click(generator);
+  fireEvent.click(screen.getByRole('radio', { name: /Escolher uma rodada/ }));
+  const picker = screen.getByRole('combobox', { name: 'Data da rodada para o card' });
+  expect(Array.from(picker.options).map(option => option.value)).toEqual(['2026-01-08', '2026-01-01']);
+  fireEvent.change(picker, { target: { value: '2026-01-01' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Visualizar card' }));
   expect(await screen.findByRole('dialog')).toHaveTextContent('2026-01-01: 0 pontos');
   fireEvent.click(screen.getByText('Fechar card'));
   fireEvent.change(screen.getByLabelText('Temporada'), { target: { value: '2025' } });
-  expect(await screen.findByRole('button', { name: 'Compartilhar minha rodada de 18/10/2025' })).toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: 'Compartilhar minha rodada de 08/01/2026' })).not.toBeInTheDocument();
+  await waitFor(() => expect(portalPost).toHaveBeenCalledTimes(2));
+  fireEvent.click(await screen.findByRole('button', { name: 'Gerar meu card' }));
+  expect(screen.getByRole('dialog', { name: 'Gerar meu card' })).toHaveTextContent('Rodada de 18/10/2025');
+  fireEvent.click(screen.getByRole('button', { name: 'Visualizar card' }));
+  expect(await screen.findByRole('dialog')).toHaveTextContent('2025-10-18: 2 pontos');
+  fireEvent.click(screen.getByText('Fechar card'));
   expect(portalPost.mock.calls.map(call => call[0])).toEqual(['getMyProfile', 'getMyProfile']);
 });
 
@@ -43,7 +53,13 @@ test('sem súmula mantém o card da temporada mas não oferece desempenho de pre
   render(<MeuCba />);
   expect(await screen.findByText('Nenhuma rodada com súmula registrada para você nesta temporada.')).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /Compartilhar minha rodada de/ })).not.toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Meu card da temporada' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Gerar meu card' }));
+  expect(screen.getByRole('button', { name: 'Visualizar card' })).toBeDisabled();
+  expect(screen.getByText(/ainda não possui uma rodada com súmula/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('radio', { name: /Minha temporada/ }));
+  expect(screen.getByRole('button', { name: 'Visualizar card' })).toBeEnabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Visualizar card' }));
+  expect(await screen.findByRole('dialog')).toHaveTextContent('Card de Atleta');
 });
 test('temporada preserva faltas no denominador e não conta N/A; pontos são cestas convertidas', () => {
   expect(buildMySeason(data)).toMatchObject({ totals: { pts: 12 }, attendanceRate: 50, validDates: 2, presences: 1, statDates: 1, numero: '00' });
@@ -63,7 +79,9 @@ test('perfil salva somente campos próprios, mantém dados após erro e permite 
   expect(await screen.findByRole('status')).toHaveTextContent('Perfil atualizado');
   expect(portalPost).toHaveBeenLastCalledWith('updateMyProfile', { nickname: 'Gigante', position: 'Pivô', jerseyNumber: '00' });
   expect(onSaved).toHaveBeenCalledWith(expect.objectContaining({ nickname: 'Gigante' }));
-  fireEvent.click(screen.getByText('Meu card da temporada'));
+  fireEvent.click(screen.getByRole('button', { name: 'Gerar meu card' }));
+  fireEvent.click(screen.getByRole('radio', { name: /Minha temporada/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Visualizar card' }));
   expect(await screen.findByRole('dialog')).toHaveTextContent('Card de Gigante');
 });
 test('conta sem vínculo exibe orientação e mantém saída disponível', async () => {
@@ -106,7 +124,26 @@ test('conquistas acompanham o ano selecionado e o card recebe somente prêmio al
   fireEvent.change(screen.getByLabelText('Temporada'), { target: { value: '2025' } });
   expect(await screen.findByText('0 de 6 · 2025')).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Ver conquista no meu card' })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Meu card da temporada' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Gerar meu card' }));
+  fireEvent.click(screen.getByRole('radio', { name: /Minha temporada/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Visualizar card' }));
   expect(await screen.findByRole('dialog')).not.toHaveTextContent('Conquista:');
   expect(portalPost.mock.calls.map(call => call[0])).toEqual(['getMyProfile', 'getMyProfile']);
+});
+
+
+test('seletor exclui ausência zerada, mas mantém a rodada com presença e zero pontos', async () => {
+  portalPost.mockResolvedValue({ ...data, stats: [
+    { stat_date: '2026-01-08', pts2: 0, pts3: 0, reb: 0, ast: 0, blk: 0 },
+    { stat_date: '2026-01-01', pts2: 0, pts3: 0, reb: 0, ast: 0, blk: 0 }
+  ] });
+  render(<MeuCba />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Gerar meu card' }));
+  expect(screen.getByRole('dialog', { name: 'Gerar meu card' })).toHaveTextContent('Rodada de 01/01/2026');
+  fireEvent.click(screen.getByRole('radio', { name: /Escolher uma rodada/ }));
+  const options = Array.from(screen.getByRole('combobox', { name: 'Data da rodada para o card' }).options);
+  expect(options.map(option => option.value)).toEqual(['2026-01-01']);
+  fireEvent.click(screen.getByRole('button', { name: 'Visualizar card' }));
+  expect(await screen.findByRole('dialog')).toHaveTextContent('2026-01-01: 0 pontos');
+  expect(portalPost).toHaveBeenCalledTimes(1);
 });
