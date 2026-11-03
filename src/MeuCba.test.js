@@ -25,7 +25,7 @@ test('abre a rodada correta do perfil próprio, filtra a temporada e reutiliza o
   expect(screen.queryByRole('button', { name: /Compartilhar minha rodada de/ })).not.toBeInTheDocument();
   fireEvent.click(generator);
   expect(screen.getByRole('dialog', { name: 'Gerar meu card' })).toBeInTheDocument();
-  expect(screen.getByText('Rodada de 08/01/2026')).toBeInTheDocument();
+  expect(screen.getByRole('dialog', { name: 'Gerar meu card' })).toHaveTextContent('Rodada de 08/01/2026');
   fireEvent.click(screen.getByRole('button', { name: 'Visualizar card' }));
   expect(await screen.findByRole('dialog')).toHaveTextContent('Card de GiganteRodada 2026-01-08: 15 pontos');
   expect(portalPost).toHaveBeenCalledTimes(1);
@@ -41,7 +41,7 @@ test('abre a rodada correta do perfil próprio, filtra a temporada e reutiliza o
   fireEvent.change(screen.getByLabelText('Temporada'), { target: { value: '2025' } });
   await waitFor(() => expect(portalPost).toHaveBeenCalledTimes(2));
   fireEvent.click(generator);
-  expect(screen.getByText('Rodada de 18/10/2025')).toBeInTheDocument();
+  expect(screen.getByRole('dialog', { name: 'Gerar meu card' })).toHaveTextContent('Rodada de 18/10/2025');
   fireEvent.click(screen.getByRole('button', { name: 'Visualizar card' }));
   expect(await screen.findByRole('dialog')).toHaveTextContent('2025-10-18: 2 pontos');
   fireEvent.click(screen.getByText('Fechar card'));
@@ -139,7 +139,7 @@ test('seletor exclui ausência zerada, mas mantém a rodada com presença e zero
   ] });
   render(<MeuCba />);
   fireEvent.click(await screen.findByRole('button', { name: 'Gerar meu card' }));
-  expect(screen.getByText('Rodada de 01/01/2026')).toBeInTheDocument();
+  expect(screen.getByRole('dialog', { name: 'Gerar meu card' })).toHaveTextContent('Rodada de 01/01/2026');
   fireEvent.click(screen.getByRole('radio', { name: /Escolher uma rodada/ }));
   const options = Array.from(screen.getByRole('combobox', { name: 'Data da rodada para o card' }).options);
   expect(options.map(option => option.value)).toEqual(['2026-01-01']);
