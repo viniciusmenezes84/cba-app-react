@@ -8,6 +8,8 @@ import {
 } from 'lucide-react';
 import { availableAthleteYears, buildAthleteSeason, formatDate } from './athleteDashboardData';
 import AthleteCardModal from './AthleteCardModal';
+import IdealTeam from './IdealTeam';
+import { buildIdealTeam, latestIdealTeamDate, todayCba } from './idealTeamData';
 import './AthleteDashboard.css';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Filler);
@@ -51,15 +53,15 @@ export default function AthleteDashboard({ allPlayersData = [], dates = [], curr
     Boolean(currentUser?.athleteId) && String(player?.id) === String(currentUser.athleteId))).slice().sort((a, b) =>
     String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR')), [allPlayersData, isAdmin, currentUser?.athleteId]);
   const years = useMemo(() => availableAthleteYears(players, dates), [players, dates]);
-  const [year, setYear] = useState(String(new Date().getFullYear()));
+  const [selectedYear, setSelectedYear] = useState(null);
+  const today = todayCba();
+  const latestDate = useMemo(() => latestIdealTeamDate(players, null, today), [players, today]);
+  const year = selectedYear ?? latestDate?.slice(0, 4) ?? years[0] ?? today.slice(0, 4);
+  const idealTeam = useMemo(() => buildIdealTeam(players, year, today), [players, year, today]);
   const [selectedName, setSelectedName] = useState('');
   const [metric, setMetric] = useState('pts');
   const [copyStatus, setCopyStatus] = useState('');
   const [cardOpen, setCardOpen] = useState(false);
-
-  useEffect(() => {
-    if (years.length && !years.includes(year)) setYear(years[0]);
-  }, [years, year]);
 
   const { athletes, rosterAverages, rankingFor } = useMemo(() =>
     buildAthleteSeason(players, dates, year), [players, dates, year]);
@@ -159,8 +161,8 @@ export default function AthleteDashboard({ allPlayersData = [], dates = [], curr
           </select>
         </label>
         <label>Temporada
-          <select aria-label="Selecionar temporada" value={year} onChange={event => setYear(event.target.value)}>
-            {(years.length ? years : [year]).map(item => <option key={item} value={item}>{item}</option>)}
+          <select aria-label="Selecionar temporada" value={year} onChange={event => setSelectedYear(event.target.value)}>
+            {[...new Set([...years, year])].sort().reverse().map(item => <option key={item} value={item}>{item}</option>)}
           </select>
         </label>
         {ownPlayer && ownPlayer.name !== athlete.name && <button type="button" onClick={() => setSelectedName(ownPlayer.name)}>Meu perfil</button>}
@@ -172,6 +174,7 @@ export default function AthleteDashboard({ allPlayersData = [], dates = [], curr
         </button>
       </div>
     </header>
+    <IdealTeam key={year} team={idealTeam} year={year}/>
     {copyStatus && <p className="cba-player__copy-status" role="status">{copyStatus}</p>}
 
     <div className="cba-player__hero">
