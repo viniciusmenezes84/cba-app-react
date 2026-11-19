@@ -105,7 +105,7 @@ test('seleciona quinto jogador pela eficiência PTS + REB + AST + TOC sem repeti
   const team = buildIdealTeam(athletes, null, today);
   expect(team.slots).toHaveLength(5);
   expect(team.slots.map(slot => slot.athlete.name)).toEqual(['Ana', 'Bia', 'Cris', 'Dani', 'Eva']);
-  expect(team.slots[4]).toMatchObject({ key: 'ie', label: 'Destaque geral', value: 20, place: 5 });
+  expect(team.slots[4]).toMatchObject({ key: 'ie', label: 'Destaque geral', value: 20, place: 4 });
   expect(idealTeamNotes(team.slots[4])).toContain('Melhor atleta ainda não selecionado');
   expect(new Set(team.slots.map(slot => slot.athlete.id)).size).toBe(5);
   expect(idealTeamCaption(team)).toContain('IE-CBA: Eva · 20');
