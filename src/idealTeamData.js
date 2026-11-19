@@ -127,7 +127,7 @@ export function buildIdealTeam(players = [], year = null, today = todayCba()) {
 }
 
 export function idealTeamCaption(team) {
-  return `Time ideal da rodada do CBA em ${formatDate(team.date)} 🏀\n` + team.slots.map(slot =>
+  return `Quinteto ideal da rodada do CBA em ${formatDate(team.date)} 🏀\n` + team.slots.map(slot =>
     `${slot.short}: ${slot.athlete ? `${slot.athlete.name} · ${slot.value} · ${idealTeamNotes(slot).join(' · ')}` : slot.reason}`).join('\n')
     + '\nTotais consolidados por data; podem reunir várias partidas. #CBA';
 }
