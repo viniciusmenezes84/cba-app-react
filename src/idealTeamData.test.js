@@ -7,7 +7,7 @@ const player = (id, name, values, day = date) => ({ id, name, dailyStats: { [day
 const roster = () => [player('a', 'Ana', stats(10, 20, 20, 20)), player('b', 'Bia', stats(5, 15, 15, 15)),
   player('c', 'Cris', stats(3, 10, 10, 10)), player('d', 'Dani', stats(2, 5, 5, 5))];
 
-test('última data exige estatística real, aceita zero e ignora presença, datas inválidas e futuras', () => {
+test('última data exige súmula real, ignora ausências zeradas e aceita zero com presença', () => {
   const players = [player('a', 'Ana', stats(1), '2025-10-18'),
     { name: 'Bia', attendance: { '2026-11-18': '✅' }, dailyStats: {
       '2026-02-30': stats(90), '2026-11-17': {}, '2026-11-16': { reb: null },
@@ -16,6 +16,8 @@ test('última data exige estatística real, aceita zero e ignora presença, data
   expect(latestIdealTeamDate(players, null, today)).toBe('2025-10-18');
   expect(buildIdealTeam(players, '2026', today)).toBeNull();
   players.push(player('c', 'Cris', stats(), date));
+  expect(latestIdealTeamDate(players, null, today)).toBe('2025-10-18');
+  players[2].attendance = { [date]: '✅' };
   expect(latestIdealTeamDate(players, null, today)).toBe(date);
 });
 
@@ -72,7 +74,12 @@ test('diferencia ausência, zero registrado e falta de atletas distintos dispon�
   const team = buildIdealTeam([player('a', 'Ana', { pts2: 1, pts3: 0, reb: 3, ast: 0 })], null, today);
   expect(team.slots.slice(1).map(slot => slot.status)).toEqual(['unavailable', 'zero', 'missing']);
   expect(team.slots.slice(1).every(slot => slot.athlete === null && slot.value === null)).toBe(true);
-  const zeros = buildIdealTeam([player('a', 'Ana', stats())], null, today);
+  const absent = player('a', 'Ana', stats());
+  absent.attendance = { [date]: '❌' };
+  expect(buildIdealTeam([absent], null, today)).toBeNull();
+  const present = player('a', 'Ana', stats());
+  present.attendance = { [date]: '✅' };
+  const zeros = buildIdealTeam([present], null, today);
   expect(zeros.date).toBe(date);
   expect(zeros.slots.every(slot => slot.status === 'zero')).toBe(true);
   expect(latestIdealTeamDate([player('a', 'Ana', { pts2: '', reb: NaN, ast: Infinity, blk: -1 })], null, today)).toBeNull();
@@ -84,5 +91,7 @@ test('legenda preserva data, marcas, colocação, empates, substituições e esp
   expect(caption).toContain('15/11/2026');
   expect(caption).toContain('AST: Cris · 10 · 3ª maior marca em assistências');
   expect(caption).toContain('Selecionado para evitar repetição');
-  expect(idealTeamCaption(buildIdealTeam([player('a', 'Ana', stats())], null, today))).toContain('Marcas registradas zeradas');
+  const present = player('a', 'Ana', stats());
+  present.attendance = { [date]: '✅' };
+  expect(idealTeamCaption(buildIdealTeam([present], null, today))).toContain('Marcas registradas zeradas');
 });
