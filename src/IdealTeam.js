@@ -13,7 +13,7 @@ function HighlightPhoto({ athlete }) {
 export default function IdealTeam({ team, year }) {
   const [open, setOpen] = useState(false);
   return <section className="cba-ideal-team" aria-labelledby="ideal-team-title">
-    <div className="cba-ideal-team__heading"><div><span className="cba-player__eyebrow">Quatro categorias · atletas distintos</span><h2 id="ideal-team-title">Time ideal da rodada</h2></div>
+    <div className="cba-ideal-team__heading"><div><span className="cba-player__eyebrow">Cinco atletas · destaques da rodada</span><h2 id="ideal-team-title">Quinteto ideal da rodada</h2></div>
       {team && <time dateTime={team.date}>{formatDate(team.date)}</time>}
     </div>
     {team ? <>
@@ -26,7 +26,7 @@ export default function IdealTeam({ team, year }) {
         </> : <div className="cba-ideal-team__vacant" aria-hidden="true">—</div>}
         <p className="cba-ideal-team__note">{idealTeamNotes(slot).join(' · ')}</p>
       </article>)}</div>
-      <div className="cba-ideal-team__footer"><p>Totais consolidados por data; uma rodada pode reunir várias partidas.</p><button type="button" onClick={() => setOpen(true)}><Share2 size={17} aria-hidden="true"/>Compartilhar time ideal da rodada</button></div>
+      <div className="cba-ideal-team__footer"><p>Totais consolidados por data; uma rodada pode reunir várias partidas.</p><button type="button" onClick={() => setOpen(true)}><Share2 size={17} aria-hidden="true"/>Compartilhar quinteto ideal</button></div>
       {open && <Suspense fallback={<p role="status">Preparando time ideal...</p>}><IdealTeamCardModal team={team} onClose={() => setOpen(false)}/></Suspense>}
     </> : <p className="cba-ideal-team__empty">Nenhuma rodada com súmula registrada em {year}. Presença sem estatísticas não gera destaques.</p>}
   </section>;
