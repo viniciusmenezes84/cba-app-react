@@ -7,7 +7,7 @@ import { myRoundCaption } from './myCbaStats';
 import AthleteCardActions from './AthleteCardActions';
 import './AthleteCardModal.css';
 
-export default function AthleteCardModal({ athlete, year, round = null, onClose }) {
+export default function AthleteCardModal({ athlete, year, round = null, collective = null, onClose }) {
   const canvasRef = useRef(null);
   const closeRef = useRef(null);
   const dialogRef = useRef(null);
@@ -22,11 +22,12 @@ export default function AthleteCardModal({ athlete, year, round = null, onClose 
   const [sharing, setSharing] = useState(false);
   const [captionVisible, setCaptionVisible] = useState(false);
   const sharingRef = useRef(false);
-  const caption = round ? myRoundCaption(round) : '';
-  const title = round ? `Minha rodada de ${formatDate(round.date)} • CBA` : `Temporada ${year} • CBA`;
-  const slug = String(athlete.name || 'atleta').normalize('NFD')
+  const initialsAllowed = useRef(false);
+  const caption = collective?.caption || (round ? myRoundCaption(round) : '');
+  const title = collective?.title || (round ? `Minha rodada de ${formatDate(round.date)} • CBA` : `Temporada ${year} • CBA`);
+  const slug = String(athlete?.name || 'atleta').normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-  const filename = `cba-${slug || 'atleta'}-${round ? `${round.date}-${format}` : `${year}${format === 'story' ? '-story' : ''}`}.png`;
+  const filename = collective ? `${collective.filename}-${format}.png` : `cba-${slug || 'atleta'}-${round ? `${round.date}-${format}` : `${year}${format === 'story' ? '-story' : ''}`}.png`;
 
   useEffect(() => {
     const oldOverflow = document.body.style.overflow;
@@ -44,8 +45,10 @@ export default function AthleteCardModal({ athlete, year, round = null, onClose 
     let timeout;
     const canvas = canvasRef.current;
     setReady(false); setShareFile(null); setPhotoUnavailable(false); setPhotoSlow(false); setMessage(''); setCaptionVisible(false);
+    initialsAllowed.current = false;
     const draw = photo => {
-      if (round) (format === 'story' ? drawMyRoundStory : drawMyRoundCard)(canvas, athlete, round, photo);
+      if (collective) collective.draw(canvas, format, photo || new Map());
+      else if (round) (format === 'story' ? drawMyRoundStory : drawMyRoundCard)(canvas, athlete, round, photo);
       else (format === 'story' ? drawAthleteStory : drawAthleteCard)(canvas, athlete, year, photo);
       setShareFile(null);
       setRenderRevision(value => value + 1);
@@ -55,6 +58,42 @@ export default function AthleteCardModal({ athlete, year, round = null, onClose 
     } catch (error) {
       setMessage(error.message || 'Não foi possível criar o card.');
       return undefined;
+    }
+
+    if (collective) {
+      const sources = collective.photos.filter(source => source.url);
+      const images = [];
+      const photos = new Map();
+      let pending = sources.length;
+      let failed = collective.photos.length - pending;
+      setPhotoUnavailable(failed > 0);
+      if (!pending) { setReady(true); return undefined; }
+      timeout = window.setTimeout(() => { if (!cancelled) setPhotoSlow(true); }, 7000);
+      sources.forEach(source => {
+        const photo = new Image();
+        photo.crossOrigin = 'anonymous';
+        let settled = false;
+        const settle = loaded => {
+          if (cancelled || settled) return;
+          settled = true; pending -= 1;
+          if (loaded) photos.set(source.id, photo); else failed += 1;
+          try { draw(photos); }
+          catch {
+            photos.delete(source.id); failed += 1;
+            try { draw(photos); } catch { setMessage('Não foi possível criar o card.'); setReady(false); return; }
+          }
+          if (!pending) { window.clearTimeout(timeout); setPhotoSlow(false); }
+          setPhotoUnavailable(failed > 0 || (initialsAllowed.current && pending > 0));
+          setReady(pending === 0 || initialsAllowed.current);
+        };
+        photo.onload = () => settle(true);
+        photo.onerror = () => settle(false);
+        images.push(photo); photo.src = source.url;
+      });
+      return () => {
+        cancelled = true; window.clearTimeout(timeout);
+        images.forEach(photo => { photo.onload = null; photo.onerror = null; });
+      };
     }
 
     if (!athlete.fotoUrl) {
@@ -95,7 +134,7 @@ export default function AthleteCardModal({ athlete, year, round = null, onClose 
       photo.onload = null;
       photo.onerror = null;
     };
-  }, [athlete, year, round, format, photoAttempt]);
+  }, [athlete, year, round, collective, format, photoAttempt]);
 
   useEffect(() => {
     if (!ready || !canvasRef.current || typeof navigator.share !== 'function' || typeof navigator.canShare !== 'function') return undefined;
@@ -139,7 +178,7 @@ export default function AthleteCardModal({ athlete, year, round = null, onClose 
     setSharing(true); setMessage('');
     try {
       if (typeof navigator.share !== 'function' || !navigator.canShare?.({ files: [shareFile] })) throw new Error('Unsupported');
-      await navigator.share({ title, files: [shareFile], ...(round ? { text: caption } : {}) });
+      await navigator.share({ title, files: [shareFile], ...(caption ? { text: caption } : {}) });
       setMessage(destination === 'Outros aplicativos' ? 'Conclua o envio no aplicativo escolhido.' : `Conclua o envio no ${destination}.`);
     } catch (error) {
       if (error?.name !== 'AbortError') setMessage('Compartilhamento indisponível. Use Baixar PNG.');
@@ -181,19 +220,19 @@ export default function AthleteCardModal({ athlete, year, round = null, onClose 
     <div className="cba-card-modal__scrim" onClick={onClose} aria-hidden="true" />
     <section ref={dialogRef} className="cba-card-modal__dialog cba-card-modal__dialog--individual" role="dialog" aria-modal="true" aria-labelledby="cba-card-title">
       <div className="cba-card-modal__header">
-        <div><h2 id="cba-card-title" className="cba-card-modal__accessible-title">Card de {athlete.name}{round ? ` · ${formatDate(round.date)}` : ''}</h2><span>{round ? `Rodada de ${formatDate(round.date)}` : `Temporada ${year}`}</span></div>
+        <div><h2 id="cba-card-title" className="cba-card-modal__accessible-title">{collective ? collective.title : `Card de ${athlete.name}${round ? ` · ${formatDate(round.date)}` : ''}`}</h2><span>{collective ? collective.label : round ? `Rodada de ${formatDate(round.date)}` : `Temporada ${year}`}</span></div>
         <button ref={closeRef} type="button" className="cba-card-modal__close" aria-label="Fechar card" onClick={onClose}><X size={21} /></button>
       </div>
       <div className="cba-card-modal__body">
         <div className="cba-card-modal__preview">
-          <canvas ref={canvasRef} width={CARD_WIDTH} height={format === 'story' ? STORY_HEIGHT : CARD_HEIGHT} style={{ aspectRatio: format === 'story' ? '9 / 16' : '4 / 5' }} role="img" aria-label={`Prévia do card de ${athlete.name} ${round ? `na rodada de ${formatDate(round.date)}` : `na temporada ${year}`}${format === 'story' ? ' para Stories' : ''}`} />
+          <canvas ref={canvasRef} width={CARD_WIDTH} height={format === 'story' ? STORY_HEIGHT : CARD_HEIGHT} style={{ aspectRatio: format === 'story' ? '9 / 16' : '4 / 5' }} role="img" aria-label={`${collective ? `Prévia do ${collective.title}` : `Prévia do card de ${athlete.name} ${round ? `na rodada de ${formatDate(round.date)}` : `na temporada ${year}`}`}${format === 'story' ? ' para Stories' : ''}`} />
         </div>
         <AthleteCardActions ready={ready} busy={sharing} canShareFiles={!!shareFile} format={format} caption={caption} onFormatChange={changeFormat} onShare={share} onDownload={download} onCopy={copyCaption} />
         <div className="cba-card-modal__feedback" aria-live="polite">
-          {photoUnavailable && <p className="cba-card-modal__notice">O card está usando a inicial do atleta. Você pode tentar carregar a foto novamente.</p>}
-          {photoSlow && !ready && <><p className="cba-card-modal__notice">A foto ainda está carregando. Aguarde ou escolha continuar com a inicial.</p><button type="button" className="cba-card-modal__share" onClick={() => { setPhotoUnavailable(true); setPhotoSlow(false); setReady(true); }}>Continuar com a inicial</button></>}
+          {photoUnavailable && <p className="cba-card-modal__notice">{collective ? 'Fotos indisponíveis usam a inicial do atleta.' : 'O card está usando a inicial do atleta. Você pode tentar carregar a foto novamente.'}</p>}
+          {photoSlow && !ready && <><p className="cba-card-modal__notice">{collective ? 'Algumas fotos ainda estão carregando. Aguarde ou continue com as iniciais.' : 'A foto ainda está carregando. Aguarde ou escolha continuar com a inicial.'}</p><button type="button" className="cba-card-modal__share" onClick={() => { initialsAllowed.current = true; setPhotoUnavailable(true); setPhotoSlow(false); setReady(true); }}>{collective ? 'Continuar com as iniciais' : 'Continuar com a inicial'}</button></>}
           {photoUnavailable && <button type="button" className="cba-card-modal__share" onClick={() => setPhotoAttempt(value => value + 1)}>Tentar carregar foto novamente</button>}
-          {!ready && !message && <p role="status">Preparando a foto do atleta…</p>}
+          {!ready && !message && <p role="status">{collective ? 'Preparando as fotos do time ideal…' : 'Preparando a foto do atleta…'}</p>}
           {captionVisible && <p aria-label="Legenda da rodada">{caption}</p>}
           {message && <p className="cba-card-modal__status" role="status">{message}</p>}
         </div>
