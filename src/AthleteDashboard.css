@@ -16,8 +16,9 @@
 .cba-ideal-team__heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 20px; }
 .cba-ideal-team__heading h2 { margin: 5px 0 0; font-size: clamp(20px, 2.6vw, 29px); font-weight: 900; color: #fff; }
 .cba-ideal-team__heading time { color: #fb923c; border: 1px solid #68412b; border-radius: 9px; padding: 8px 11px; font-size: 13px; font-weight: 800; }
-.cba-ideal-team__grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
-.cba-ideal-team__slot { display: flex; min-width: 0; flex-direction: column; align-items: center; padding: 15px 10px; border: 1px solid #3e4654; border-radius: 15px; background: linear-gradient(155deg, #233149, #111d2e); text-align: center; }
+.cba-ideal-team__grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+.cba-ideal-team__slot { grid-column: span 2; display: flex; min-width: 0; flex-direction: column; align-items: center; padding: 15px 10px; border: 1px solid #3e4654; border-radius: 15px; background: linear-gradient(155deg, #233149, #111d2e); text-align: center; }
+.cba-ideal-team__slot:nth-child(n+4) { grid-column: span 3; }
 .cba-ideal-team__category { color: #fb923c; font-size: 13px; font-weight: 900; }
 .cba-ideal-team__category span { color: #b3c2d4; font-size: 11px; }
 .cba-ideal-team__crown { flex-shrink: 0; margin: 12px 0 4px; color: #f5c854; fill: #dca72a33; }
@@ -34,7 +35,12 @@
 .cba-ideal-team__footer button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 9px 13px; color: #15202d; background: #fb923c; border: 0; border-radius: 10px; font-size: 12px; font-weight: 800; }
 .cba-ideal-team__footer button:hover { background: #ffb37d; }
 .cba-ideal-team__footer button:focus-visible { outline: 2px solid #fb923c; outline-offset: 3px; }
-@media (max-width: 760px) { .cba-ideal-team__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .cba-ideal-team__footer button { width: 100%; } }
+@media (max-width: 760px) {
+  .cba-ideal-team__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cba-ideal-team__slot, .cba-ideal-team__slot:nth-child(n+4) { grid-column: span 1; }
+  .cba-ideal-team__slot:last-child { grid-column: span 2; }
+  .cba-ideal-team__footer button { width: 100%; }
+}
 @media (max-width: 380px) {
   .cba-ideal-team__grid { gap: 8px; }
   .cba-ideal-team__slot { padding: 12px 6px; }
