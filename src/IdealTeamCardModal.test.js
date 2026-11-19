@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import IdealTeamCardModal from './IdealTeamCardModal';
 import { buildIdealTeam, idealTeamCaption } from './idealTeamData';
 
-const players = ['Ana', 'Bia', 'Cris', 'Dani'].map((name, index) => ({ id: String(index), name,
+const players = ['Ana', 'Bia', 'Cris', 'Dani', 'Eva'].map((name, index) => ({ id: String(index), name,
   dailyStats: { '2026-11-15': { pts2: 10 - index, pts3: 0, reb: 20 - index, ast: 20 - index, blk: 20 - index } } }));
 const team = buildIdealTeam(players, null, '2026-11-18');
 const withPhotos = () => ({ ...team, slots: team.slots.map((slot, index) => ({ ...slot,
@@ -43,29 +43,33 @@ function openShare() {
   fireEvent.click(screen.getByRole('menuitem', { name: 'Outros aplicativos' }));
 }
 
-test('Canvas coletivo preserva quatro nomes, coroas, marcas, data e colocações em Post e Story', async () => {
+test('Canvas coletivo preserva cinco nomes, coroas, marcas, data e colocações em Post e Story', async () => {
   render(<IdealTeamCardModal team={team} onClose={jest.fn()}/>);
   const canvas = screen.getByRole('img');
   expect(canvas).toHaveAttribute('width', '1080'); expect(canvas).toHaveAttribute('height', '1350');
   const printed = context.fillText.mock.calls.map(call => String(call[0]));
-  for (const name of ['Ana', 'Bia', 'Cris', 'Dani', '15/11/2026', '20 PTS', '19 REB', '18 AST', '17 TOC',
-    '2ª maior marca em rebotes', '3ª maior marca em assistências', '4ª maior marca em tocos', 'Selecionado para evitar repetição']) expect(printed).toContain(name);
-  expect(context.arc).toHaveBeenCalledTimes(4);
-  expect(context.fill).toHaveBeenCalledTimes(4); // Vector crowns, one per portrait.
+  for (const name of ['Ana', 'Bia', 'Cris', 'Dani', 'Eva', '15/11/2026', '20 PTS', '19 REB', '18 AST', '17 TOC',
+    '2ª maior marca em rebotes', '3ª maior marca em assistências', '4ª maior marca em tocos', '60 IE-CBA', 'Selecionado para evitar repetição']) expect(printed).toContain(name);
+  expect(context.arc).toHaveBeenCalledTimes(5);
+  expect(context.fill).toHaveBeenCalledTimes(5); // Uma coroa vetorial por jogador.
+  expect(context.strokeRect.mock.calls).toEqual([
+    [70, 235, 301, 449], [389, 235, 301, 449], [708, 235, 301, 449],
+    [70, 710, 461, 449], [549, 710, 461, 449]
+  ]); // 3 + 2, sem sobreposição.
   expect(printed).not.toContain('WhatsApp');
   fireEvent.click(screen.getByRole('button', { name: 'Baixar PNG' }));
-  expect(downloadName).toBe('cba-time-ideal-2026-11-15-post.png');
+  expect(downloadName).toBe('cba-quinteto-ideal-2026-11-15-post.png');
   chooseFormat('Story');
   expect(canvas).toHaveAttribute('height', '1920');
   expect(context.drawImage).toHaveBeenCalledWith(expect.any(HTMLCanvasElement), 0, 290, 1080, 1350);
   fireEvent.click(screen.getByRole('button', { name: 'Baixar PNG' }));
-  expect(downloadName).toBe('cba-time-ideal-2026-11-15-story.png');
+  expect(downloadName).toBe('cba-quinteto-ideal-2026-11-15-story.png');
   fireEvent.click(screen.getByRole('button', { name: 'Copiar legenda' }));
   await screen.findByText('Legenda copiada.');
   expect(navigator.clipboard.writeText).toHaveBeenCalledWith(idealTeamCaption(team));
   openShare();
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Abrir seletor de aplicativos' })));
-  expect(navigator.share).toHaveBeenCalledWith(expect.objectContaining({ text: idealTeamCaption(team), files: [expect.objectContaining({ name: 'cba-time-ideal-2026-11-15-story.png' })] }));
+  expect(navigator.share).toHaveBeenCalledWith(expect.objectContaining({ text: idealTeamCaption(team), files: [expect.objectContaining({ name: 'cba-quinteto-ideal-2026-11-15-story.png' })] }));
   expect(navigator.canShare).toHaveBeenCalledWith({ files: [expect.any(File)] });
 });
 
@@ -74,7 +78,7 @@ test('Canvas mantém empate e espaços sem atleta, sem inventar números', () =>
   render(<IdealTeamCardModal team={tied} onClose={jest.fn()}/>);
   const printed = context.fillText.mock.calls.map(call => String(call[0]));
   expect(printed).toContain('Liderança empatada');
-  expect(printed.filter(text => text === 'SEM DESTAQUE')).toHaveLength(2);
+  expect(printed.filter(text => text === 'SEM DESTAQUE')).toHaveLength(3);
   expect(printed).not.toContain('0 TOC');
 });
 
@@ -84,11 +88,13 @@ test('espera todas as fotos com CORS e libera iniciais para as fotos que falhara
   try {
     render(<IdealTeamCardModal team={withPhotos()} onClose={jest.fn()}/>);
     const download = () => screen.getByRole('button', { name: 'Baixar PNG' });
-    expect(images).toHaveLength(4); expect(images.every(image => image.crossOrigin === 'anonymous')).toBe(true);
+    expect(images).toHaveLength(5); expect(images.every(image => image.crossOrigin === 'anonymous')).toBe(true);
     expect(download()).toBeDisabled(); expect(HTMLCanvasElement.prototype.toBlob).not.toHaveBeenCalled();
     act(() => images[0].onload()); act(() => images[1].onerror()); act(() => images[2].onload());
     expect(download()).toBeDisabled(); expect(HTMLCanvasElement.prototype.toBlob).not.toHaveBeenCalled();
     act(() => images[3].onload());
+    expect(download()).toBeDisabled();
+    act(() => images[4].onload());
     expect(download()).toBeEnabled(); expect(screen.getByText(/Fotos indisponíveis usam a inicial/)).toBeInTheDocument();
     expect(context.drawImage.mock.calls.some(call => call[0] === images[0])).toBe(true);
     expect(context.drawImage.mock.calls.some(call => call[0] === images[1])).toBe(false);
@@ -121,10 +127,10 @@ test('troca de formato cancela fotos antigas sem liberar exportação prematura'
     render(<IdealTeamCardModal team={withPhotos()} onClose={jest.fn()}/>);
     const oldLoad = images[0].onload;
     chooseFormat('Story');
-    expect(images).toHaveLength(8);
+    expect(images).toHaveLength(10);
     act(() => oldLoad());
     expect(screen.getByRole('button', { name: 'Baixar PNG' })).toBeDisabled();
-    act(() => images.slice(4).forEach(image => image.onload()));
+    act(() => images.slice(5).forEach(image => image.onload()));
     expect(screen.getByRole('button', { name: 'Baixar PNG' })).toBeEnabled();
   } finally { global.Image = OldImage; }
 });
@@ -139,7 +145,7 @@ test('fallback sem compartilhamento, cancelamento silencioso e caminhos Instagra
   fireEvent.click(screen.getByRole('menuitem', { name: 'Reels' }));
   expect(screen.getByText(/Reels precisa de vídeo/)).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Baixar arte para editar' }));
-  expect(downloadName).toBe('cba-time-ideal-2026-11-15-story.png');
+  expect(downloadName).toBe('cba-quinteto-ideal-2026-11-15-story.png');
   unmount();
   setNavigator('canShare', () => true);
   navigator.share.mockRejectedValueOnce(Object.assign(new Error('Cancelado'), { name: 'AbortError' }));
@@ -153,7 +159,7 @@ test('modal tem nome, foco contido, Escape e restaura foco ao fechar', () => {
   const trigger = document.createElement('button'); document.body.appendChild(trigger); trigger.focus();
   const onClose = jest.fn();
   const { unmount } = render(<IdealTeamCardModal team={team} onClose={onClose}/>);
-  const dialog = screen.getByRole('dialog', { name: 'Time ideal da rodada de 15/11/2026' });
+  const dialog = screen.getByRole('dialog', { name: 'Quinteto ideal da rodada de 15/11/2026' });
   expect(dialog).toHaveAttribute('aria-modal', 'true');
   const close = screen.getByRole('button', { name: 'Fechar card' }); expect(close).toHaveFocus();
   fireEvent.keyDown(close, { key: 'Tab', shiftKey: true });
