@@ -51,7 +51,11 @@ test('Canvas coletivo preserva cinco nomes, coroas, marcas, data e colocações 
   for (const name of ['Ana', 'Bia', 'Cris', 'Dani', 'Eva', '15/11/2026', '20 PTS', '19 REB', '18 AST', '17 TOC',
     '2ª maior marca em rebotes', '3ª maior marca em assistências', '4ª maior marca em tocos', '60 IE-CBA', 'Selecionado para evitar repetição']) expect(printed).toContain(name);
   expect(context.arc).toHaveBeenCalledTimes(5);
-  expect(context.fill).toHaveBeenCalledTimes(5); // Vector crowns, one per portrait.
+  expect(context.fill).toHaveBeenCalledTimes(5); // Uma coroa vetorial por jogador.
+  expect(context.strokeRect.mock.calls).toEqual([
+    [70, 235, 301, 449], [389, 235, 301, 449], [708, 235, 301, 449],
+    [70, 710, 461, 449], [549, 710, 461, 449]
+  ]); // 3 + 2, sem sobreposição.
   expect(printed).not.toContain('WhatsApp');
   fireEvent.click(screen.getByRole('button', { name: 'Baixar PNG' }));
   expect(downloadName).toBe('cba-quinteto-ideal-2026-11-15-post.png');
