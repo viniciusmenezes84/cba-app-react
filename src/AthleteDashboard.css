@@ -12,28 +12,37 @@
 }
 
 .cba-player * { box-sizing: border-box; }
-.cba-ideal-team { margin: 0 0 24px; padding: clamp(14px, 2vw, 22px); border: 1px solid #76602e; border-radius: 20px; background: radial-gradient(ellipse at 50% 0, #42351e55, transparent 65%), #111e30; }
+.cba-ideal-team { margin: 0 0 24px; padding: clamp(14px, 2vw, 22px); border: 1px solid #68412b; border-radius: 20px; background: radial-gradient(ellipse at 50% 0, rgba(251, 146, 60, .10), transparent 65%), var(--cba-surface); }
 .cba-ideal-team__heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 20px; }
 .cba-ideal-team__heading h2 { margin: 5px 0 0; font-size: clamp(20px, 2.6vw, 29px); font-weight: 900; color: #fff; }
-.cba-ideal-team__heading time { color: #f6cf70; border: 1px solid #66552e; border-radius: 9px; padding: 8px 11px; font-size: 13px; font-weight: 800; }
+.cba-ideal-team__heading time { color: #fb923c; border: 1px solid #68412b; border-radius: 9px; padding: 8px 11px; font-size: 13px; font-weight: 800; }
 .cba-ideal-team__grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .cba-ideal-team__slot { display: flex; min-width: 0; flex-direction: column; align-items: center; padding: 15px 10px; border: 1px solid #3e4654; border-radius: 15px; background: linear-gradient(155deg, #233149, #111d2e); text-align: center; }
-.cba-ideal-team__category { color: #f6cf70; font-size: 13px; font-weight: 900; }
+.cba-ideal-team__category { color: #fb923c; font-size: 13px; font-weight: 900; }
 .cba-ideal-team__category span { color: #b3c2d4; font-size: 11px; }
 .cba-ideal-team__crown { flex-shrink: 0; margin: 12px 0 4px; color: #f5c854; fill: #dca72a33; }
-.cba-ideal-team__photo { display: grid; place-items: center; width: clamp(70px, 8vw, 110px); height: clamp(70px, 8vw, 110px); overflow: hidden; border: 2px solid #d7ae53; border-radius: 50%; background: #33455d; }
+.cba-ideal-team__photo { display: grid; place-items: center; width: clamp(70px, 8vw, 110px); height: clamp(70px, 8vw, 110px); overflow: hidden; border: 2px solid #fb923c; border-radius: 50%; background: #33455d; }
 .cba-ideal-team__photo img { width: 100%; height: 100%; object-fit: cover; }
 .cba-ideal-team__photo span { font-size: 38px; font-weight: 900; color: #f6cf70; }
 .cba-ideal-team__name { margin-top: 13px; color: #f8fafc; font-size: 16px; line-height: 1.3; overflow-wrap: anywhere; }
 .cba-ideal-team__value { margin: 8px 0; font-size: 34px; font-weight: 900; color: #fff; line-height: 1.1; }
-.cba-ideal-team__value small { color: #f6cf70; font-size: 12px; }
+.cba-ideal-team__value small { color: #fb923c; font-size: 12px; }
 .cba-ideal-team__note { margin: auto 0 0; padding-top: 8px; color: #bdcbdc; font-size: 12px; line-height: 1.5; }
 .cba-ideal-team__vacant { display: grid; flex: 1; min-height: 170px; place-items: center; color: #8c9fb8; font-size: 40px; }
 .cba-ideal-team__footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-top: 17px; }
 .cba-ideal-team__footer p, .cba-ideal-team__empty { color: #a8b9ce; font-size: 12px; line-height: 1.6; }
-.cba-ideal-team__footer button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 9px 13px; color: #17212d; background: #f6cf70; border: 0; border-radius: 10px; font-size: 12px; font-weight: 800; }
-.cba-ideal-team__footer button:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+.cba-ideal-team__footer button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 9px 13px; color: #15202d; background: #fb923c; border: 0; border-radius: 10px; font-size: 12px; font-weight: 800; }
+.cba-ideal-team__footer button:hover { background: #ffb37d; }
+.cba-ideal-team__footer button:focus-visible { outline: 2px solid #fb923c; outline-offset: 3px; }
 @media (max-width: 760px) { .cba-ideal-team__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .cba-ideal-team__footer button { width: 100%; } }
+@media (max-width: 380px) {
+  .cba-ideal-team__grid { gap: 8px; }
+  .cba-ideal-team__slot { padding: 12px 6px; }
+  .cba-ideal-team__name { font-size: 13px; }
+  .cba-ideal-team__value { font-size: 27px; }
+  .cba-ideal-team__photo { width: 70px; height: 70px; }
+  .cba-ideal-team__note { font-size: 11px; }
+}
 .cba-player__topline { display: flex; justify-content: space-between; gap: 12px; color: #91a5bd; font-size: 10px; font-weight: 900; letter-spacing: .18em; }
 .cba-player__topline span:first-child { color: #f8fafc; }
 .cba-player__topline b { color: #fb923c; padding: 0 7px; }
