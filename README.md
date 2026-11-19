@@ -30,9 +30,11 @@ Toque em Meu CBA no cabeçalho de qualquer aba, no celular ou computador, para a
 
 ## Time ideal da rodada
 
-No início de Desempenho do Atleta, o time ideal usa a última data válida com estatísticas efetivamente registradas nos dados já carregados. Na entrada, a temporada acompanha essa data, inclusive no ano anterior; a seleção manual de temporada passa a limitar a busca. Trocar de atleta não altera os destaques coletivos.
+No início de Desempenho do Atleta, o time ideal usa a última data com súmula real nos dados esportivos coletivos já autorizados por `getInitialAppData`. Uma linha totalmente zerada só representa rodada válida quando há presença confirmada; placeholders zerados de atletas ausentes não criam uma rodada fictícia. Na entrada, a temporada acompanha a última rodada coletiva, inclusive quando pertence ao ano anterior; a seleção manual limita a busca. Trocar de atleta não muda os destaques coletivos. O perfil individual de MEMBER continua restrito ao próprio atleta, enquanto as quatro seleções públicas são calculadas a partir apenas de ID, nome, foto e estatísticas esportivas já disponíveis; nenhum campo financeiro ou administrativo é utilizado.
 
 A seleção processa PTS, REB, AST e TOC nessa ordem, sem repetir identidades de atletas. A identidade usa o identificador disponível e, nos dados legados sem identificador, o nome normalizado. Cada categoria é ordenada pela marca, nome e identidade. A colocação original é `1 + quantidade de atletas com marca maior`, antes das exclusões; empates compartilham posição. Substitutos mantêm a colocação real e a indicação de seleção para evitar repetição. Somente marcas positivas recebem destaque; espaços vazios distinguem zero registrado, campo ausente e indisponibilidade de outro atleta elegível. Pontos exigem os dois campos de cestas registrados e seguem `pts2 * 2 + pts3 * 3`.
+
+A seção usa a paleta azul-escuro e laranja do painel Desempenho do Atleta, coroa dourada como símbolo de prêmio, layout responsivo de 4 colunas no desktop e 2 no celular, com ajustes adicionais para larguras de 320 px.
 
 Compartilhar time ideal da rodada reutiliza os controles sociais do card individual e gera uma imagem coletiva Post/Story com as quatro categorias, fotos ou iniciais, coroas e notas de colocação. A exportação aguarda todas as fotos; após espera prolongada é possível optar pelas iniciais. A súmula é consolidada por data e pode reunir várias partidas. Não há consultas extras, alteração de estatísticas ou publicação automática.
 
