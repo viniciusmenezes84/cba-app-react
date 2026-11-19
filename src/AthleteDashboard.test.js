@@ -36,11 +36,11 @@ test('entrada usa última súmula mesmo no ano anterior; temporada manual e atle
   expect(screen.getByRole('heading', { name: 'Beto' })).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText('Selecionar temporada'), { target: { value: '2026' } });
   expect(region().getByText(/Nenhuma rodada com súmula registrada em 2026/)).toBeInTheDocument();
-  expect(region().queryByRole('button', { name: 'Compartilhar time ideal da rodada' })).not.toBeInTheDocument();
+  expect(region().queryByRole('button', { name: 'Compartilhar quinteto ideal' })).not.toBeInTheDocument();
   rerender(<AthleteDashboard allPlayersData={historical} dates={['2026-11-15', '2027-01-01']} currentUser={{ name: 'Ana' }} isAdmin/>);
   expect(screen.getByLabelText('Selecionar temporada')).toHaveValue('2026');
   fireEvent.change(screen.getByLabelText('Selecionar temporada'), { target: { value: '2025' } });
-  expect(region().getByRole('button', { name: 'Compartilhar time ideal da rodada' })).toBeInTheDocument();
+  expect(region().getByRole('button', { name: 'Compartilhar quinteto ideal' })).toBeInTheDocument();
 });
 
 test('time ideal vem após o cabeçalho e antes do perfil individual', () => {
