@@ -19,6 +19,12 @@ function validDate(date, today) {
 }
 
 const hasRecord = stats => stats && fields.some(key => recorded(stats[key]) !== null);
+const hasProduction = stats => fields.some(key => recorded(stats?.[key]) > 0);
+const isPresent = value => String(value || '').includes('✅') || String(value || '').toLowerCase() === 'present';
+const isValidRoundRecord = (player, date, stats) =>
+  hasRecord(stats) && (hasProduction(stats) || isPresent(player.attendance?.[date]));
+// Ausência com linha zerada é um placeholder técnico, não uma nova rodada disputada.
+
 const identity = player => {
   const id = player.id ?? player.athleteId ?? player.athlete_id;
   return id !== undefined && id !== null && String(id).trim() ? `id:${id}` : `name:${normalize(player.name || player.nickname || player.apelido)}`;
@@ -30,7 +36,7 @@ const compare = (a, b) => a.name.localeCompare(b.name, 'pt-BR') || a.id.localeCo
 export function latestIdealTeamDate(players = [], year = null, today = todayCba()) {
   const dates = players.filter(player => player && nameOf(player)).flatMap(player =>
     Object.entries(player.dailyStats || {}).filter(([date, stats]) => validDate(date, today)
-      && (year === null || date.startsWith(`${year}-`)) && hasRecord(stats)).map(([date]) => date));
+      && (year === null || date.startsWith(`${year}-`)) && isValidRoundRecord(player, date, stats)).map(([date]) => date));
   return dates.sort().at(-1) || null;
 }
 
