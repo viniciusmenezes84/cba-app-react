@@ -16,7 +16,7 @@ test('exibe cinco coroas, apelidos e notas reais; botão abre o card coletivo co
   expect(rebounds.getByText(/2ª maior marca em rebotes · Selecionado para evitar repetição/)).toBeInTheDocument();
   fireEvent.error(screen.getByRole('img', { name: 'Foto de Armadora' }));
   expect(screen.queryByRole('img', { name: 'Foto de Armadora' })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Compartilhar time ideal da rodada' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Compartilhar quinteto ideal' }));
   expect(await screen.findByRole('dialog')).toHaveTextContent('Rodada 2026-11-15: Armadora, Bia, Cris, Dani, Eva');
   fireEvent.click(screen.getByText('Fechar time'));
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
