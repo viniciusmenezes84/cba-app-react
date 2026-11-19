@@ -52,12 +52,18 @@ export default function AthleteDashboard({ allPlayersData = [], dates = [], curr
   const players = useMemo(() => (isAdmin ? allPlayersData : allPlayersData.filter(player =>
     Boolean(currentUser?.athleteId) && String(player?.id) === String(currentUser.athleteId))).slice().sort((a, b) =>
     String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR')), [allPlayersData, isAdmin, currentUser?.athleteId]);
-  const years = useMemo(() => availableAthleteYears(players, dates), [players, dates]);
+  // Os dados esportivos coletivos já são autorizados pelo getInitialAppData.
+  // O perfil individual continua limitado a "players" (o próprio atleta para MEMBER).
+  // Usar somente os campos esportivos evita que detalhes administrativos migrem para o destaque.
+  const sharedSportPlayers = useMemo(() => allPlayersData.filter(player => player?.name).map(player => ({
+    id: player.id, name: player.name, fotoUrl: player.fotoUrl, dailyStats: player.dailyStats
+  })), [allPlayersData]);
+  const years = useMemo(() => availableAthleteYears(sharedSportPlayers, dates), [sharedSportPlayers, dates]);
   const [selectedYear, setSelectedYear] = useState(null);
   const today = todayCba();
-  const latestDate = useMemo(() => latestIdealTeamDate(players, null, today), [players, today]);
+  const latestDate = useMemo(() => latestIdealTeamDate(sharedSportPlayers, null, today), [sharedSportPlayers, today]);
   const year = selectedYear ?? latestDate?.slice(0, 4) ?? years[0] ?? today.slice(0, 4);
-  const idealTeam = useMemo(() => buildIdealTeam(players, year, today), [players, year, today]);
+  const idealTeam = useMemo(() => buildIdealTeam(sharedSportPlayers, year, today), [sharedSportPlayers, year, today]);
   const [selectedName, setSelectedName] = useState('');
   const [metric, setMetric] = useState('pts');
   const [copyStatus, setCopyStatus] = useState('');
