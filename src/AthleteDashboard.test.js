@@ -49,14 +49,23 @@ test('time ideal vem após o cabeçalho e antes do perfil individual', () => {
   expect(container.querySelector('.cba-ideal-team').nextElementSibling).toHaveClass('cba-player__hero');
 });
 
-test('time ideal preserva o filtro de atletas permitido ao membro', () => {
-  const roster = players.map((player, index) => ({ ...player, id: String(index), dailyStats: {
-    '2026-09-06': { pts2: index ? 100 : 2, pts3: 0, reb: 3, ast: 2, blk: 1 }
-  } }));
-  render(<AthleteDashboard allPlayersData={roster} currentUser={{ name: 'Ana', athleteId: '0' }}/>);
+test('membro vê os destaques esportivos coletivos, mas somente seu próprio perfil individual', () => {
+  const roster = players.map((player, index) => ({ ...player, id: String(index),
+    financialNote: 'PRIVATE-CBA-ACCOUNT-DATA',
+    dailyStats: { '2026-09-06': { pts2: index ? 100 : 2, pts3: 0, reb: 3, ast: 2, blk: 1 } }
+  }));
+  const { unmount } = render(<AthleteDashboard allPlayersData={roster} currentUser={{ name: 'Ana', athleteId: '0' }}/>);
   const team = within(screen.getByRole('region', { name: 'Time ideal da rodada' }));
+  expect(team.getByText('Beto')).toBeInTheDocument();
   expect(team.getByText('Ana')).toBeInTheDocument();
-  expect(team.queryByText('Beto')).not.toBeInTheDocument();
-  expect(team.getAllByText('Sem outro atleta com marca positiva disponível.')).toHaveLength(3);
+  expect(screen.getByRole('heading', { name: 'Ana' })).toBeInTheDocument();
+  expect(screen.queryByRole('heading', { name: 'Beto' })).not.toBeInTheDocument();
   expect(screen.getByLabelText('Selecionar atleta')).toBeDisabled();
+  expect(screen.queryByText('PRIVATE-CBA-ACCOUNT-DATA')).not.toBeInTheDocument();
+  const memberTeam = screen.getByRole('region', { name: 'Time ideal da rodada' }).textContent;
+  unmount();
+
+  render(<AthleteDashboard allPlayersData={roster} currentUser={{ name: 'Ana', athleteId: '0' }} isAdmin/>);
+  expect(screen.getByRole('region', { name: 'Time ideal da rodada' }).textContent).toBe(memberTeam);
+  expect(screen.getByLabelText('Selecionar atleta')).toBeEnabled();
 });
