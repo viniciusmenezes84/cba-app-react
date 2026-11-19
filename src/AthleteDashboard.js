@@ -56,7 +56,7 @@ export default function AthleteDashboard({ allPlayersData = [], dates = [], curr
   // O perfil individual continua limitado a "players" (o próprio atleta para MEMBER).
   // Usar somente os campos esportivos evita que detalhes administrativos migrem para o destaque.
   const sharedSportPlayers = useMemo(() => allPlayersData.filter(player => player?.name).map(player => ({
-    id: player.id, name: player.name, fotoUrl: player.fotoUrl, dailyStats: player.dailyStats
+    id: player.id, name: player.name, fotoUrl: player.fotoUrl, attendance: player.attendance, dailyStats: player.dailyStats
   })), [allPlayersData]);
   const years = useMemo(() => availableAthleteYears(sharedSportPlayers, dates), [sharedSportPlayers, dates]);
   const [selectedYear, setSelectedYear] = useState(null);
