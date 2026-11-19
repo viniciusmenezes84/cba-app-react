@@ -38,6 +38,7 @@ function portrait(ctx, athlete, photo, center, top) {
   ctx.restore();
 }
 
+// Card 1080x1350: três destaques em cima e dois na segunda linha.
 export function drawIdealTeamCard(canvas, team, photos = new Map()) {
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Canvas indisponível neste navegador.');
@@ -45,32 +46,43 @@ export function drawIdealTeamCard(canvas, team, photos = new Map()) {
   const gradient = ctx.createLinearGradient(0, 0, CARD_WIDTH, CARD_HEIGHT);
   gradient.addColorStop(0, '#22324b'); gradient.addColorStop(1, '#081521');
   ctx.fillStyle = gradient; ctx.fillRect(0, 0, CARD_WIDTH, CARD_HEIGHT);
-  ctx.fillStyle = gold; ctx.fillRect(0, 0, 12, CARD_HEIGHT);
-  text(ctx, 'CBA', 76, 54, 62, ink);
-  text(ctx, 'TIME IDEAL DA RODADA', 76, 132, 36, gold);
-  ctx.textAlign = 'right'; text(ctx, formatDate(team.date), 1004, 77, 32, gold); ctx.textAlign = 'left';
-  text(ctx, 'Quatro categorias • atletas distintos • marcas registradas', 76, 184, 22, muted);
-  team.slots.forEach((slot, index) => {
-    const x = index % 2 ? 556 : 76, y = index < 2 ? 242 : 722, width = 448;
-    ctx.fillStyle = '#16283e'; ctx.fillRect(x, y, width, 456);
-    ctx.strokeStyle = '#73603a'; ctx.lineWidth = 2; ctx.strokeRect(x, y, width, 456);
-    text(ctx, `${slot.short} / ${slot.label.toUpperCase()}`, x + 20, y + 18, 21, gold);
+  ctx.fillStyle = '#fb923c'; ctx.fillRect(0, 0, 12, CARD_HEIGHT);
+  text(ctx, 'CBA', 70, 47, 61);
+  text(ctx, 'QUINTETO IDEAL DA RODADA', 70, 127, 36, gold);
+  ctx.textAlign = 'right'; text(ctx, formatDate(team.date), 1003, 69, 32, gold); ctx.textAlign = 'left';
+  text(ctx, 'Cinco atletas distintos • quatro fundamentos + eficiência', 70, 183, 21, muted);
+
+  const layouts = team.slots.map((slot, index) => ({
+    slot,
+    x: index < 3 ? 70 + index * 319 : 70 + (index - 3) * 479,
+    y: index < 3 ? 235 : 710,
+    width: index < 3 ? 301 : 461,
+    height: 449
+  }));
+
+  layouts.forEach(({ slot, x, y, width, height }, index) => {
+    ctx.fillStyle = index === 4 ? '#23324a' : '#16283e';
+    ctx.fillRect(x, y, width, height);
+    ctx.strokeStyle = index === 4 ? '#fb923c' : '#73603a';
+    ctx.lineWidth = 2; ctx.strokeRect(x, y, width, height);
+    text(ctx, `${slot.short} / ${slot.label.toUpperCase()}`, x + 15, y + 17, 19, gold, width - 30);
     if (!slot.athlete) {
-      text(ctx, 'SEM DESTAQUE', x + 24, y + 138, 31, muted);
-      lines(ctx, slot.reason, x + 24, y + 226, width - 48, 24);
+      text(ctx, 'SEM DESTAQUE', x + 18, y + 128, 28, muted, width - 36);
+      lines(ctx, slot.reason, x + 18, y + 205, width - 36, 20);
       return;
     }
-    crown(ctx, x + width / 2, y + 57);
-    portrait(ctx, slot.athlete, photos.get(slot.athlete.id), x + width / 2, y + 104);
+    crown(ctx, x + width / 2, y + 63);
+    portrait(ctx, slot.athlete, photos.get(slot.athlete.id), x + width / 2, y + 109);
     ctx.textAlign = 'center';
-    text(ctx, slot.athlete.name, x + width / 2, y + 256, 32, ink, width - 40);
-    text(ctx, `${slot.value} ${slot.short}`, x + width / 2, y + 303, 54, gold, width - 40);
+    text(ctx, slot.athlete.name, x + width / 2, y + 260, 30, ink, width - 27);
+    text(ctx, `${slot.value} ${slot.short}`, x + width / 2, y + 312, 43, gold, width - 24);
     ctx.textAlign = 'left';
-    idealTeamNotes(slot).forEach((note, line) => text(ctx, note, x + 20, y + 370 + line * 24, 20, muted, width - 40));
+    idealTeamNotes(slot).slice(0, 3).forEach((note, line) =>
+      text(ctx, note, x + 14, y + 372 + line * 23, 17, muted, width - 28));
   });
-  text(ctx, 'Súmula consolidada por data; pode reunir várias partidas.', 76, 1220, 23, muted);
-  text(ctx, 'Colocação calculada antes de evitar repetições.', 76, 1260, 22, muted);
-  text(ctx, 'PORTAL CBA / BASQUETE', 76, 1310, 20, gold);
+  text(ctx, 'Totais consolidados por rodada; uma data pode reunir várias partidas.', 70, 1204, 21, muted);
+  text(ctx, 'IE-CBA = PTS + REB + AST + TOC (índice simplificado).', 70, 1244, 21, muted);
+  text(ctx, 'PORTAL CBA / BASQUETE', 70, 1300, 20, gold);
 }
 
 export function drawIdealTeamStory(canvas, team, photos = new Map()) {
@@ -80,9 +92,9 @@ export function drawIdealTeamStory(canvas, team, photos = new Map()) {
   if (!ctx) throw new Error('Canvas indisponível neste navegador.');
   canvas.width = CARD_WIDTH; canvas.height = STORY_HEIGHT;
   ctx.fillStyle = '#0a1728'; ctx.fillRect(0, 0, CARD_WIDTH, STORY_HEIGHT);
-  text(ctx, 'CBA / TIME IDEAL', 76, 128, 50, gold);
+  text(ctx, 'CBA / QUINTETO IDEAL', 76, 128, 50, gold);
   text(ctx, `Rodada de ${formatDate(team.date)}`, 76, 203, 30, muted);
   ctx.drawImage(post, 0, 290, CARD_WIDTH, CARD_HEIGHT);
-  text(ctx, 'QUATRO DESTAQUES DA NOSSA RODADA', 76, 1710, 35, gold);
-  text(ctx, 'Seleção sem repetir atletas • números reais da súmula', 76, 1773, 25, muted);
+  text(ctx, 'CINCO DESTAQUES DA NOSSA RODADA', 76, 1710, 35, gold);
+  text(ctx, 'Destaques estatísticos • sem repetir atletas', 76, 1773, 25, muted);
 }
